@@ -4,6 +4,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.security import hash_password
 from app.database import get_db
 from app.main import app
 from app.models.analysis import AnalysisTemp
@@ -34,7 +35,21 @@ async def db_session(test_engine):
 
 
 @pytest.fixture(scope="function")
-async def client(db_session: AsyncSession):
+async def seed_user(db_session: AsyncSession) -> User:
+    """Inserta el usuario de prueba con id=1 para tests que usan create_access_token('1')."""
+    user = User(
+        nombre="Test User",
+        email="test@privapp.test",
+        hashed_password=hash_password("TestPass123"),
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest.fixture(scope="function")
+async def client(db_session: AsyncSession, seed_user: User):
     async def override_get_db():
         yield db_session
 

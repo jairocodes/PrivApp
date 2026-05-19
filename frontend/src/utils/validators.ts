@@ -1,5 +1,5 @@
 export const MIN_TEXTO = 200
-export const MAX_TEXTO = 50000
+export const MAX_TEXTO = 200000
 
 export function validarTextoPolítica(texto: string): string | null {
   if (texto.trim().length < MIN_TEXTO)

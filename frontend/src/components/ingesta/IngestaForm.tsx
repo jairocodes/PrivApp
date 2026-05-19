@@ -7,7 +7,7 @@ import Button from '@/components/common/Button'
 type Pestana = 'texto' | 'url'
 
 const MIN_CHARS = 200
-const MAX_CHARS = 50_000
+const MAX_CHARS = 200_000
 
 interface IngestaResponse {
   texto_procesado: string
@@ -121,7 +121,7 @@ export default function IngestaForm() {
             </label>
             <textarea
               value={texto}
-              onChange={(e) => setTexto(e.target.value)}
+              onChange={(e) => { setTexto(e.target.value); if (error) setError(null) }}
               rows={12}
               placeholder="Pega aquí el texto completo de la política de privacidad..."
               className="w-full border border-gray-300 rounded-lg p-3 text-sm
@@ -143,7 +143,7 @@ export default function IngestaForm() {
             <input
               type="url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => { setUrl(e.target.value); if (error) setError(null) }}
               placeholder="https://ejemplo.com/politica-de-privacidad"
               className="w-full border border-gray-300 rounded-lg p-3 text-sm
                          focus:ring-2 focus:ring-blue-500 focus:border-transparent"

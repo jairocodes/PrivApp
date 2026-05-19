@@ -10,6 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+
+# Instalar torch CPU-only antes del resto para evitar que pip descargue
+# la variante CUDA (532 MB) y sus dependencias de cuda_toolkit inaccesibles.
+RUN pip install --no-cache-dir torch==2.5.1+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

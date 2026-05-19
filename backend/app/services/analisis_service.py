@@ -12,6 +12,7 @@ Flujo completo por política:
 5. Retornar AnalisisResponse
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -31,6 +32,7 @@ from app.schemas.analysis import (
     ResumenGeneral,
     SeccionAnalizada,
 )
+from app.services.llm.base import LLMAdapter
 from app.services.llm.gemini_adapter import GeminiAdapter
 from app.services.rag_service import recuperar_contexto
 
@@ -87,8 +89,8 @@ BAJO RIESGO: Lenguaje claro, finalidades específicas, plazos definidos, mecanis
 claros para ejercer derechos, notificación previa de cambios, identificación clara
 de responsables."""
 
-# Fragmentos del corpus a incluir en el contexto
-_K_FRAGMENTOS = 5
+# Fragmentos del corpus a incluir en el contexto (3 es suficiente en tier gratuito)
+_K_FRAGMENTOS = 3
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
 # Máximo de secciones a analizar (prototipo: limitar costo/latencia)
@@ -316,6 +318,14 @@ def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
 # Orquestador principal
 # ---------------------------------------------------------------------------
 
+def _crear_adaptador_llm() -> LLMAdapter:
+    """Selecciona el adaptador LLM según LLM_PROVIDER en el .env."""
+    if settings.llm_provider == "openai":
+        from app.services.llm.openai_adapter import OpenAIAdapter
+        return OpenAIAdapter(api_key=settings.openai_api_key, model=settings.openai_model)
+    return GeminiAdapter(api_key=settings.gemini_api_key, model=settings.gemini_model)
+
+
 async def iniciar_analisis(
     db: AsyncSession,
     texto: str,
@@ -341,10 +351,7 @@ async def iniciar_analisis(
     analisis_id = str(registro.id)
     logger.info("Análisis %s iniciado para usuario %d.", analisis_id, user_id)
 
-    gemini = GeminiAdapter(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
-    )
+    gemini = _crear_adaptador_llm()
 
     secciones_analizadas: list[SeccionAnalizada] = []
     secciones = segmentar_politica(texto)
@@ -383,6 +390,11 @@ async def iniciar_analisis(
         except Exception as exc:
             logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
             secciones_analizadas.append(_seccion_fallback(seccion, idx))
+
+        # Pausa entre secciones: con 20s entre 5 secciones el análisis supera 1 minuto,
+        # lo que distribuye las llamadas en dos ventanas y evita el límite del tier gratuito.
+        if idx < len(secciones):
+            await asyncio.sleep(20)
 
     resumen = _calcular_resumen(secciones_analizadas)
     recomendaciones = _generar_recomendaciones(secciones_analizadas)

@@ -22,7 +22,7 @@ from app.core.exceptions import (
 logger = logging.getLogger(__name__)
 
 MIN_PALABRAS = 40
-MAX_CARACTERES = 50_000
+MAX_CARACTERES = 200_000
 _TIMEOUT_HTTP = 10
 
 _HEADERS = {

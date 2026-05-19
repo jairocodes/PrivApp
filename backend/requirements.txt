@@ -12,15 +12,18 @@ psycopg2-binary==2.9.10
 pgvector==0.3.6
 
 # Validación
-pydantic==2.10.3
+pydantic[email]==2.10.3
 pydantic-settings==2.6.1
+email-validator==2.2.0
 
 # Seguridad / Autenticación
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
 
 # LLM
 google-generativeai==0.8.3
+openai==1.82.0
 
 # Embeddings
 sentence-transformers==3.3.1

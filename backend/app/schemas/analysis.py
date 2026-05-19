@@ -41,7 +41,7 @@ class AnalisisResponse(BaseModel):
 
 
 class IngestaTextoRequest(BaseModel):
-    texto: str = Field(..., min_length=200, max_length=50000)
+    texto: str = Field(..., min_length=200, max_length=200_000)
 
 
 class IngestaURLRequest(BaseModel):

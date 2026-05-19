@@ -54,3 +54,6 @@ backend/.model_cache/
 # Test artifacts
 .pytest_cache/
 coverage.xml
+
+# Prompts internos / documentación de sesión
+PROMPT_MAESTRO.md
