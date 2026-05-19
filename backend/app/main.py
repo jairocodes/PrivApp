@@ -25,7 +25,7 @@ app = FastAPI(
         "dirigido a jóvenes de San José Acatempa, Jutiapa. "
         "Proyecto de Graduación I — UMG Campus Jutiapa."
     ),
-    version="0.2.0",
+    version="0.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -45,13 +45,13 @@ app.add_middleware(
 )
 
 # Routers
-from app.api.v1 import auth  # noqa: E402
+from app.api.v1 import auth, ingesta  # noqa: E402
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Autenticación"])
+app.include_router(ingesta.router, prefix="/api/ingesta", tags=["Ingesta"])
 
-# Sprints siguientes registrarán aquí:
-# from app.api.v1 import ingesta, analisis
-# app.include_router(ingesta.router, prefix="/api/ingesta", tags=["Ingesta"])
+# Sprint 4 registrará aquí:
+# from app.api.v1 import analisis
 # app.include_router(analisis.router, prefix="/api/analisis", tags=["Análisis"])
 
 
@@ -61,7 +61,7 @@ async def healthcheck():
     return {
         "status": "ok",
         "service": "privapp-backend",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "environment": settings.environment,
     }
 
