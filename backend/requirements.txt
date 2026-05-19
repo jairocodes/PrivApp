@@ -1,0 +1,48 @@
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# Base de datos
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# Extensión vectorial (cliente pgvector)
+pgvector==0.3.6
+
+# Validación
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Seguridad / Autenticación
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# LLM
+google-generativeai==0.8.3
+
+# Embeddings
+sentence-transformers==3.3.1
+
+# Extracción de texto
+beautifulsoup4==4.12.3
+requests==2.32.3
+pdfplumber==0.11.4
+pypdf==5.1.0
+
+# Utilidades
+python-multipart==0.0.20
+httpx==0.28.1
+tenacity==9.0.0
+
+# Linters / Formateo (solo desarrollo)
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+httpx==0.28.1

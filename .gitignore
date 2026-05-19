@@ -1,0 +1,56 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+pip-wheel-metadata/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Node / Frontend
+node_modules/
+dist/
+.cache/
+*.local
+
+# Docker
+*.override.yml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Alembic (keep versions tracked)
+# migrations/versions/*.py  <- tracked intentionally
+
+# Logs
+*.log
+logs/
+
+# Sentence Transformers cache (models descargados localmente)
+backend/.model_cache/
+
+# Test artifacts
+.pytest_cache/
+coverage.xml
