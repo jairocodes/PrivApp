@@ -16,16 +16,16 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 |---|---|
 | Backend | Python 3.11, FastAPI, SQLAlchemy async, Alembic |
 | Base de datos | PostgreSQL 16 + pgvector |
-| LLM | Google Gemini (gemini-1.5-flash) |
-| Embeddings | Sentence Transformers (paraphrase-multilingual-mpnet-base-v2) |
+| LLM | Google Gemini (`gemini-1.5-flash`) |
+| Embeddings | Sentence Transformers (`paraphrase-multilingual-mpnet-base-v2`, local) |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Infraestructura | Docker, Docker Compose |
 
 ## Requisitos previos
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (incluye Docker Compose)
-- API key de Google Gemini ([obtener aquí](https://aistudio.google.com/))
-- Los PDFs del corpus normativo (ver `corpus_normativo/README.md`)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) v4.0+ (incluye Docker Compose v2)
+- API key de Google Gemini — [obtener gratis en aistudio.google.com](https://aistudio.google.com/)
+- PDFs del corpus normativo (ver `corpus_normativo/README.md`)
 
 ## Instalación rápida
 
@@ -36,30 +36,54 @@ cd sistema-privacidad-sja
 
 # 2. Configurar variables de entorno
 cp .env.example .env
-# Edita .env con tus valores reales (ver sección Configuración)
+# Edita .env y completa: POSTGRES_PASSWORD, JWT_SECRET_KEY, GEMINI_API_KEY
 
-# 3. Coloca los PDFs del corpus normativo (ver corpus_normativo/README.md)
+# 3. Colocar los PDFs del corpus normativo (ver corpus_normativo/README.md)
 
-# 4. Levantar el sistema completo
+# 4. Levantar el sistema
 docker compose up --build
+
+# 5. En otra terminal: ejecutar migraciones y cargar corpus
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/cargar_corpus.py
 ```
 
 El sistema estará disponible en:
 - **Frontend:** http://localhost:5173
-- **Backend (API + docs):** http://localhost:8000/docs
-- **PostgreSQL:** localhost:5432
+- **API (Swagger UI):** http://localhost:8000/docs
+- **Healthcheck:** http://localhost:8000/health
+
+Para instrucciones detalladas ver [`docs/instalacion.md`](docs/instalacion.md).
 
 ## Configuración del archivo `.env`
 
-Copia `.env.example` como `.env` y completa los valores:
-
 ```env
-POSTGRES_PASSWORD=una_contrasena_segura
+# Base de datos
+POSTGRES_USER=privapp
+POSTGRES_PASSWORD=tu_contrasena_segura
+POSTGRES_DB=privapp_db
+DATABASE_URL=postgresql+asyncpg://privapp:tu_contrasena_segura@db:5432/privapp_db
+
+# JWT
 JWT_SECRET_KEY=clave_aleatoria_minimo_32_caracteres
+JWT_ALGORITHM=HS256
+JWT_EXPIRATION_HOURS=24
+
+# Gemini
 GEMINI_API_KEY=tu_api_key_de_gemini
+GEMINI_MODEL=gemini-1.5-flash
+
+# General
+ENVIRONMENT=development
+CORS_ORIGINS=http://localhost:5173
 ```
 
-> **Importante:** El archivo `.env` está en `.gitignore` y nunca debe subirse al repositorio.
+> El archivo `.env` está en `.gitignore` y **nunca debe subirse al repositorio**.
+
+Para generar una clave JWT segura:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
 ## Comandos principales
 
@@ -73,47 +97,67 @@ docker compose up -d --build
 # Detener
 docker compose down
 
-# Cargar el corpus normativo (primera vez o tras actualización)
+# Cargar / recargar corpus normativo
 docker compose exec backend python scripts/cargar_corpus.py
 
-# Ejecutar migraciones de base de datos
+# Ejecutar migraciones
 docker compose exec backend alembic upgrade head
 
 # Ejecutar tests del backend
-docker compose exec backend pytest
+docker compose exec backend pytest --cov=app
 
-# Ver logs del backend
+# Ver logs
 docker compose logs -f backend
 ```
+
+## Estado del prototipo v1.0
+
+| Módulo | Estado | Sprint |
+|---|---|---|
+| Infraestructura Docker | Completado | Sprint 0 |
+| Autenticación JWT (registro, login, logout, `/me`) | Completado | Sprint 1 |
+| Corpus normativo + arquitectura RAG | Completado | Sprint 2 |
+| Ingesta de políticas (texto directo + URL) | Completado | Sprint 3 |
+| Motor de Análisis (RAG + Gemini + OPP-115) | Completado | Sprint 4 |
+| Panel de Visualización (mobile-first) | Completado | Sprint 5 |
+
+**Módulos excluidos del prototipo** (se implementarán en Proyecto de Graduación II):
+- Repositorio histórico de análisis
+- Generación de reportes descargables en PDF
 
 ## Estructura del proyecto
 
 ```
-├── backend/          # API FastAPI + servicios
-├── frontend/         # App React + TypeScript
-├── postgres/         # Scripts de inicialización de BD
-├── corpus_normativo/ # Documentos legales y estándares
-└── docs/             # Documentación detallada
+├── backend/            # API FastAPI, servicios, migraciones, tests
+│   ├── app/
+│   │   ├── api/v1/     # Routers: auth, ingesta, analisis
+│   │   ├── services/   # auth, ingesta, rag, analisis, llm/
+│   │   └── utils/      # chunking, embeddings, pdf_extractor
+│   ├── migrations/     # Versiones Alembic (0001–0003)
+│   ├── scripts/        # cargar_corpus.py
+│   └── tests/          # 65+ tests pytest
+├── frontend/           # App React + TypeScript
+│   └── src/
+│       ├── components/ # auth/, analisis/, ingesta/, common/
+│       ├── pages/      # Login, Register, Dashboard, Ingesta, Resultados
+│       └── hooks/      # useAuth, useAnalisis
+├── corpus_normativo/   # PDFs de normativa guatemalteca e internacional
+│   ├── guatemala/
+│   ├── internacional/
+│   └── estandares_tecnicos/
+├── docs/               # Documentación detallada
+└── postgres/           # init.sql (pgvector, corpus_chunks)
 ```
 
-Ver [`docs/instalacion.md`](docs/instalacion.md) para instrucciones detalladas.  
-Ver [`docs/arquitectura.md`](docs/arquitectura.md) para descripción técnica completa.
+## Documentación adicional
 
-## Estado del prototipo (Sprint 0)
-
-| Módulo | Estado |
+| Documento | Descripción |
 |---|---|
-| Infraestructura Docker | Completado |
-| Autenticación (JWT) | Sprint 1 |
-| Ingesta de políticas | Sprint 3 |
-| Motor de Análisis (RAG + Gemini) | Sprint 4 |
-| Panel de Visualización | Sprint 5 |
-
-## Módulos excluidos del prototipo
-
-Los siguientes módulos serán implementados en Proyecto de Graduación II:
-- Repositorio histórico de análisis
-- Generación de reportes descargables
+| [`docs/instalacion.md`](docs/instalacion.md) | Instalación detallada y solución de problemas |
+| [`docs/api.md`](docs/api.md) | Referencia de endpoints REST |
+| [`docs/arquitectura.md`](docs/arquitectura.md) | Decisiones de diseño técnico |
+| [`docs/guia_evaluador.md`](docs/guia_evaluador.md) | Guía paso a paso para evaluadores |
+| [`CHANGELOG.md`](CHANGELOG.md) | Historial de cambios por Sprint |
 
 ## Licencia
 
