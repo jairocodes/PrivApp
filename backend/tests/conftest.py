@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import get_db
 from app.main import app
+from app.models.analysis import AnalysisTemp
 from app.models.user import User
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -15,10 +16,12 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 async def test_engine():
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
     async with engine.begin() as conn:
-        # Solo se crea la tabla users — corpus_chunks usa pgvector (incompatible con SQLite)
+        # corpus_chunks usa pgvector (incompatible con SQLite), se omite
         await conn.run_sync(User.__table__.create, checkfirst=True)
+        await conn.run_sync(AnalysisTemp.__table__.create, checkfirst=True)
     yield engine
     async with engine.begin() as conn:
+        await conn.run_sync(AnalysisTemp.__table__.drop, checkfirst=True)
         await conn.run_sync(User.__table__.drop, checkfirst=True)
     await engine.dispose()
 

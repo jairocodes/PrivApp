@@ -1,8 +1,449 @@
-"""Servicio orquestador del motor de análisis. Implementación completa en Sprint 4."""
+"""Motor de Análisis: orquesta segmentación, RAG, prompts y llamada a Gemini.
+
+Flujo completo por política:
+1. segmentar_politica(texto)        → list[str]  (secciones temáticas)
+2. Para cada sección:
+   a. recuperar_contexto(db, sec)   → list[CorpusChunk]
+   b. construir_prompt(sec, chunks) → str
+   c. gemini.generar_analisis(...)  → str JSON
+   d. parsear_seccion(json_str)     → SeccionAnalizada  (con re-intento si inválido)
+3. calcular_resumen(secciones)      → ResumenGeneral
+4. Persistir en analysis_temp
+5. Retornar AnalisisResponse
+"""
+
+import json
+import logging
+import re
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.core.exceptions import AnalisisNoEncontradoError, LLMError
+from app.models.analysis import AnalysisTemp
+from app.schemas.analysis import (
+    AnalisisResponse,
+    FuenteNormativa,
+    Hallazgo,
+    ResumenGeneral,
+    SeccionAnalizada,
+)
+from app.services.llm.gemini_adapter import GeminiAdapter
+from app.services.rag_service import recuperar_contexto
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# System prompt (Sección 7.1 del prompt maestro)
+# ---------------------------------------------------------------------------
+
+SYSTEM_PROMPT = """Eres un asistente experto en análisis de políticas de privacidad. Tu tarea es ayudar
+a jóvenes ciudadanos de Guatemala a comprender el tratamiento de sus datos personales
+en plataformas digitales.
+
+PRINCIPIOS DE OPERACIÓN:
+
+1. HONESTIDAD ACADÉMICA: Tus respuestas deben basarse exclusivamente en los fragmentos
+   normativos que se te proporcionan como contexto. No inventes referencias legales.
+   No cites artículos o principios que no aparezcan en el contexto proporcionado.
+
+2. DISTINCIÓN JURISDICCIONAL: Guatemala no cuenta con una ley específica e integral
+   de protección de datos personales. Cuando una afirmación se base en normativa
+   guatemalteca, indícalo claramente. Cuando se base en estándares internacionales
+   o regionales (RGPD, LOPDP, Principios OEA, etc.), indica explícitamente que se
+   trata de una referencia internacional aplicable como buena práctica, no como ley
+   vigente en Guatemala.
+
+3. LENGUAJE ACCESIBLE: Tu audiencia son jóvenes (13-30 años) del municipio de
+   San José Acatempa, Jutiapa. Usa lenguaje claro, sin jerga jurídica innecesaria.
+   Explica los conceptos técnicos cuando sean indispensables.
+
+4. CLASIFICACIÓN ESTRUCTURADA: Clasifica cada sección de la política según la
+   taxonomía OPP-115. Asigna niveles de riesgo (bajo, medio, alto) basados en
+   los criterios definidos en el contexto.
+
+5. FORMATO DE SALIDA: Responde EXCLUSIVAMENTE en formato JSON válido según el
+   esquema definido. No incluyas texto explicativo fuera del JSON.
+
+6. CITAS OBLIGATORIAS: Cada hallazgo debe citar el fragmento normativo específico
+   que lo respalda, incluyendo documento fuente y referencia.
+
+CRITERIOS DE RIESGO:
+
+ALTO RIESGO: Recopilación sin finalidad declarada, compartición con terceros no
+identificados, transferencia internacional sin garantías, conservación indefinida,
+ausencia de mecanismos para ejercer derechos, cambios unilaterales sin notificación,
+procesamiento de datos sensibles sin justificación, recopilación de menores sin
+salvaguardas.
+
+RIESGO MEDIO: Finalidades amplias o ambiguas, plazos de conservación poco claros,
+mecanismos de ejercicio de derechos engorrosos, transferencias internacionales con
+garantías genéricas.
+
+BAJO RIESGO: Lenguaje claro, finalidades específicas, plazos definidos, mecanismos
+claros para ejercer derechos, notificación previa de cambios, identificación clara
+de responsables."""
+
+# Fragmentos del corpus a incluir en el contexto
+_K_FRAGMENTOS = 5
+# Tamaño mínimo de sección para considerarla analizable (palabras)
+_MIN_PALABRAS_SECCION = 30
+# Máximo de secciones a analizar (prototipo: limitar costo/latencia)
+_MAX_SECCIONES = 8
 
 
-# TODO Sprint 4: implementar AnalisisService
-# - iniciar_analisis(texto, user_id) -> AnalysisTemp
-# - obtener_analisis(analisis_id, user_id) -> AnalisisResponse
-# - _segmentar_politica(texto) -> list[str]
-# - _analizar_seccion(seccion, contexto_normativo) -> SeccionAnalizada
+# ---------------------------------------------------------------------------
+# Segmentación
+# ---------------------------------------------------------------------------
+
+def segmentar_politica(texto: str) -> list[str]:
+    """Divide la política en secciones temáticas analizables.
+
+    Estrategia: separa por encabezados (líneas en mayúsculas, numeradas o con
+    marcadores comunes de sección). Si no se detectan encabezados, cae en
+    división por bloques de párrafos de tamaño controlado.
+    """
+    # Patrón: líneas que parecen títulos de sección
+    patron_titulo = re.compile(
+        r"^(?:"
+        r"\d+[\.\)]\s+"            # "1. " o "1) "
+        r"|[IVXLC]+[\.\)]\s+"      # "I. " o "IV) "
+        r"|#{1,3}\s+"              # markdown "# " "## "
+        r"|[A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]{4,}$"  # línea todo mayúsculas
+        r")",
+        re.MULTILINE | re.UNICODE,
+    )
+
+    lineas = texto.splitlines()
+    secciones: list[str] = []
+    bloque_actual: list[str] = []
+
+    for linea in lineas:
+        if patron_titulo.match(linea.strip()) and bloque_actual:
+            contenido = "\n".join(bloque_actual).strip()
+            if len(contenido.split()) >= _MIN_PALABRAS_SECCION:
+                secciones.append(contenido)
+            bloque_actual = [linea]
+        else:
+            bloque_actual.append(linea)
+
+    if bloque_actual:
+        contenido = "\n".join(bloque_actual).strip()
+        if len(contenido.split()) >= _MIN_PALABRAS_SECCION:
+            secciones.append(contenido)
+
+    # Fallback: si no se detectaron secciones, dividir en bloques de ~400 palabras
+    if not secciones:
+        palabras = texto.split()
+        tam = 400
+        for i in range(0, len(palabras), tam):
+            bloque = " ".join(palabras[i : i + tam])
+            if len(bloque.split()) >= _MIN_PALABRAS_SECCION:
+                secciones.append(bloque)
+
+    return secciones[:_MAX_SECCIONES]
+
+
+# ---------------------------------------------------------------------------
+# Construcción de prompt por sección (Sección 7.2 del prompt maestro)
+# ---------------------------------------------------------------------------
+
+def _construir_contexto_normativo(chunks) -> str:
+    if not chunks:
+        return "No se encontraron fragmentos normativos relevantes para esta sección."
+
+    partes = []
+    for i, chunk in enumerate(chunks, 1):
+        partes.append(
+            f"[Fragmento {i}]\n"
+            f"Documento: {chunk.documento_fuente}\n"
+            f"Jurisdicción: {chunk.jurisdiccion}\n"
+            f"Referencia: {chunk.referencia or 'N/A'}\n"
+            f"Contenido: {chunk.texto_original[:600]}"
+        )
+    return "\n\n".join(partes)
+
+
+def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> str:
+    return (
+        f'TEXTO DE LA POLÍTICA A ANALIZAR (sección):\n"""\n{texto_seccion}\n"""\n\n'
+        f"CONTEXTO NORMATIVO RELEVANTE RECUPERADO:\n\n{contexto_normativo}\n\n"
+        "INSTRUCCIONES:\n"
+        "Analiza la sección proporcionada usando únicamente el contexto normativo entregado.\n"
+        "Genera tu respuesta en formato JSON estrictamente según el esquema:\n\n"
+        "{\n"
+        '  "categoria_opp115": "string",\n'
+        '  "titulo": "string",\n'
+        '  "texto_original": "string",\n'
+        '  "hallazgos": [\n'
+        "    {\n"
+        '      "tipo": "riesgo|transparencia|neutral",\n'
+        '      "descripcion": "string",\n'
+        '      "nivel": "bajo|medio|alto",\n'
+        '      "fuentes_normativas": [\n'
+        "        {\n"
+        '          "documento": "string",\n'
+        '          "referencia": "string",\n'
+        '          "fragmento_relevante": "string"\n'
+        "        }\n"
+        "      ]\n"
+        "    }\n"
+        "  ]\n"
+        "}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Parseo y validación de respuesta del LLM
+# ---------------------------------------------------------------------------
+
+def _extraer_json(texto: str) -> str:
+    """Extrae el bloque JSON de la respuesta aunque venga envuelto en markdown."""
+    # Remover bloques ```json ... ```
+    match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", texto)
+    if match:
+        return match.group(1).strip()
+    # Intentar encontrar el primer '{' y el último '}'
+    inicio = texto.find("{")
+    fin = texto.rfind("}")
+    if inicio != -1 and fin != -1:
+        return texto[inicio : fin + 1]
+    return texto.strip()
+
+
+def _parsear_seccion(json_str: str) -> SeccionAnalizada:
+    """Convierte la respuesta JSON del LLM en SeccionAnalizada validada."""
+    datos = json.loads(_extraer_json(json_str))
+
+    hallazgos = []
+    for h in datos.get("hallazgos", []):
+        fuentes = [
+            FuenteNormativa(
+                documento=f.get("documento", ""),
+                referencia=f.get("referencia", ""),
+                fragmento_relevante=f.get("fragmento_relevante", ""),
+            )
+            for f in h.get("fuentes_normativas", [])
+        ]
+        hallazgos.append(
+            Hallazgo(
+                tipo=h.get("tipo", "neutral"),
+                descripcion=h.get("descripcion", ""),
+                nivel=h.get("nivel", "bajo"),
+                fuentes_normativas=fuentes,
+            )
+        )
+
+    return SeccionAnalizada(
+        categoria_opp115=datos.get("categoria_opp115", "General"),
+        titulo=datos.get("titulo", "Sección sin título"),
+        texto_original=datos.get("texto_original", ""),
+        hallazgos=hallazgos,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cálculo del resumen general
+# ---------------------------------------------------------------------------
+
+_PESO_NIVEL = {"bajo": 1, "medio": 2, "alto": 3}
+
+
+def _calcular_resumen(secciones: list[SeccionAnalizada]) -> ResumenGeneral:
+    todos_hallazgos = [h for s in secciones for h in s.hallazgos]
+
+    if not todos_hallazgos:
+        return ResumenGeneral(
+            nivel_riesgo_global="bajo",
+            puntaje=0,
+            comentario_breve="No se identificaron hallazgos en las secciones analizadas.",
+        )
+
+    pesos = [_PESO_NIVEL.get(h.nivel, 1) for h in todos_hallazgos]
+    promedio = sum(pesos) / len(pesos)
+    puntaje = min(100, int((promedio - 1) / 2 * 100))
+
+    alto = sum(1 for h in todos_hallazgos if h.nivel == "alto")
+    medio = sum(1 for h in todos_hallazgos if h.nivel == "medio")
+
+    if alto >= 2 or promedio >= 2.5:
+        nivel = "alto"
+        comentario = (
+            f"Esta política presenta {alto} hallazgo(s) de riesgo alto. "
+            "Revisa detenidamente las secciones marcadas antes de aceptar."
+        )
+    elif medio >= 2 or promedio >= 1.5:
+        nivel = "medio"
+        comentario = (
+            f"Se detectaron {medio} hallazgo(s) de riesgo medio. "
+            "Algunos aspectos merecen atención, especialmente los usos de tus datos."
+        )
+    else:
+        nivel = "bajo"
+        comentario = (
+            "La política muestra un nivel de riesgo bajo en los aspectos analizados. "
+            "Aun así, te recomendamos revisar los detalles."
+        )
+
+    return ResumenGeneral(
+        nivel_riesgo_global=nivel,
+        puntaje=puntaje,
+        comentario_breve=comentario,
+    )
+
+
+def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
+    recomendaciones: list[str] = []
+    for seccion in secciones:
+        for hallazgo in seccion.hallazgos:
+            if hallazgo.nivel in ("alto", "medio"):
+                recomendaciones.append(
+                    f"En '{seccion.titulo}': {hallazgo.descripcion}"
+                )
+    if not recomendaciones:
+        recomendaciones.append(
+            "Esta política parece razonablemente transparente. "
+            "Recuerda que siempre puedes solicitar más información al responsable del servicio."
+        )
+    # Limitar a 5 recomendaciones más relevantes
+    return recomendaciones[:5]
+
+
+# ---------------------------------------------------------------------------
+# Orquestador principal
+# ---------------------------------------------------------------------------
+
+async def iniciar_analisis(
+    db: AsyncSession,
+    texto: str,
+    user_id: int,
+) -> AnalisisResponse:
+    """Orquesta el análisis completo de una política de privacidad.
+
+    1. Persiste el análisis con estado 'procesando'
+    2. Segmenta la política
+    3. Para cada sección: RAG + Gemini + validación
+    4. Calcula resumen y recomendaciones
+    5. Actualiza el registro con resultado 'completado'
+    6. Retorna AnalisisResponse
+    """
+    # Crear registro temporal
+    registro = AnalysisTemp(
+        user_id=user_id,
+        texto_original=texto[:2000],  # Guardar solo un extracto
+        estado="procesando",
+    )
+    db.add(registro)
+    await db.flush()
+    analisis_id = str(registro.id)
+    logger.info("Análisis %s iniciado para usuario %d.", analisis_id, user_id)
+
+    gemini = GeminiAdapter(
+        api_key=settings.gemini_api_key,
+        model=settings.gemini_model,
+    )
+
+    secciones_analizadas: list[SeccionAnalizada] = []
+    secciones = segmentar_politica(texto)
+    logger.info("Política segmentada en %d secciones.", len(secciones))
+
+    for idx, seccion in enumerate(secciones, 1):
+        logger.info("Analizando sección %d/%d...", idx, len(secciones))
+        try:
+            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
+            contexto = _construir_contexto_normativo(chunks)
+            prompt = _construir_prompt_seccion(seccion, contexto)
+
+            # Intento 1
+            json_str = await gemini.generar_analisis(SYSTEM_PROMPT, seccion, contexto)
+            try:
+                sec_analizada = _parsear_seccion(json_str)
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                logger.warning("Sección %d: JSON inválido en intento 1 (%s). Reintentando...", idx, e)
+                # Intento 2: pedir corrección explícita
+                prompt_correccion = (
+                    f"Tu respuesta anterior no era JSON válido. "
+                    f"Devuelve ÚNICAMENTE el JSON corregido sin texto adicional:\n{json_str[:500]}"
+                )
+                json_str2 = await gemini.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+                try:
+                    sec_analizada = _parsear_seccion(json_str2)
+                except (json.JSONDecodeError, KeyError, ValueError) as e2:
+                    logger.error("Sección %d: JSON inválido tras corrección (%s). Usando fallback.", idx, e2)
+                    sec_analizada = _seccion_fallback(seccion, idx)
+
+            secciones_analizadas.append(sec_analizada)
+
+        except LLMError as exc:
+            logger.error("LLMError en sección %d: %s", idx, exc.detail)
+            secciones_analizadas.append(_seccion_fallback(seccion, idx))
+        except Exception as exc:
+            logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
+            secciones_analizadas.append(_seccion_fallback(seccion, idx))
+
+    resumen = _calcular_resumen(secciones_analizadas)
+    recomendaciones = _generar_recomendaciones(secciones_analizadas)
+
+    respuesta = AnalisisResponse(
+        id_analisis=analisis_id,
+        fecha=datetime.now(timezone.utc),
+        resumen_general=resumen,
+        secciones_analizadas=secciones_analizadas,
+        recomendaciones=recomendaciones,
+    )
+
+    # Persistir resultado
+    registro.resultado = respuesta.model_dump(mode="json")
+    registro.estado = "completado"
+    await db.flush()
+    logger.info(
+        "Análisis %s completado. Nivel: %s, puntaje: %d.",
+        analisis_id,
+        resumen.nivel_riesgo_global,
+        resumen.puntaje,
+    )
+    return respuesta
+
+
+def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:
+    """Sección de respaldo cuando el LLM falla o devuelve JSON inválido."""
+    return SeccionAnalizada(
+        categoria_opp115="General",
+        titulo=f"Sección {idx}",
+        texto_original=texto_seccion[:500],
+        hallazgos=[
+            Hallazgo(
+                tipo="neutral",
+                descripcion="No fue posible analizar esta sección automáticamente.",
+                nivel="bajo",
+                fuentes_normativas=[],
+            )
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Recuperación de análisis existente
+# ---------------------------------------------------------------------------
+
+async def obtener_analisis(
+    db: AsyncSession,
+    analisis_id: int,
+    user_id: int,
+) -> AnalisisResponse:
+    """Recupera un análisis completado por su ID, verificando que pertenezca al usuario."""
+    result = await db.execute(
+        select(AnalysisTemp).where(
+            AnalysisTemp.id == analisis_id,
+            AnalysisTemp.user_id == user_id,
+        )
+    )
+    registro = result.scalar_one_or_none()
+
+    if registro is None or registro.estado != "completado" or registro.resultado is None:
+        raise AnalisisNoEncontradoError()
+
+    return AnalisisResponse(**registro.resultado)

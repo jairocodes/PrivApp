@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import apiClient from '@/api/client'
+import { analisisApi } from '@/api/analisis'
 import Button from '@/components/common/Button'
 
 type Pestana = 'texto' | 'url'
@@ -21,16 +22,15 @@ export default function IngestaForm() {
   const [url, setUrl] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fase, setFase] = useState<'ingesta' | 'analisis' | null>(null)
 
   const chars = texto.length
   const charColor =
-    chars < MIN_CHARS
+    chars > 0 && chars < MIN_CHARS
       ? 'text-red-500'
       : chars > MAX_CHARS
       ? 'text-red-500'
       : 'text-gray-500'
-
-  const resetError = () => setError(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,7 +41,7 @@ export default function IngestaForm() {
       return
     }
     if (pestana === 'texto' && chars > MAX_CHARS) {
-      setError(`El texto no puede superar ${MAX_CHARS} caracteres.`)
+      setError(`El texto no puede superar ${MAX_CHARS.toLocaleString()} caracteres.`)
       return
     }
     if (pestana === 'url' && !url.trim()) {
@@ -51,29 +51,42 @@ export default function IngestaForm() {
 
     setLoading(true)
     try {
-      let response: IngestaResponse
+      // Paso 1: ingesta
+      setFase('ingesta')
+      let textoProcesado: string
       if (pestana === 'texto') {
-        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/texto', {
-          texto,
-        })
-        response = data
+        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/texto', { texto })
+        textoProcesado = data.texto_procesado
       } else {
-        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/url', {
-          url: url.trim(),
-        })
-        response = data
+        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/url', { url: url.trim() })
+        textoProcesado = data.texto_procesado
       }
-      // Navegar a análisis pasando el texto procesado por state
-      navigate('/analizar/confirmar', { state: { textoProcessado: response.texto_procesado, palabras: response.palabras, fuente: response.fuente } })
+
+      // Paso 2: análisis
+      setFase('analisis')
+      const { data: analisis } = await analisisApi.iniciar(textoProcesado)
+
+      // Navegar a resultados
+      navigate(`/resultados/${analisis.id_analisis}`, {
+        state: { resultado: analisis },
+      })
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
-        'Ocurrió un error al procesar. Intenta de nuevo.'
+        'Ocurrió un error. Intenta de nuevo.'
       setError(msg)
     } finally {
       setLoading(false)
+      setFase(null)
     }
   }
+
+  const mensajeCarga =
+    fase === 'ingesta'
+      ? 'Procesando texto...'
+      : fase === 'analisis'
+      ? 'Analizando política con IA... (puede tardar unos segundos)'
+      : 'Cargando...'
 
   return (
     <div className="card max-w-2xl mx-auto">
@@ -88,7 +101,7 @@ export default function IngestaForm() {
             key={tab}
             role="tab"
             aria-selected={pestana === tab}
-            onClick={() => { setPestana(tab); resetError() }}
+            onClick={() => { setPestana(tab); setError(null) }}
             className={`px-5 py-2 text-sm font-medium capitalize transition-colors
               ${pestana === tab
                 ? 'border-b-2 border-blue-600 text-blue-600'
@@ -113,10 +126,11 @@ export default function IngestaForm() {
               placeholder="Pega aquí el texto completo de la política de privacidad..."
               className="w-full border border-gray-300 rounded-lg p-3 text-sm
                          focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+              disabled={loading}
             />
             <p className={`text-xs mt-1 text-right ${charColor}`}>
               {chars.toLocaleString()} / {MAX_CHARS.toLocaleString()} caracteres
-              {chars < MIN_CHARS && chars > 0 && (
+              {chars > 0 && chars < MIN_CHARS && (
                 <span className="ml-2">(mínimo {MIN_CHARS})</span>
               )}
             </p>
@@ -133,6 +147,7 @@ export default function IngestaForm() {
               placeholder="https://ejemplo.com/politica-de-privacidad"
               className="w-full border border-gray-300 rounded-lg p-3 text-sm
                          focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading}
             />
             <p className="text-xs text-gray-500 mt-1">
               El sistema descargará y extraerá automáticamente el texto.
@@ -146,10 +161,16 @@ export default function IngestaForm() {
           </div>
         )}
 
+        {loading && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-700">{mensajeCarga}</p>
+          </div>
+        )}
+
         <Button
           type="submit"
           isLoading={loading}
-          disabled={pestana === 'texto' && chars < MIN_CHARS}
+          disabled={pestana === 'texto' && (chars < MIN_CHARS || chars > MAX_CHARS)}
           className="w-full"
         >
           Analizar política
