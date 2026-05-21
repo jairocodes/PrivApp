@@ -48,9 +48,13 @@ en plataformas digitales.
 
 PRINCIPIOS DE OPERACIÓN:
 
-1. HONESTIDAD ACADÉMICA: Tus respuestas deben basarse exclusivamente en los fragmentos
-   normativos que se te proporcionan como contexto. No inventes referencias legales.
-   No cites artículos o principios que no aparezcan en el contexto proporcionado.
+1. COBERTURA NORMATIVA: SIEMPRE reporta todos los riesgos que encuentres en el texto,
+   independientemente de si el corpus proporcionado los cubre o no. Cuando el contexto
+   incluya un fragmento directamente aplicable, cítalo. Cuando el riesgo sea evidente
+   pero el corpus no tenga un fragmento específico, reporta el hallazgo indicando
+   "Principios generales de protección de datos" como documento fuente. NUNCA omitas
+   un riesgo obvio por falta de cita exacta. No inventes nombres de leyes ni artículos
+   que no aparezcan en el contexto.
 
 2. DISTINCIÓN JURISDICCIONAL: Guatemala no cuenta con una ley específica e integral
    de protección de datos personales. Cuando una afirmación se base en normativa
@@ -65,32 +69,39 @@ PRINCIPIOS DE OPERACIÓN:
 
 4. CLASIFICACIÓN ESTRUCTURADA: Clasifica cada sección de la política según la
    taxonomía OPP-115. Asigna niveles de riesgo (bajo, medio, alto) basados en
-   los criterios definidos en el contexto.
+   los criterios definidos a continuación.
 
 5. FORMATO DE SALIDA: Responde EXCLUSIVAMENTE en formato JSON válido según el
    esquema definido. No incluyas texto explicativo fuera del JSON.
 
-6. CITAS OBLIGATORIAS: Cada hallazgo debe citar el fragmento normativo específico
-   que lo respalda, incluyendo documento fuente y referencia.
-
 CRITERIOS DE RIESGO:
 
-ALTO RIESGO: Recopilación sin finalidad declarada, compartición con terceros no
-identificados, transferencia internacional sin garantías, conservación indefinida,
-ausencia de mecanismos para ejercer derechos, cambios unilaterales sin notificación,
-procesamiento de datos sensibles sin justificación, recopilación de menores sin
-salvaguardas.
+ALTO RIESGO (nivel: "alto") — DEBES reportar como alto cualquiera de estos:
+- Recopilación de datos biométricos (rostro, huellas, voz, audio pasivo)
+- Grabación o captura de audio/video sin finalidad declarada o de forma pasiva
+- Datos de salud, registros médicos o datos sensibles sin justificación explícita
+- Compartición con terceros no identificados o intermediarios de datos (data brokers)
+- Transferencia internacional a países sin leyes de protección de datos equivalentes
+- Conservación indefinida o irrenunciable de datos
+- Ausencia total de mecanismos para consultar, modificar o eliminar datos
+- Recopilación de menores de edad sin verificación de consentimiento parental
+- Consentimiento implícito por el simple uso (sin opción real de negarse)
+- Cambios unilaterales en la política sin notificación al usuario
 
-RIESGO MEDIO: Finalidades amplias o ambiguas, plazos de conservación poco claros,
-mecanismos de ejercicio de derechos engorrosos, transferencias internacionales con
-garantías genéricas.
+RIESGO MEDIO (nivel: "medio"):
+- Finalidades amplias o ambiguas ("mejorar servicios", "fines comerciales")
+- Plazos de conservación poco claros o sujetos a criterio unilateral
+- Mecanismos de ejercicio de derechos engorrosos o sin plazos definidos
+- Transferencias internacionales con garantías genéricas sin identificar países
 
-BAJO RIESGO: Lenguaje claro, finalidades específicas, plazos definidos, mecanismos
-claros para ejercer derechos, notificación previa de cambios, identificación clara
-de responsables."""
+BAJO RIESGO (nivel: "bajo"):
+- Lenguaje claro con finalidades específicas y limitadas
+- Plazos de conservación definidos
+- Mecanismos claros para ejercer derechos con contacto identificado
+- Notificación previa de cambios en la política"""
 
-# Fragmentos del corpus a incluir en el contexto (3 es suficiente en tier gratuito)
-_K_FRAGMENTOS = 3
+# Fragmentos del corpus a recuperar por sección (5 da mejor cobertura con OpenAI)
+_K_FRAGMENTOS = 5
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
 # Máximo de secciones a analizar (prototipo: limitar costo/latencia)
@@ -171,25 +182,28 @@ def _construir_contexto_normativo(chunks) -> str:
 
 def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> str:
     return (
-        f'TEXTO DE LA POLÍTICA A ANALIZAR (sección):\n"""\n{texto_seccion}\n"""\n\n'
-        f"CONTEXTO NORMATIVO RELEVANTE RECUPERADO:\n\n{contexto_normativo}\n\n"
-        "INSTRUCCIONES:\n"
-        "Analiza la sección proporcionada usando únicamente el contexto normativo entregado.\n"
-        "Genera tu respuesta en formato JSON estrictamente según el esquema:\n\n"
+        f'SECCIÓN DE LA POLÍTICA A ANALIZAR:\n"""\n{texto_seccion}\n"""\n\n'
+        f"FRAGMENTOS NORMATIVOS DE REFERENCIA:\n{contexto_normativo}\n\n"
+        "TAREA: Identifica y reporta TODOS los riesgos presentes en la sección anterior.\n"
+        "- Si un riesgo tiene respaldo en los fragmentos normativos, cítalo.\n"
+        "- Si un riesgo es evidente pero los fragmentos no lo cubren, repórtalo igual\n"
+        '  usando "Principios generales de protección de datos" como documento.\n'
+        "- NUNCA devuelvas hallazgos vacíos si el texto contiene cláusulas problemáticas.\n\n"
+        "Devuelve SOLO el siguiente JSON sin texto adicional:\n\n"
         "{\n"
-        '  "categoria_opp115": "string",\n'
-        '  "titulo": "string",\n'
-        '  "texto_original": "string",\n'
+        '  "categoria_opp115": "<categoría según taxonomía OPP-115>",\n'
+        '  "titulo": "<título descriptivo de la sección>",\n'
+        '  "texto_original": "<primeras 300 chars de la sección>",\n'
         '  "hallazgos": [\n'
         "    {\n"
-        '      "tipo": "riesgo|transparencia|neutral",\n'
-        '      "descripcion": "string",\n'
-        '      "nivel": "bajo|medio|alto",\n'
+        '      "tipo": "riesgo",\n'
+        '      "descripcion": "<qué riesgo representa para el usuario en lenguaje claro>",\n'
+        '      "nivel": "alto",\n'
         '      "fuentes_normativas": [\n'
         "        {\n"
-        '          "documento": "string",\n'
-        '          "referencia": "string",\n'
-        '          "fragmento_relevante": "string"\n'
+        '          "documento": "<nombre del documento normativo o Principios generales>",\n'
+        '          "referencia": "<artículo o sección>",\n'
+        '          "fragmento_relevante": "<texto exacto del fragmento que aplica>"\n'
         "        }\n"
         "      ]\n"
         "    }\n"
@@ -351,7 +365,7 @@ async def iniciar_analisis(
     analisis_id = str(registro.id)
     logger.info("Análisis %s iniciado para usuario %d.", analisis_id, user_id)
 
-    gemini = _crear_adaptador_llm()
+    llm = _crear_adaptador_llm()
 
     secciones_analizadas: list[SeccionAnalizada] = []
     secciones = segmentar_politica(texto)
@@ -362,10 +376,11 @@ async def iniciar_analisis(
         try:
             chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
             contexto = _construir_contexto_normativo(chunks)
-            prompt = _construir_prompt_seccion(seccion, contexto)
+            # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
+            user_msg = _construir_prompt_seccion(seccion, contexto)
 
             # Intento 1
-            json_str = await gemini.generar_analisis(SYSTEM_PROMPT, seccion, contexto)
+            json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
             try:
                 sec_analizada = _parsear_seccion(json_str)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
@@ -375,7 +390,7 @@ async def iniciar_analisis(
                     f"Tu respuesta anterior no era JSON válido. "
                     f"Devuelve ÚNICAMENTE el JSON corregido sin texto adicional:\n{json_str[:500]}"
                 )
-                json_str2 = await gemini.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+                json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
                 try:
                     sec_analizada = _parsear_seccion(json_str2)
                 except (json.JSONDecodeError, KeyError, ValueError) as e2:
@@ -391,10 +406,6 @@ async def iniciar_analisis(
             logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
             secciones_analizadas.append(_seccion_fallback(seccion, idx))
 
-        # Pausa entre secciones: con 20s entre 5 secciones el análisis supera 1 minuto,
-        # lo que distribuye las llamadas en dos ventanas y evita el límite del tier gratuito.
-        if idx < len(secciones):
-            await asyncio.sleep(20)
 
     resumen = _calcular_resumen(secciones_analizadas)
     recomendaciones = _generar_recomendaciones(secciones_analizadas)

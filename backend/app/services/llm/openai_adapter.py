@@ -52,10 +52,15 @@ class OpenAIAdapter(LLMAdapter):
         texto_seccion: str,
         contexto_normativo: str,
     ) -> str:
-        """Envía el prompt a OpenAI y retorna el texto generado."""
+        """Envía el prompt a OpenAI y retorna el texto generado.
+
+        texto_seccion se usa como mensaje de usuario completo (pre-construido por el caller).
+        contexto_normativo se ignora cuando ya está embebido en texto_seccion.
+        """
         prompt_usuario = (
-            f"CONTEXTO NORMATIVO:\n{contexto_normativo}\n\n"
-            f"SECCIÓN A ANALIZAR:\n{texto_seccion}"
+            texto_seccion
+            if not contexto_normativo
+            else f"CONTEXTO NORMATIVO:\n{contexto_normativo}\n\nSECCIÓN A ANALIZAR:\n{texto_seccion}"
         )
 
         try:
