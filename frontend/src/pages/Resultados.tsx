@@ -123,7 +123,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
           <Stat
             label="Hallazgos críticos"
             valor={totalHallazgosAltos}
-            color={totalHallazgosAltos > 0 ? 'text-red-600' : 'text-green-600'}
+            color={totalHallazgosAltos > 0 ? 'text-riesgo-alto' : 'text-riesgo-bajo'}
           />
           <Stat label="Recomendaciones" valor={recomendaciones.length} />
         </div>
@@ -193,9 +193,9 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
 
 function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: string }) {
   const colorArc: Record<string, string> = {
-    bajo: 'text-green-500',
-    medio: 'text-yellow-400',
-    alto: 'text-red-500',
+    bajo: 'text-riesgo-bajo',
+    medio: 'text-riesgo-medio',
+    alto: 'text-riesgo-alto',
   }
   return (
     <div className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4

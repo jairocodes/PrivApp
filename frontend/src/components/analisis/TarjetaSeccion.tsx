@@ -114,9 +114,9 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
 
 function NivelChip({ nivel }: { nivel: string }) {
   const cfg: Record<string, string> = {
-    alto: 'bg-red-100 text-red-700',
-    medio: 'bg-yellow-100 text-yellow-700',
-    bajo: 'bg-green-100 text-green-700',
+    alto: 'bg-riesgo-alto/15 text-riesgo-alto',
+    medio: 'bg-riesgo-medio/15 text-riesgo-medio',
+    bajo: 'bg-riesgo-bajo/15 text-riesgo-bajo',
     neutral: 'bg-gray-100 text-gray-600',
   }
   return (
