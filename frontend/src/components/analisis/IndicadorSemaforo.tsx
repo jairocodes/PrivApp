@@ -6,7 +6,7 @@ interface Props {
   mostrarTexto?: boolean
 }
 
-const CONFIG: Record<NivelRiesgo, { dot: string; bg: string; text: string; label: string; descripcion: string }> = {
+export const CONFIG: Record<NivelRiesgo, { dot: string; bg: string; text: string; label: string; descripcion: string }> = {
   bajo: {
     dot: 'bg-riesgo-bajo',
     bg: 'bg-riesgo-bajo/10 border-riesgo-bajo/30',
