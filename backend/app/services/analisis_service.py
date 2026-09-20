@@ -19,16 +19,20 @@ import re
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.database as database
 from app.config import settings
 from app.core.exceptions import AnalisisNoEncontradoError, LLMError
 from app.models.analysis import AnalysisTemp
 from app.schemas.analysis import (
+    AnalisisEstadoResponse,
+    AnalisisHistorialItem,
     AnalisisResponse,
     FuenteNormativa,
     Hallazgo,
+    HistorialResponse,
     ResumenGeneral,
     SeccionAnalizada,
 )
@@ -340,95 +344,129 @@ def _crear_adaptador_llm() -> LLMAdapter:
     return GeminiAdapter(api_key=settings.gemini_api_key, model=settings.gemini_model)
 
 
-async def iniciar_analisis(
+async def crear_analisis(
     db: AsyncSession,
     texto: str,
     user_id: int,
-) -> AnalisisResponse:
-    """Orquesta el análisis completo de una política de privacidad.
+) -> AnalysisTemp:
+    """Crea el registro inicial de un análisis (estado 'procesando') y lo comitea.
 
-    1. Persiste el análisis con estado 'procesando'
-    2. Segmenta la política
-    3. Para cada sección: RAG + Gemini + validación
-    4. Calcula resumen y recomendaciones
-    5. Actualiza el registro con resultado 'completado'
-    6. Retorna AnalisisResponse
+    El commit explícito (no solo flush) es necesario porque la tarea de fondo
+    que sigue (ver ejecutar_analisis_background) usa una sesión de BD distinta
+    y solo puede ver filas ya confirmadas por otra conexión.
     """
-    # Crear registro temporal
     registro = AnalysisTemp(
         user_id=user_id,
         texto_original=texto[:2000],  # Guardar solo un extracto
         estado="procesando",
+        seccion_actual=0,
     )
     db.add(registro)
-    await db.flush()
-    analisis_id = str(registro.id)
-    logger.info("Análisis %s iniciado para usuario %d.", analisis_id, user_id)
+    await db.commit()
+    await db.refresh(registro)
+    logger.info("Análisis %s creado para usuario %d.", registro.id, user_id)
+    return registro
 
-    llm = _crear_adaptador_llm()
 
-    secciones_analizadas: list[SeccionAnalizada] = []
-    secciones = segmentar_politica(texto)
-    logger.info("Política segmentada en %d secciones.", len(secciones))
+# Referencias a tareas de fondo en curso, para que asyncio no las recolecte a
+# medias (ver advertencia de la documentación de asyncio.create_task).
+_tareas_en_fondo: set[asyncio.Task] = set()
 
-    for idx, seccion in enumerate(secciones, 1):
-        logger.info("Analizando sección %d/%d...", idx, len(secciones))
+
+def lanzar_analisis_en_fondo(analisis_id: int, texto: str) -> None:
+    """Programa ejecutar_analisis_background como tarea de fondo del event loop."""
+    tarea = asyncio.create_task(ejecutar_analisis_background(analisis_id, texto))
+    _tareas_en_fondo.add(tarea)
+    tarea.add_done_callback(_tareas_en_fondo.discard)
+
+
+async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
+    """Segmenta y analiza la política sección por sección, persistiendo el
+    progreso a medida que avanza. Corre en una sesión de BD propia,
+    independiente de la sesión del request que la originó (HU-13).
+    """
+    async with database.AsyncSessionLocal() as db:
+        registro: AnalysisTemp | None = None
         try:
-            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
-            contexto = _construir_contexto_normativo(chunks)
-            # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
-            user_msg = _construir_prompt_seccion(seccion, contexto)
+            result = await db.execute(select(AnalysisTemp).where(AnalysisTemp.id == analisis_id))
+            registro = result.scalar_one()
 
-            # Intento 1
-            json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
-            try:
-                sec_analizada = _parsear_seccion(json_str)
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
-                logger.warning("Sección %d: JSON inválido en intento 1 (%s). Reintentando...", idx, e)
-                # Intento 2: pedir corrección explícita
-                prompt_correccion = (
-                    f"Tu respuesta anterior no era JSON válido. "
-                    f"Devuelve ÚNICAMENTE el JSON corregido sin texto adicional:\n{json_str[:500]}"
-                )
-                json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+            llm = _crear_adaptador_llm()
+            secciones = segmentar_politica(texto)
+            logger.info("Análisis %s: política segmentada en %d secciones.", analisis_id, len(secciones))
+
+            registro.secciones_total = len(secciones)
+            await db.commit()
+
+            secciones_analizadas: list[SeccionAnalizada] = []
+            for idx, seccion in enumerate(secciones, 1):
+                logger.info("Análisis %s: analizando sección %d/%d...", analisis_id, idx, len(secciones))
                 try:
-                    sec_analizada = _parsear_seccion(json_str2)
-                except (json.JSONDecodeError, KeyError, ValueError) as e2:
-                    logger.error("Sección %d: JSON inválido tras corrección (%s). Usando fallback.", idx, e2)
-                    sec_analizada = _seccion_fallback(seccion, idx)
+                    chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
+                    contexto = _construir_contexto_normativo(chunks)
+                    # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
+                    user_msg = _construir_prompt_seccion(seccion, contexto)
 
-            secciones_analizadas.append(sec_analizada)
+                    # Intento 1
+                    json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
+                    try:
+                        sec_analizada = _parsear_seccion(json_str)
+                    except (json.JSONDecodeError, KeyError, ValueError) as e:
+                        logger.warning("Sección %d: JSON inválido en intento 1 (%s). Reintentando...", idx, e)
+                        # Intento 2: pedir corrección explícita
+                        prompt_correccion = (
+                            f"Tu respuesta anterior no era JSON válido. "
+                            f"Devuelve ÚNICAMENTE el JSON corregido sin texto adicional:\n{json_str[:500]}"
+                        )
+                        json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+                        try:
+                            sec_analizada = _parsear_seccion(json_str2)
+                        except (json.JSONDecodeError, KeyError, ValueError) as e2:
+                            logger.error("Sección %d: JSON inválido tras corrección (%s). Usando fallback.", idx, e2)
+                            sec_analizada = _seccion_fallback(seccion, idx)
 
-        except LLMError as exc:
-            logger.error("LLMError en sección %d: %s", idx, exc.detail)
-            secciones_analizadas.append(_seccion_fallback(seccion, idx))
-        except Exception as exc:
-            logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
-            secciones_analizadas.append(_seccion_fallback(seccion, idx))
+                    secciones_analizadas.append(sec_analizada)
 
+                except LLMError as exc:
+                    logger.error("LLMError en sección %d: %s", idx, exc.detail)
+                    secciones_analizadas.append(_seccion_fallback(seccion, idx))
+                except Exception as exc:
+                    logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
+                    secciones_analizadas.append(_seccion_fallback(seccion, idx))
 
-    resumen = _calcular_resumen(secciones_analizadas)
-    recomendaciones = _generar_recomendaciones(secciones_analizadas)
+                registro.seccion_actual = idx
+                await db.commit()
 
-    respuesta = AnalisisResponse(
-        id_analisis=analisis_id,
-        fecha=datetime.now(timezone.utc),
-        resumen_general=resumen,
-        secciones_analizadas=secciones_analizadas,
-        recomendaciones=recomendaciones,
-    )
+            resumen = _calcular_resumen(secciones_analizadas)
+            recomendaciones = _generar_recomendaciones(secciones_analizadas)
 
-    # Persistir resultado
-    registro.resultado = respuesta.model_dump(mode="json")
-    registro.estado = "completado"
-    await db.flush()
-    logger.info(
-        "Análisis %s completado. Nivel: %s, puntaje: %d.",
-        analisis_id,
-        resumen.nivel_riesgo_global,
-        resumen.puntaje,
-    )
-    return respuesta
+            respuesta = AnalisisResponse(
+                id_analisis=str(analisis_id),
+                fecha=datetime.now(timezone.utc),
+                resumen_general=resumen,
+                secciones_analizadas=secciones_analizadas,
+                recomendaciones=recomendaciones,
+            )
+
+            registro.resultado = respuesta.model_dump(mode="json")
+            registro.estado = "completado"
+            await db.commit()
+            logger.info(
+                "Análisis %s completado. Nivel: %s, puntaje: %d.",
+                analisis_id, resumen.nivel_riesgo_global, resumen.puntaje,
+            )
+        except Exception:
+            logger.exception("Análisis %s falló en la tarea de fondo.", analisis_id)
+            await db.rollback()
+            try:
+                if registro is None:
+                    result = await db.execute(select(AnalysisTemp).where(AnalysisTemp.id == analisis_id))
+                    registro = result.scalar_one_or_none()
+                if registro is not None:
+                    registro.estado = "error"
+                    await db.commit()
+            except Exception:
+                logger.exception("No fue posible marcar el análisis %s como error.", analisis_id)
 
 
 def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:
@@ -470,3 +508,69 @@ async def obtener_analisis(
         raise AnalisisNoEncontradoError()
 
     return AnalisisResponse(**registro.resultado)
+
+
+async def obtener_estado_analisis(
+    db: AsyncSession,
+    analisis_id: int,
+    user_id: int,
+) -> AnalisisEstadoResponse:
+    """Devuelve el estado de progreso de un análisis, esté o no completado (HU-13)."""
+    result = await db.execute(
+        select(AnalysisTemp).where(
+            AnalysisTemp.id == analisis_id,
+            AnalysisTemp.user_id == user_id,
+        )
+    )
+    registro = result.scalar_one_or_none()
+
+    if registro is None:
+        raise AnalisisNoEncontradoError()
+
+    return AnalisisEstadoResponse(
+        estado=registro.estado,
+        seccion_actual=registro.seccion_actual,
+        secciones_total=registro.secciones_total,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Historial de análisis (HU-14)
+# ---------------------------------------------------------------------------
+
+async def listar_historial(
+    db: AsyncSession,
+    user_id: int,
+    page: int,
+    page_size: int,
+) -> HistorialResponse:
+    """Lista paginada de los análisis completados del usuario, más recientes primero."""
+    filtro = (AnalysisTemp.user_id == user_id, AnalysisTemp.estado == "completado")
+
+    total_result = await db.execute(
+        select(func.count()).select_from(AnalysisTemp).where(*filtro)
+    )
+    total = total_result.scalar_one()
+
+    result = await db.execute(
+        select(AnalysisTemp)
+        .where(*filtro)
+        .order_by(AnalysisTemp.created_at.desc())
+        .limit(page_size)
+        .offset((page - 1) * page_size)
+    )
+    registros = result.scalars().all()
+
+    items = [
+        AnalisisHistorialItem(
+            id_analisis=str(registro.id),
+            fecha=registro.created_at,
+            nivel_riesgo_global=registro.resultado["resumen_general"]["nivel_riesgo_global"],
+            puntaje=registro.resultado["resumen_general"]["puntaje"],
+            comentario_breve=registro.resultado["resumen_general"]["comentario_breve"],
+        )
+        for registro in registros
+        if registro.resultado is not None
+    ]
+
+    return HistorialResponse(items=items, total=total, page=page, page_size=page_size)

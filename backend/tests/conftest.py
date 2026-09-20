@@ -1,8 +1,17 @@
 """Configuración global de pytest con base de datos SQLite en memoria para tests."""
 
+import os
+
+# Los tests parchean GeminiAdapter (unittest.mock.patch), así que el proveedor
+# activo debe ser "gemini" para que ese parche realmente intercepte la llamada
+# al LLM. Debe fijarse ANTES de importar app.main (que instancia app.config.settings),
+# y con setdefault para no pisar un LLM_PROVIDER que el entorno ya haya definido.
+os.environ.setdefault("LLM_PROVIDER", "gemini")
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
 from app.core.security import hash_password
 from app.database import get_db
@@ -14,8 +23,17 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture(scope="function")
-async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+async def test_engine(monkeypatch):
+    # StaticPool: una sola conexión física compartida por todas las sesiones
+    # de la prueba, para que la sesión independiente que abre la tarea de
+    # fondo (app.database.AsyncSessionLocal, ver HU-13) vea la misma base en
+    # memoria que la sesión de la request (sin esto, cada sesión nueva sobre
+    # sqlite ":memory:" obtendría una base vacía y aislada).
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=StaticPool)
+    monkeypatch.setattr(
+        "app.database.AsyncSessionLocal",
+        async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False),
+    )
     async with engine.begin() as conn:
         # corpus_chunks usa pgvector (incompatible con SQLite), se omite
         await conn.run_sync(User.__table__.create, checkfirst=True)

@@ -41,6 +41,8 @@ class AnalysisTemp(Base):
     texto_original: Mapped[str] = mapped_column(Text, nullable=False)
     resultado: Mapped[dict | None] = mapped_column(JSONBCompat)
     estado: Mapped[str] = mapped_column(String(20), default="pendiente")
+    seccion_actual: Mapped[int] = mapped_column(Integer, default=0)
+    secciones_total: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -7,6 +7,7 @@ Flujo por sección de política:
 4. Devuelve top-k fragmentos con metadatos para construir el prompt
 """
 
+import asyncio
 import logging
 
 from sqlalchemy import select, text
@@ -37,7 +38,11 @@ async def recuperar_contexto(
     Returns:
         Lista de CorpusChunk ordenados por relevancia (mayor similitud primero).
     """
-    query_embedding = encode(query_text)
+    # encode() carga el modelo de embeddings (~sentence-transformers) y hace
+    # inferencia en CPU de forma síncrona; se corre en un hilo aparte para no
+    # bloquear el event loop mientras otras requests (ej. GET /estado, HU-13)
+    # necesitan seguir respondiendo mientras el análisis avanza en segundo plano.
+    query_embedding = await asyncio.to_thread(encode, query_text)
     embedding_str = "[" + ",".join(f"{x:.6f}" for x in query_embedding) + "]"
 
     # Construir consulta SQL con operador pgvector <=> (distancia coseno)

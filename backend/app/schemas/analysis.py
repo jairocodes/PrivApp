@@ -40,6 +40,32 @@ class AnalisisResponse(BaseModel):
     recomendaciones: list[str]
 
 
+class AnalisisHistorialItem(BaseModel):
+    id_analisis: str
+    fecha: datetime
+    nivel_riesgo_global: Literal["bajo", "medio", "alto"]
+    puntaje: int
+    comentario_breve: str
+
+
+class HistorialResponse(BaseModel):
+    items: list[AnalisisHistorialItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class AnalisisIniciadoResponse(BaseModel):
+    id_analisis: str
+    estado: Literal["procesando"]
+
+
+class AnalisisEstadoResponse(BaseModel):
+    estado: Literal["procesando", "completado", "error"]
+    seccion_actual: int
+    secciones_total: int | None
+
+
 class IngestaTextoRequest(BaseModel):
     texto: str = Field(..., min_length=200, max_length=200_000)
 

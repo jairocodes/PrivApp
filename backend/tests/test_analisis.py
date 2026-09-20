@@ -7,10 +7,33 @@
 - TestEndpointsAnalisis: integración con los endpoints /api/analisis/*
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+def _respuesta_gemini_valida() -> str:
+    return json.dumps({
+        "categoria_opp115": "First Party Collection/Use",
+        "titulo": "Recopilación de datos personales",
+        "texto_original": "Recopilamos datos para operar el servicio.",
+        "hallazgos": [
+            {
+                "tipo": "transparencia",
+                "descripcion": "La finalidad está claramente declarada.",
+                "nivel": "bajo",
+                "fuentes_normativas": [
+                    {
+                        "documento": "Principios OEA 2021",
+                        "referencia": "Principio 2",
+                        "fragmento_relevante": "Los datos deben tener finalidad declarada."
+                    }
+                ]
+            }
+        ]
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -201,28 +224,21 @@ class TestResumen:
 # Endpoints de análisis — integración
 # ---------------------------------------------------------------------------
 
-class TestEndpointsAnalisis:
-    def _respuesta_gemini_valida(self) -> str:
-        return json.dumps({
-            "categoria_opp115": "First Party Collection/Use",
-            "titulo": "Recopilación de datos personales",
-            "texto_original": "Recopilamos datos para operar el servicio.",
-            "hallazgos": [
-                {
-                    "tipo": "transparencia",
-                    "descripcion": "La finalidad está claramente declarada.",
-                    "nivel": "bajo",
-                    "fuentes_normativas": [
-                        {
-                            "documento": "Principios OEA 2021",
-                            "referencia": "Principio 2",
-                            "fragmento_relevante": "Los datos deben tener finalidad declarada."
-                        }
-                    ]
-                }
-            ]
-        })
+async def _esperar_estado_final(client, headers, analisis_id, intentos=40, espera=0.05) -> dict:
+    """Sondea GET /estado hasta que el análisis deje de estar 'procesando'
+    (o se agoten los intentos). Usado por los tests de integración de HU-13,
+    donde el análisis corre en una tarea de fondo real (asyncio.create_task)
+    y no de forma inline como bajo ASGITransport con BackgroundTasks."""
+    for _ in range(intentos):
+        response = await client.get(f"/api/analisis/{analisis_id}/estado", headers=headers)
+        datos = response.json()
+        if datos["estado"] != "procesando":
+            return datos
+        await asyncio.sleep(espera)
+    raise AssertionError(f"El análisis {analisis_id} no terminó tras {intentos} intentos.")
 
+
+class TestEndpointsAnalisis:
     async def test_iniciar_sin_autenticacion_retorna_403(self, client):
         response = await client.post(
             "/api/analisis/iniciar",
@@ -245,6 +261,7 @@ class TestEndpointsAnalisis:
         from app.core.security import create_access_token
 
         token = create_access_token("1")
+        headers = {"Authorization": f"Bearer {token}"}
         texto_largo = (
             "Esta política de privacidad describe cómo nuestra empresa recopila, "
             "usa y protege tus datos personales cuando utilizas nuestros servicios. "
@@ -253,23 +270,28 @@ class TestEndpointsAnalisis:
             "No compartimos tus datos con terceros sin tu consentimiento explícito. "
         ) * 6
 
-        chunks_mock = []  # RAG vacío en tests
-        respuesta_mock = self._respuesta_gemini_valida()
-
-        with patch("app.services.analisis_service.recuperar_contexto", return_value=chunks_mock), \
+        with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
              patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
             instancia = MockGemini.return_value
-            instancia.generar_analisis = AsyncMock(return_value=respuesta_mock)
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
 
             response = await client.post(
-                "/api/analisis/iniciar",
-                json={"texto": texto_largo},
-                headers={"Authorization": f"Bearer {token}"},
+                "/api/analisis/iniciar", json={"texto": texto_largo}, headers=headers,
             )
+            assert response.status_code == 202
+            iniciado = response.json()
+            assert iniciado["estado"] == "procesando"
+            analisis_id = iniciado["id_analisis"]
 
-        assert response.status_code == 201
-        datos = response.json()
-        assert "id_analisis" in datos
+            estado_final = await _esperar_estado_final(client, headers, analisis_id)
+            assert estado_final["estado"] == "completado"
+            assert estado_final["seccion_actual"] == estado_final["secciones_total"]
+
+            respuesta = await client.get(f"/api/analisis/{analisis_id}", headers=headers)
+
+        assert respuesta.status_code == 200
+        datos = respuesta.json()
+        assert datos["id_analisis"] == analisis_id
         assert "resumen_general" in datos
         assert "secciones_analizadas" in datos
         assert "recomendaciones" in datos
@@ -280,6 +302,7 @@ class TestEndpointsAnalisis:
         from app.core.exceptions import LLMError
 
         token = create_access_token("1")
+        headers = {"Authorization": f"Bearer {token}"}
         texto_largo = (
             "Política de privacidad. Recopilamos datos para operar el servicio. "
             "Los datos son tratados conforme a la normativa aplicable. "
@@ -293,15 +316,19 @@ class TestEndpointsAnalisis:
             )
 
             response = await client.post(
-                "/api/analisis/iniciar",
-                json={"texto": texto_largo},
-                headers={"Authorization": f"Bearer {token}"},
+                "/api/analisis/iniciar", json={"texto": texto_largo}, headers=headers,
             )
+            assert response.status_code == 202
+            analisis_id = response.json()["id_analisis"]
 
-        # El análisis debe completarse con secciones de fallback
-        assert response.status_code == 201
-        datos = response.json()
-        assert "secciones_analizadas" in datos
+            estado_final = await _esperar_estado_final(client, headers, analisis_id)
+            # El análisis debe completarse con secciones de fallback, no quedar en error
+            assert estado_final["estado"] == "completado"
+
+            respuesta = await client.get(f"/api/analisis/{analisis_id}", headers=headers)
+
+        assert respuesta.status_code == 200
+        assert "secciones_analizadas" in respuesta.json()
 
     async def test_obtener_analisis_no_existente_retorna_404(self, client):
         from app.core.security import create_access_token
@@ -316,3 +343,136 @@ class TestEndpointsAnalisis:
     async def test_obtener_sin_autenticacion_retorna_403(self, client):
         response = await client.get("/api/analisis/1")
         assert response.status_code == 403
+
+    async def test_obtener_analisis_en_procesamiento_retorna_404(self, client, db_session, seed_user):
+        from app.core.security import create_access_token
+        from app.models.analysis import AnalysisTemp
+
+        registro = AnalysisTemp(
+            user_id=seed_user.id, texto_original="texto", estado="procesando", seccion_actual=0,
+        )
+        db_session.add(registro)
+        await db_session.commit()
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{registro.id}", headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+
+class TestEstadoYProgreso:
+    async def test_estado_sin_autenticacion_retorna_403(self, client):
+        response = await client.get("/api/analisis/1/estado")
+        assert response.status_code == 403
+
+    async def test_estado_no_existente_retorna_404(self, client):
+        from app.core.security import create_access_token
+
+        token = create_access_token("1")
+        response = await client.get(
+            "/api/analisis/99999/estado", headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+    async def test_estado_de_otro_usuario_retorna_404(self, client, db_session, seed_user):
+        from app.core.security import create_access_token, hash_password
+        from app.models.analysis import AnalysisTemp
+        from app.models.user import User
+
+        otro_usuario = User(
+            nombre="Otro Usuario", email="otro-estado@privapp.test",
+            hashed_password=hash_password("OtraPass123"), is_active=True,
+        )
+        db_session.add(otro_usuario)
+        await db_session.flush()
+
+        registro = AnalysisTemp(
+            user_id=otro_usuario.id, texto_original="texto", estado="procesando", seccion_actual=0,
+        )
+        db_session.add(registro)
+        await db_session.commit()
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{registro.id}/estado", headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 404
+
+    async def test_estado_en_procesamiento_refleja_seccion_actual(self, client, db_session, seed_user):
+        from app.core.security import create_access_token
+        from app.models.analysis import AnalysisTemp
+
+        registro = AnalysisTemp(
+            user_id=seed_user.id, texto_original="texto", estado="procesando",
+            seccion_actual=1, secciones_total=3,
+        )
+        db_session.add(registro)
+        await db_session.commit()
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{registro.id}/estado", headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        datos = response.json()
+        assert datos == {"estado": "procesando", "seccion_actual": 1, "secciones_total": 3}
+
+    async def test_ejecutar_analisis_background_completa_y_persiste_resultado(
+        self, db_session, seed_user
+    ):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto_largo = "Política de privacidad de prueba. " * 60
+        registro = await crear_analisis(db_session, texto_largo, seed_user.id)
+
+        with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
+             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
+            instancia = MockGemini.return_value
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
+            await ejecutar_analisis_background(registro.id, texto_largo)
+
+        await db_session.refresh(registro)
+        assert registro.estado == "completado"
+        assert registro.secciones_total is not None
+        assert registro.seccion_actual == registro.secciones_total
+        assert registro.resultado is not None
+
+    async def test_ejecutar_analisis_background_fallo_marca_estado_error(
+        self, db_session, seed_user
+    ):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto_largo = "Política de privacidad de prueba. " * 60
+        registro = await crear_analisis(db_session, texto_largo, seed_user.id)
+
+        with patch(
+            "app.services.analisis_service.segmentar_politica",
+            side_effect=RuntimeError("fallo simulado"),
+        ):
+            await ejecutar_analisis_background(registro.id, texto_largo)
+
+        await db_session.refresh(registro)
+        assert registro.estado == "error"
+
+    async def test_iniciar_dispara_tarea_en_segundo_plano_que_completa(self, client):
+        from app.core.security import create_access_token
+
+        token = create_access_token("1")
+        headers = {"Authorization": f"Bearer {token}"}
+        texto_largo = "Política de privacidad de prueba para integración. " * 20
+
+        with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
+             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
+            instancia = MockGemini.return_value
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
+
+            response = await client.post(
+                "/api/analisis/iniciar", json={"texto": texto_largo}, headers=headers,
+            )
+            assert response.status_code == 202
+            analisis_id = response.json()["id_analisis"]
+
+            estado_final = await _esperar_estado_final(client, headers, analisis_id)
+
+        assert estado_final["estado"] == "completado"
