@@ -9,7 +9,7 @@ import logging
 import google.generativeai as genai
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -24,6 +24,9 @@ _RETRYABLE = (Exception,)
 
 def _es_error_reintentable(exc: BaseException) -> bool:
     """Reintenta en errores transitorios de red/cuota; no en errores de autenticación."""
+    if isinstance(exc, LLMError):
+        # Ya fue clasificado como no reintentable dentro de generar_analisis.
+        return False
     msg = str(exc).lower()
     no_reintentar = ("api_key", "permission", "invalid", "not found", "quota exceeded permanently")
     return not any(s in msg for s in no_reintentar)
@@ -38,7 +41,7 @@ class GeminiAdapter(LLMAdapter):
         logger.info("GeminiAdapter inicializado con modelo '%s'.", model)
 
     @retry(
-        retry=retry_if_exception_type(Exception),
+        retry=retry_if_exception(_es_error_reintentable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=2, min=2, max=10),
         reraise=True,
