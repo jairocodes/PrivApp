@@ -9,7 +9,7 @@ import logging
 from openai import AsyncOpenAI, APIStatusError, RateLimitError, APIConnectionError
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
@@ -41,7 +41,7 @@ class OpenAIAdapter(LLMAdapter):
         logger.info("OpenAIAdapter inicializado con modelo '%s'.", model)
 
     @retry(
-        retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+        retry=retry_if_exception(_es_error_reintentable),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=2, min=2, max=10),
         reraise=True,
@@ -85,9 +85,9 @@ class OpenAIAdapter(LLMAdapter):
                 len(texto),
             )
             return texto
-        except (RateLimitError, APIConnectionError):
-            logger.warning("Error transitorio en OpenAI. Reintentando...")
-            raise
         except Exception as exc:
+            if _es_error_reintentable(exc):
+                logger.warning("Error transitorio en OpenAI (%s). Reintentando...", type(exc).__name__)
+                raise
             logger.error("Error no reintentable en OpenAI: %s", type(exc).__name__)
             raise LLMError(f"Error en OpenAI: {type(exc).__name__}") from exc
