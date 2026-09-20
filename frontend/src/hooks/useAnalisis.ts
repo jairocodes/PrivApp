@@ -7,25 +7,6 @@ export function useAnalisis() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const iniciar = async (texto: string): Promise<AnalisisResult | null> => {
-    setIsLoading(true)
-    setError(null)
-    setResultado(null)
-    try {
-      const res = await analisisApi.iniciar(texto)
-      setResultado(res.data)
-      return res.data
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
-        'No fue posible completar el análisis. Intenta nuevamente.'
-      setError(msg)
-      return null
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const obtener = async (id: string | number): Promise<void> => {
     setIsLoading(true)
     setError(null)
@@ -39,5 +20,5 @@ export function useAnalisis() {
     }
   }
 
-  return { resultado, isLoading, error, iniciar, obtener }
+  return { resultado, isLoading, error, obtener }
 }

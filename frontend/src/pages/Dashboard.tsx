@@ -31,15 +31,18 @@ export default function Dashboard() {
             </div>
           </Link>
 
-          <div className="card flex items-center gap-4 opacity-50 cursor-not-allowed">
-            <div className="p-3 bg-gray-100 rounded-lg">
-              <ShieldCheck size={24} className="text-gray-400" />
+          <Link
+            to="/historial"
+            className="card flex items-center gap-4 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="p-3 bg-blue-100 rounded-lg">
+              <ShieldCheck size={24} className="text-blue-600" />
             </div>
             <div>
               <h2 className="font-semibold text-gray-900">Mis análisis</h2>
-              <p className="text-sm text-gray-500">Disponible en versión final</p>
+              <p className="text-sm text-gray-500">Consulta tu historial de análisis</p>
             </div>
-          </div>
+          </Link>
         </div>
       </main>
     </div>

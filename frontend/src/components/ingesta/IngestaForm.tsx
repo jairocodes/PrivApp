@@ -62,14 +62,12 @@ export default function IngestaForm() {
         textoProcesado = data.texto_procesado
       }
 
-      // Paso 2: análisis
+      // Paso 2: inicia el análisis (se procesa en segundo plano)
       setFase('analisis')
-      const { data: analisis } = await analisisApi.iniciar(textoProcesado)
+      const { data: iniciado } = await analisisApi.iniciar(textoProcesado)
 
-      // Navegar a resultados
-      navigate(`/resultados/${analisis.id_analisis}`, {
-        state: { resultado: analisis },
-      })
+      // Navegar a la vista de progreso / resultados
+      navigate(`/resultados/${iniciado.id_analisis}`)
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
@@ -85,7 +83,7 @@ export default function IngestaForm() {
     fase === 'ingesta'
       ? 'Procesando texto...'
       : fase === 'analisis'
-      ? 'Analizando política con IA... (puede tardar unos segundos)'
+      ? 'Iniciando análisis...'
       : 'Cargando...'
 
   return (

@@ -6,6 +6,7 @@ import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
 import Ingesta from '@/pages/Ingesta'
 import Resultados from '@/pages/Resultados'
+import Historial from '@/pages/Historial'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analizar" element={<Ingesta />} />
             <Route path="/resultados/:id" element={<Resultados />} />
+            <Route path="/historial" element={<Historial />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>

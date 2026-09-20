@@ -35,3 +35,31 @@ export interface AnalisisResult {
   secciones_analizadas: SeccionAnalizada[]
   recomendaciones: string[]
 }
+
+export interface AnalisisHistorialItem {
+  id_analisis: string
+  fecha: string
+  nivel_riesgo_global: NivelRiesgo
+  puntaje: number
+  comentario_breve: string
+}
+
+export interface HistorialResponse {
+  items: AnalisisHistorialItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface AnalisisIniciado {
+  id_analisis: string
+  estado: 'procesando'
+}
+
+export type EstadoAnalisis = 'procesando' | 'completado' | 'error'
+
+export interface AnalisisEstado {
+  estado: EstadoAnalisis
+  seccion_actual: number
+  secciones_total: number | null
+}
