@@ -143,3 +143,49 @@ class TestRutasProtegidas:
     async def test_logout_sin_token_devuelve_403(self, client: AsyncClient):
         r = await client.post("/api/auth/logout")
         assert r.status_code == 403
+
+    async def test_logout_invalida_el_token(self, client: AsyncClient):
+        """(a) token revocado → 401 en cualquier endpoint protegido posterior."""
+        r = await client.post("/api/auth/register", json=USUARIO_BASE)
+        token = r.json()["access_token"]
+
+        logout = await client.post(
+            "/api/auth/logout", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert logout.status_code == 200
+
+        me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 401
+
+    async def test_token_no_revocado_sigue_funcionando(self, client: AsyncClient):
+        """(b) token no revocado → sigue funcionando normalmente."""
+        r = await client.post("/api/auth/register", json=USUARIO_BASE)
+        token = r.json()["access_token"]
+
+        me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200
+
+    async def test_logout_no_afecta_otro_token_del_mismo_usuario(self, client: AsyncClient):
+        """La revocación es por jti (token específico), no por usuario."""
+        await client.post("/api/auth/register", json=USUARIO_BASE)
+        login1 = await client.post(
+            "/api/auth/login",
+            json={"email": USUARIO_BASE["email"], "password": USUARIO_BASE["password"]},
+        )
+        login2 = await client.post(
+            "/api/auth/login",
+            json={"email": USUARIO_BASE["email"], "password": USUARIO_BASE["password"]},
+        )
+        token1 = login1.json()["access_token"]
+        token2 = login2.json()["access_token"]
+
+        logout = await client.post(
+            "/api/auth/logout", headers={"Authorization": f"Bearer {token1}"}
+        )
+        assert logout.status_code == 200
+
+        me1 = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token1}"})
+        assert me1.status_code == 401
+
+        me2 = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token2}"})
+        assert me2.status_code == 200
