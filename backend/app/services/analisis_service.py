@@ -19,13 +19,14 @@ import re
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.database as database
 from app.config import settings
 from app.core.exceptions import AnalisisNoEncontradoError, LLMError
 from app.models.analysis import AnalysisTemp
+from app.repositories.analisis import RepositorioAnalisis
 from app.schemas.analysis import (
     AnalisisEstadoResponse,
     AnalisisHistorialItem,
@@ -361,7 +362,7 @@ async def crear_analisis(
         estado="procesando",
         seccion_actual=0,
     )
-    db.add(registro)
+    RepositorioAnalisis(db).agregar(registro)
     await db.commit()
     await db.refresh(registro)
     logger.info("Análisis %s creado para usuario %d.", registro.id, user_id)
@@ -386,10 +387,12 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
     independiente de la sesión del request que la originó (HU-13).
     """
     async with database.AsyncSessionLocal() as db:
+        repo = RepositorioAnalisis(db)
         registro: AnalysisTemp | None = None
         try:
-            result = await db.execute(select(AnalysisTemp).where(AnalysisTemp.id == analisis_id))
-            registro = result.scalar_one()
+            registro = await repo.obtener_por_id(analisis_id)
+            if registro is None:
+                raise NoResultFound(f"AnalysisTemp {analisis_id} no encontrado")
 
             llm = _crear_adaptador_llm()
             secciones = segmentar_politica(texto)
@@ -460,8 +463,7 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
             await db.rollback()
             try:
                 if registro is None:
-                    result = await db.execute(select(AnalysisTemp).where(AnalysisTemp.id == analisis_id))
-                    registro = result.scalar_one_or_none()
+                    registro = await repo.obtener_por_id(analisis_id)
                 if registro is not None:
                     registro.estado = "error"
                     await db.commit()
@@ -496,13 +498,7 @@ async def obtener_analisis(
     user_id: int,
 ) -> AnalisisResponse:
     """Recupera un análisis completado por su ID, verificando que pertenezca al usuario."""
-    result = await db.execute(
-        select(AnalysisTemp).where(
-            AnalysisTemp.id == analisis_id,
-            AnalysisTemp.user_id == user_id,
-        )
-    )
-    registro = result.scalar_one_or_none()
+    registro = await RepositorioAnalisis(db).obtener_por_id_y_usuario(analisis_id, user_id)
 
     if registro is None or registro.estado != "completado" or registro.resultado is None:
         raise AnalisisNoEncontradoError()
@@ -516,13 +512,7 @@ async def obtener_estado_analisis(
     user_id: int,
 ) -> AnalisisEstadoResponse:
     """Devuelve el estado de progreso de un análisis, esté o no completado (HU-13)."""
-    result = await db.execute(
-        select(AnalysisTemp).where(
-            AnalysisTemp.id == analisis_id,
-            AnalysisTemp.user_id == user_id,
-        )
-    )
-    registro = result.scalar_one_or_none()
+    registro = await RepositorioAnalisis(db).obtener_por_id_y_usuario(analisis_id, user_id)
 
     if registro is None:
         raise AnalisisNoEncontradoError()
@@ -545,21 +535,11 @@ async def listar_historial(
     page_size: int,
 ) -> HistorialResponse:
     """Lista paginada de los análisis completados del usuario, más recientes primero."""
-    filtro = (AnalysisTemp.user_id == user_id, AnalysisTemp.estado == "completado")
-
-    total_result = await db.execute(
-        select(func.count()).select_from(AnalysisTemp).where(*filtro)
+    repo = RepositorioAnalisis(db)
+    total = await repo.contar_completados_de_usuario(user_id)
+    registros = await repo.listar_completados_de_usuario(
+        user_id, limit=page_size, offset=(page - 1) * page_size
     )
-    total = total_result.scalar_one()
-
-    result = await db.execute(
-        select(AnalysisTemp)
-        .where(*filtro)
-        .order_by(AnalysisTemp.created_at.desc())
-        .limit(page_size)
-        .offset((page - 1) * page_size)
-    )
-    registros = result.scalars().all()
 
     items = [
         AnalisisHistorialItem(
