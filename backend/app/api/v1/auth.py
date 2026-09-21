@@ -1,10 +1,13 @@
 """Router de autenticación — registro, login, logout y perfil del usuario."""
 
+import time
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_token_payload, get_current_user
 from app.core.limiter import limiter
+from app.core.token_revocation import revocar_token
 from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
@@ -38,8 +41,15 @@ async def login(
 
 
 @router.post("/logout")
-async def logout(current_user: User = Depends(get_current_user)):
-    """Cierre de sesión — la invalidación del token es responsabilidad del cliente."""
+async def logout(
+    payload: dict = Depends(get_current_token_payload),
+    current_user: User = Depends(get_current_user),
+):
+    """Cierra la sesión revocando el token actual (jti) hasta su expiración natural."""
+    jti = payload.get("jti")
+    if jti is not None:
+        ttl_segundos = max(1, int(payload["exp"] - time.time()))
+        await revocar_token(jti, ttl_segundos)
     return {"message": "Sesión cerrada exitosamente."}
 
 
