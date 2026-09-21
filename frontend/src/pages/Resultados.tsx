@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Download, ShieldAlert, ShieldCheck } from 'lucide-react'
 import Navbar from '@/components/common/Navbar'
-import IndicadorSemaforo from '@/components/analisis/IndicadorSemaforo'
+import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
 import ListaRecomendaciones from '@/components/analisis/ListaRecomendaciones'
 import VistaProgreso from '@/components/analisis/VistaProgreso'
 import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisApi } from '@/api/analisis'
-import type { AnalisisResult } from '@/types/analisis'
+import type { AnalisisResult, NivelRiesgo } from '@/types/analisis'
 
 export default function Resultados() {
   const { id } = useParams<{ id: string }>()
@@ -123,7 +123,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
           <Stat
             label="Hallazgos críticos"
             valor={totalHallazgosAltos}
-            color={totalHallazgosAltos > 0 ? 'text-red-600' : 'text-green-600'}
+            color={totalHallazgosAltos > 0 ? 'text-riesgo-alto' : 'text-riesgo-bajo'}
           />
           <Stat label="Recomendaciones" valor={recomendaciones.length} />
         </div>
@@ -191,19 +191,23 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
    Componentes auxiliares de UI
    -------------------------------------------------------------------------- */
 
-function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: string }) {
-  const colorArc: Record<string, string> = {
-    bajo: 'text-green-500',
-    medio: 'text-yellow-400',
-    alto: 'text-red-500',
+function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: NivelRiesgo }) {
+  const colorArc: Record<NivelRiesgo, string> = {
+    bajo: 'text-riesgo-bajo',
+    medio: 'text-riesgo-medio',
+    alto: 'text-riesgo-alto',
   }
   return (
-    <div className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4
-                    border-gray-100 bg-white shadow-sm shrink-0">
-      <span className={`text-xl font-black leading-none ${colorArc[nivel] ?? 'text-gray-500'}`}>
+    <div
+      role="img"
+      aria-label={`Puntaje de riesgo: ${puntaje} de 100, ${CONFIG_RIESGO[nivel].label}`}
+      className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4
+                    border-gray-100 bg-white shadow-sm shrink-0"
+    >
+      <span className={`text-xl font-black leading-none ${colorArc[nivel] ?? 'text-gray-500'}`} aria-hidden="true">
         {puntaje}
       </span>
-      <span className="text-xs text-gray-400 leading-none">/100</span>
+      <span className="text-xs text-gray-400 leading-none" aria-hidden="true">/100</span>
     </div>
   )
 }

@@ -6,25 +6,25 @@ interface Props {
   mostrarTexto?: boolean
 }
 
-const CONFIG: Record<NivelRiesgo, { dot: string; bg: string; text: string; label: string; descripcion: string }> = {
+export const CONFIG: Record<NivelRiesgo, { dot: string; bg: string; text: string; label: string; descripcion: string }> = {
   bajo: {
-    dot: 'bg-green-500',
-    bg: 'bg-green-50 border-green-200',
-    text: 'text-green-700',
+    dot: 'bg-riesgo-bajo',
+    bg: 'bg-riesgo-bajo/10 border-riesgo-bajo/30',
+    text: 'text-riesgo-bajo',
     label: 'Riesgo Bajo',
     descripcion: 'Esta política muestra buenas prácticas de privacidad.',
   },
   medio: {
-    dot: 'bg-yellow-400',
-    bg: 'bg-yellow-50 border-yellow-200',
-    text: 'text-yellow-700',
+    dot: 'bg-riesgo-medio',
+    bg: 'bg-riesgo-medio/10 border-riesgo-medio/30',
+    text: 'text-riesgo-medio',
     label: 'Riesgo Medio',
     descripcion: 'Hay aspectos que merecen atención antes de aceptar.',
   },
   alto: {
-    dot: 'bg-red-500',
-    bg: 'bg-red-50 border-red-200',
-    text: 'text-red-700',
+    dot: 'bg-riesgo-alto',
+    bg: 'bg-riesgo-alto/10 border-riesgo-alto/30',
+    text: 'text-riesgo-alto',
     label: 'Riesgo Alto',
     descripcion: 'Esta política presenta cláusulas preocupantes para tu privacidad.',
   },

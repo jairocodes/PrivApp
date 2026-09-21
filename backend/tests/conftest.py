@@ -13,6 +13,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.core.limiter import limiter
 from app.core.security import hash_password
 from app.database import get_db
 from app.main import app
@@ -64,6 +65,35 @@ async def seed_user(db_session: AsyncSession) -> User:
     db_session.add(user)
     await db_session.flush()
     return user
+
+
+class FakeRedis:
+    """Redis en memoria para tests: solo lo mínimo que usa token_revocation.py."""
+
+    def __init__(self):
+        self._store: dict[str, str] = {}
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._store[key] = value
+
+    async def exists(self, key: str) -> int:
+        return 1 if key in self._store else 0
+
+
+@pytest.fixture(autouse=True)
+def fake_redis(monkeypatch):
+    monkeypatch.setattr("app.core.token_revocation._client", FakeRedis())
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    # El limiter (slowapi) es un singleton en memoria compartido por toda la
+    # sesión de pytest; sin este reset, las pruebas que llaman a endpoints
+    # limitados (ej. /api/auth/register) acumulan conteo entre tests y
+    # pueden empezar a fallar con 429 según el orden/cantidad de pruebas.
+    limiter.reset()
+    yield
+    limiter.reset()
 
 
 @pytest.fixture(scope="function")
