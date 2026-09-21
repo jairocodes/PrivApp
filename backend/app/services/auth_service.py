@@ -2,7 +2,6 @@
 
 import logging
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
@@ -12,18 +11,17 @@ from app.core.exceptions import (
 )
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
+from app.repositories.usuarios import RepositorioUsuarios
 
 logger = logging.getLogger(__name__)
 
 
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    result = await db.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
+    return await RepositorioUsuarios(db).obtener_por_email(email)
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> User:
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await RepositorioUsuarios(db).obtener_por_id(user_id)
     if not user:
         raise UsuarioNoEncontradoError()
     return user
@@ -44,7 +42,7 @@ async def register_user(
         email=email,
         hashed_password=hash_password(password),
     )
-    db.add(user)
+    RepositorioUsuarios(db).agregar(user)
     await db.flush()
 
     token = create_access_token(str(user.id))
