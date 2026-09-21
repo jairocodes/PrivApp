@@ -10,10 +10,10 @@ Flujo por sección de política:
 import asyncio
 import logging
 
-from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.corpus import CorpusChunk
+from app.repositories.corpus import RepositorioCorpusNormativo
 from app.utils.embeddings import encode
 
 logger = logging.getLogger(__name__)
@@ -45,33 +45,8 @@ async def recuperar_contexto(
     query_embedding = await asyncio.to_thread(encode, query_text)
     embedding_str = "[" + ",".join(f"{x:.6f}" for x in query_embedding) + "]"
 
-    # Construir consulta SQL con operador pgvector <=> (distancia coseno)
-    where_clauses = []
-    params: dict = {"embedding": embedding_str, "k": k}
-
-    if filtro_jurisdiccion:
-        where_clauses.append("jurisdiccion = :jurisdiccion")
-        params["jurisdiccion"] = filtro_jurisdiccion
-
-    if filtro_categoria:
-        where_clauses.append("categoria_tematica = :categoria")
-        params["categoria"] = filtro_categoria
-
-    where_sql = ""
-    if where_clauses:
-        where_sql = "WHERE " + " AND ".join(where_clauses)
-
-    sql = text(f"""
-        SELECT id, documento_fuente, jurisdiccion, referencia,
-               categoria_tematica, texto_original, metadatos
-        FROM   corpus_chunks
-        {where_sql}
-        ORDER  BY embedding <=> CAST(:embedding AS vector)
-        LIMIT  :k
-    """)
-
-    result = await db.execute(sql, params)
-    filas = result.mappings().all()
+    repo = RepositorioCorpusNormativo(db)
+    filas = await repo.buscar_similares(embedding_str, k, filtro_jurisdiccion, filtro_categoria)
 
     chunks = [
         CorpusChunk(
@@ -95,5 +70,4 @@ async def recuperar_contexto(
 
 async def contar_chunks(db: AsyncSession) -> int:
     """Devuelve la cantidad total de chunks cargados en el corpus."""
-    result = await db.execute(text("SELECT COUNT(*) FROM corpus_chunks"))
-    return result.scalar_one()
+    return await RepositorioCorpusNormativo(db).contar()
