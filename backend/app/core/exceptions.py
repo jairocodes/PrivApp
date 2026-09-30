@@ -101,6 +101,33 @@ class ExtraccionURLError(HTTPException):
         )
 
 
+class ArchivoNoPermitidoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt).",
+        )
+
+
+class ArchivoDemasiadoGrandeError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="El archivo supera el tamaño máximo de 5 MB.",
+        )
+
+
+class PdfSinTextoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "No se encontró texto en el PDF. Si es un documento escaneado, el sistema "
+                "no puede leerlo: copia el texto de la política y pégalo directamente."
+            ),
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(
