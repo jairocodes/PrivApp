@@ -123,6 +123,9 @@ BAJO RIESGO (nivel: "bajo"):
 
 # Fragmentos del corpus a recuperar por sección (5 da mejor cobertura con OpenAI)
 _K_FRAGMENTOS = 5
+# Fragmentos guatemaltecos que se agregan siempre, aunque no estén entre los 5
+# más cercanos: sin ellos el modelo casi nunca puede citar normativa nacional.
+_K_GUATEMALA = 2
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
 # Se analiza la política completa: no hay tope de secciones. Las secciones que
@@ -513,7 +516,7 @@ async def _analizar_seccion(
     error devuelve la sección de respaldo, sin afectar a las demás."""
     try:
         async with candado_bd:
-            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
+            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS, k_guatemala=_K_GUATEMALA)
         contexto = _construir_contexto_normativo(chunks)
         # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
         user_msg = _construir_prompt_seccion(seccion, contexto)
