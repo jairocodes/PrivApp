@@ -6,6 +6,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
@@ -301,4 +302,20 @@ class TestEndpointPDF:
             pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
         )
         assert "Tipo de tratamiento" not in texto
+
+
+class TestJurisdiccionEnElReporte:
+    @pytest.mark.parametrize("documento,esperada", [
+        ("Constitución Política de la República de Guatemala.pdf", "guatemala"),
+        ("Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala"),
+        ("Ley de Acceso a la Información Pública", "guatemala"),
+        ("El Corpus OPP-115 y su Ontología Estructural.pdf", "estandar_tecnico"),
+        ("Metodología, Casuística y Algoritmos del Proyecto ToS;DR.pdf", "estandar_tecnico"),
+        ("RGPD.pdf", "internacional"),
+        ("LOPDP España.pdf", "internacional"),
+    ])
+    def test_misma_clasificacion_que_el_panel_de_resultados(self, documento, esperada):
+        from app.services.reportes_service import _inferir_jurisdiccion
+
+        assert _inferir_jurisdiccion(documento) == esperada
 

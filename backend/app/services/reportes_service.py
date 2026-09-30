@@ -32,11 +32,16 @@ def _inferir_jurisdiccion(documento: str) -> str:
     """Misma heurística de CitaNormativa.tsx (frontend), para que el PDF sea
     consistente con lo que el usuario ya vio en el panel de resultados."""
     d = documento.lower()
-    if any(k in d for k in ("constituci", "laip", "guatemal")):
+    if any(k in d for k in _CLAVES_GUATEMALA):
         return "guatemala"
-    if any(k in d for k in ("opp", "tosdr")):
+    if any(k in d for k in _CLAVES_ESTANDAR):
         return "estandar_tecnico"
     return "internacional"
+
+
+# Mismas claves que frontend/src/utils/jurisdiccion.ts.
+_CLAVES_GUATEMALA = ("constituci", "laip", "guatemal", "decreto 57", "57-2008", "acceso a la informaci")
+_CLAVES_ESTANDAR = ("opp", "tosdr", "tos;dr", "tos dr")
 
 
 def _estilos() -> dict[str, ParagraphStyle]:

@@ -6,14 +6,17 @@ export const ETIQUETA_JURISDICCION: Record<Jurisdiccion, string> = {
   estandar_tecnico: 'Estándar técnico',
 }
 
+const CLAVES_GUATEMALA = ['constituci', 'laip', 'guatemal', 'decreto 57', '57-2008', 'acceso a la informaci']
+const CLAVES_ESTANDAR = ['opp', 'tosdr', 'tos;dr', 'tos dr']
+
 /**
  * Jurisdicción de una fuente citada, deducida del nombre del documento.
- * El reporte PDF (reportes_service._inferir_jurisdiccion) usa la misma
- * heurística para que ambos coincidan.
+ * El reporte PDF (reportes_service._inferir_jurisdiccion) usa las mismas
+ * claves para que ambos coincidan.
  */
 export function inferirJurisdiccion(documento: string): Jurisdiccion {
   const d = documento.toLowerCase()
-  if (d.includes('constituci') || d.includes('laip') || d.includes('guatemal')) return 'guatemala'
-  if (d.includes('opp') || d.includes('tosdr')) return 'estandar_tecnico'
+  if (CLAVES_GUATEMALA.some((clave) => d.includes(clave))) return 'guatemala'
+  if (CLAVES_ESTANDAR.some((clave) => d.includes(clave))) return 'estandar_tecnico'
   return 'internacional'
 }
