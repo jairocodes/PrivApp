@@ -65,3 +65,11 @@ export interface AnalisisEstado {
   seccion_actual: number
   secciones_total: number | null
 }
+
+/** Filtros del historial tal como los ingresa la persona (fechas AAAA-MM-DD locales). */
+export interface FiltrosHistorial {
+  texto?: string
+  nivel?: NivelRiesgo | ''
+  desde?: string
+  hasta?: string
+}

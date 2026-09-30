@@ -38,7 +38,7 @@ describe('Historial', () => {
 
     expect(await screen.findByText('Aún no tienes análisis registrados.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Analizar una política' })).toHaveAttribute('href', '/analizar')
-    expect(analisisApi.listar).toHaveBeenCalledWith(1, 10)
+    expect(analisisApi.listar).toHaveBeenCalledWith(1, 10, {})
   })
 
   it('lista los análisis con su nivel de riesgo y enlace al detalle', async () => {
@@ -72,7 +72,7 @@ describe('Historial', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
 
     expect(await screen.findByText('Página 2 de 2')).toBeInTheDocument()
-    expect(analisisApi.listar).toHaveBeenLastCalledWith(2, 10)
+    expect(analisisApi.listar).toHaveBeenLastCalledWith(2, 10, {})
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled()
   })
 })
