@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
+from app.models.user import ROL_ADMINISTRADOR, User
 from app.repositories.json_sql import patron_contiene, sin_acentos
 
 
@@ -56,6 +56,19 @@ class RepositorioUsuarios:
 
     async def cambiar_estado(self, user: User, activo: bool) -> None:
         user.is_active = activo
+        await self.db.flush()
+
+    async def contar_administradores_activos(self) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(User)
+            .where(User.role == ROL_ADMINISTRADOR, User.is_active.is_(True))
+        )
+        return result.scalar_one()
+
+    async def eliminar(self, user: User) -> None:
+        """Eliminación definitiva de la cuenta (sus análisis se eliminan antes,
+        ver RepositorioAnalisis.eliminar_de_usuario)."""
+        await self.db.delete(user)
         await self.db.flush()
 
     async def invalidar_sesiones(self, user: User) -> None:

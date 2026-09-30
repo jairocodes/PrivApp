@@ -8,13 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AvisoNoAceptadoError,
     CredencialesInvalidasError,
+    CuentaConAnalisisEnCursoError,
     PasswordActualIncorrectaError,
+    PasswordIncorrectaError,
     PasswordRepetidaError,
+    UltimoAdministradorError,
     UsuarioNoEncontradoError,
     UsuarioYaExisteError,
 )
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import ROL_ADMINISTRADOR, ROL_USUARIO, User
+from app.repositories.analisis import RepositorioAnalisis
 from app.repositories.usuarios import RepositorioUsuarios
 
 logger = logging.getLogger(__name__)
@@ -120,3 +124,26 @@ async def cambiar_password(
     logger.info("Contraseña cambiada y sesiones invalidadas: id=%s", user.id)
     # Se emite después de invalidar: su 'iat' es posterior a sessions_valid_from.
     return create_access_token(str(user.id), user.role)
+
+
+async def eliminar_cuenta(db: AsyncSession, user: User, password: str) -> None:
+    """Elimina de forma definitiva la cuenta del usuario y todos sus análisis.
+    Pide la contraseña, no deja al sistema sin administradores y espera a que
+    no haya análisis en curso (la tarea de fondo escribiría sobre un registro
+    eliminado)."""
+    if not verify_password(password, user.hashed_password):
+        logger.warning("Eliminación de cuenta rechazada (contraseña incorrecta): id=%s", user.id)
+        raise PasswordIncorrectaError()
+
+    usuarios = RepositorioUsuarios(db)
+    if user.role == ROL_ADMINISTRADOR and await usuarios.contar_administradores_activos() <= 1:
+        raise UltimoAdministradorError()
+
+    analisis = RepositorioAnalisis(db)
+    if await analisis.tiene_analisis_en_proceso(user.id):
+        raise CuentaConAnalisisEnCursoError()
+
+    eliminados = await analisis.eliminar_de_usuario(user.id)
+    user_id = user.id
+    await usuarios.eliminar(user)
+    logger.info("Cuenta eliminada: id=%s (%d análisis).", user_id, eliminados)

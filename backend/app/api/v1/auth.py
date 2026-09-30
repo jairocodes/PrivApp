@@ -1,8 +1,9 @@
-"""Router de autenticación — registro, login, logout, perfil y cambio de contraseña."""
+"""Router de autenticación — registro, login, logout, perfil, cambio de contraseña y
+eliminación de la propia cuenta."""
 
 import time
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_token_payload, get_current_user
@@ -13,6 +14,7 @@ from app.models.user import User
 from app.schemas.auth import (
     ActualizarPerfilRequest,
     CambioPasswordRequest,
+    EliminarCuentaRequest,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
@@ -22,6 +24,7 @@ from app.services.auth_service import (
     actualizar_perfil,
     authenticate_user,
     cambiar_password,
+    eliminar_cuenta,
     register_user,
 )
 
@@ -79,6 +82,26 @@ async def editar_perfil(
 ):
     """Actualiza el nombre del usuario autenticado; el correo no es editable."""
     return await actualizar_perfil(db, current_user, body.nombre)
+
+
+@router.delete("/me", status_code=204)
+@limiter.limit("5/minute")
+async def eliminar_mi_cuenta(
+    request: Request,
+    body: EliminarCuentaRequest,
+    payload: dict = Depends(get_current_token_payload),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Elimina de forma definitiva la cuenta del usuario autenticado y todos sus
+    análisis. Los demás tokens dejan de servir porque la cuenta ya no existe; el
+    actual se revoca además de forma explícita."""
+    await eliminar_cuenta(db, current_user, body.password)
+    await db.commit()
+    jti = payload.get("jti")
+    if jti is not None:
+        await revocar_token(jti, max(1, int(payload["exp"] - time.time())))
+    return Response(status_code=204)
 
 
 @router.post("/change-password", response_model=TokenResponse)

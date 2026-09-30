@@ -40,6 +40,11 @@ class ActualizarPerfilRequest(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=100)
 
 
+class EliminarCuentaRequest(BaseModel):
+    # Se pide la contraseña para confirmar que quien elimina es el titular.
+    password: str = Field(..., min_length=1, max_length=100)
+
+
 class CambioPasswordRequest(BaseModel):
     password_actual: str = Field(..., min_length=1, max_length=100)
     password_nueva: str = Field(..., min_length=8, max_length=100)
