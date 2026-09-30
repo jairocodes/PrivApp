@@ -71,16 +71,48 @@ class TestSegmentacion:
         # Puede producir 0 o 1 según el umbral de palabras mínimas
         assert isinstance(secciones, list)
 
-    def test_limita_a_max_secciones(self):
-        from app.services.analisis_service import _MAX_SECCIONES, segmentar_politica
+    def test_analiza_todas_las_secciones_sin_tope(self):
+        from app.services.analisis_service import segmentar_politica
 
-        # 15 secciones numeradas
+        # 15 secciones numeradas: antes solo se conservaban las 8 primeras.
         bloques = []
         for i in range(1, 16):
             bloques.append(f"{i}. Sección {i}\n" + "palabra " * 50)
         texto = "\n\n".join(bloques)
         secciones = segmentar_politica(texto)
-        assert len(secciones) <= _MAX_SECCIONES
+        assert len(secciones) == 15
+        assert secciones[-1].startswith("15. Sección 15")
+
+    def test_texto_sin_encabezados_se_cubre_completo(self):
+        from app.services.analisis_service import _TAM_BLOQUE, segmentar_politica
+
+        # ~30,000 palabras corridas (una política de unos 200,000 caracteres).
+        palabras = [f"p{i}" for i in range(30_000)]
+        secciones = segmentar_politica(" ".join(palabras))
+
+        assert len(secciones) == 30_000 // _TAM_BLOQUE
+        assert " ".join(secciones).split() == palabras
+
+    def test_las_secciones_largas_se_dividen_sin_perder_texto(self):
+        from app.services.analisis_service import _MAX_PALABRAS_SECCION, segmentar_politica
+
+        larga = "1. Datos que recopilamos\n" + " ".join(f"d{i}" for i in range(1_600))
+        corta = "2. Contacto\n" + "escríbenos a privacidad@ejemplo.com para cualquier duda. " * 6
+        secciones = segmentar_politica(larga + "\n\n" + corta)
+
+        assert all(len(s.split()) <= _MAX_PALABRAS_SECCION for s in secciones)
+        assert len(secciones) == 5  # 1,604 palabras en bloques de 500 (con el resto unido) + la corta
+        assert secciones[-1].startswith("2. Contacto")
+        texto_largo = " ".join(secciones[:-1]).split()
+        assert texto_largo == larga.split()
+
+    def test_un_resto_muy_corto_se_une_al_bloque_anterior(self):
+        from app.services.analisis_service import _TAM_BLOQUE, segmentar_politica
+
+        secciones = segmentar_politica(" ".join(f"p{i}" for i in range(_TAM_BLOQUE * 2 + 5)))
+
+        assert len(secciones) == 2
+        assert len(secciones[-1].split()) == _TAM_BLOQUE + 5
 
     def test_texto_vacio_devuelve_lista_vacia(self):
         from app.services.analisis_service import segmentar_politica

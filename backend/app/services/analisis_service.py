@@ -125,8 +125,11 @@ BAJO RIESGO (nivel: "bajo"):
 _K_FRAGMENTOS = 5
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
-# Máximo de secciones a analizar (prototipo: limitar costo/latencia)
-_MAX_SECCIONES = 8
+# Se analiza la política completa: no hay tope de secciones. Las secciones que
+# superan _MAX_PALABRAS_SECCION se dividen en bloques de _TAM_BLOQUE palabras,
+# el mismo tamaño que se usa para el texto sin encabezados.
+_MAX_PALABRAS_SECCION = 700
+_TAM_BLOQUE = 500
 
 
 # ---------------------------------------------------------------------------
@@ -169,16 +172,29 @@ def segmentar_politica(texto: str) -> list[str]:
         if len(contenido.split()) >= _MIN_PALABRAS_SECCION:
             secciones.append(contenido)
 
-    # Fallback: si no se detectaron secciones, dividir en bloques de ~400 palabras
+    # Fallback: si no se detectaron secciones, dividir todo el texto en bloques
     if not secciones:
-        palabras = texto.split()
-        tam = 400
-        for i in range(0, len(palabras), tam):
-            bloque = " ".join(palabras[i : i + tam])
-            if len(bloque.split()) >= _MIN_PALABRAS_SECCION:
-                secciones.append(bloque)
+        return [b for b in _dividir_en_bloques(texto) if len(b.split()) >= _MIN_PALABRAS_SECCION]
 
-    return secciones[:_MAX_SECCIONES]
+    # Las secciones muy largas se dividen para que ningún fragmento llegue al
+    # modelo con un tamaño desproporcionado.
+    resultado: list[str] = []
+    for seccion in secciones:
+        if len(seccion.split()) > _MAX_PALABRAS_SECCION:
+            resultado.extend(_dividir_en_bloques(seccion))
+        else:
+            resultado.append(seccion)
+    return resultado
+
+
+def _dividir_en_bloques(texto: str) -> list[str]:
+    """Divide el texto en bloques de _TAM_BLOQUE palabras. Si el último bloque
+    quedaría demasiado corto, se une al anterior para no perder ese texto."""
+    palabras = texto.split()
+    bloques = [palabras[i : i + _TAM_BLOQUE] for i in range(0, len(palabras), _TAM_BLOQUE)]
+    if len(bloques) > 1 and len(bloques[-1]) < _MIN_PALABRAS_SECCION:
+        bloques[-2].extend(bloques.pop())
+    return [" ".join(b) for b in bloques]
 
 
 # ---------------------------------------------------------------------------
