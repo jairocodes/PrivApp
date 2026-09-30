@@ -81,6 +81,13 @@ def fake_redis(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def dns_publico(monkeypatch):
+    # Las pruebas no consultan el DNS real: todo sitio resuelve a una IP pública
+    # de documentación. Las pruebas de direcciones internas lo sustituyen.
+    monkeypatch.setattr("app.services.ingesta_service._resolver_ips", lambda host: ["93.184.216.34"])
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     # El limiter (slowapi) es un singleton en memoria compartido por toda la
     # sesión de pytest; sin este reset, las pruebas que llaman a endpoints

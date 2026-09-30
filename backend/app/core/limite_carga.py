@@ -11,7 +11,9 @@ import json
 
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-RUTA_CARGA_ARCHIVO = "/api/ingesta/archivo"
+# Rutas que reciben archivos: la ingesta de la persona usuaria y la carga de
+# documentos al corpus desde la administración (ambas con tope de 5 MB).
+RUTAS_CARGA_ARCHIVO = frozenset({"/api/ingesta/archivo", "/api/admin/corpus"})
 DETALLE_ARCHIVO_GRANDE = "El archivo supera el tamaño máximo de 5 MB."
 
 
@@ -21,7 +23,7 @@ class LimiteCargaArchivoMiddleware:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope["path"] == RUTA_CARGA_ARCHIVO:
+        if scope["type"] == "http" and scope.get("method") == "POST" and scope["path"] in RUTAS_CARGA_ARCHIVO:
             longitud = dict(scope["headers"]).get(b"content-length")
             if longitud is not None and longitud.isdigit() and int(longitud) > self.max_bytes:
                 cuerpo = json.dumps({"detail": DETALLE_ARCHIVO_GRANDE}).encode()

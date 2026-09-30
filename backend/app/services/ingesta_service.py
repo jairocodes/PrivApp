@@ -7,11 +7,13 @@ Responsabilidades:
 - Validar la longitud del texto limpio con la regla única (utils.validacion_texto)
 """
 
+import ipaddress
 import logging
 import re
+import socket
 import unicodedata
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -88,12 +90,61 @@ def _sitio(url: str) -> str:
     return urlparse(url).hostname or "sitio desconocido"
 
 
+MENSAJE_URL_NO_PUBLICA = "La dirección indicada no es un sitio web público."
+_ESQUEMAS_PERMITIDOS = {"http", "https"}
+_PUERTOS_PERMITIDOS = {None, 80, 443}
+_MAX_REDIRECCIONES = 5
+_CODIGOS_REDIRECCION = {301, 302, 303, 307, 308}
+
+
+def _resolver_ips(host: str) -> list[str]:
+    """Direcciones IP a las que apunta el nombre del sitio."""
+    return [info[4][0] for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)]
+
+
+def validar_url_publica(url: str) -> None:
+    """Evita que el servidor descargue direcciones internas (SSRF): solo http o
+    https, puertos estándar y un sitio cuyas IP sean todas públicas. Queda la
+    posibilidad teórica de que el DNS cambie entre esta comprobación y la
+    descarga; la plataforma de alojamiento no expone servicios sin autenticación."""
+    try:
+        partes = urlparse(url)
+        puerto = partes.port
+    except ValueError:
+        raise ExtraccionURLError(MENSAJE_URL_NO_PUBLICA)
+    if partes.scheme.lower() not in _ESQUEMAS_PERMITIDOS or not partes.hostname:
+        raise ExtraccionURLError("La dirección debe comenzar con http:// o https://.")
+    if puerto not in _PUERTOS_PERMITIDOS or partes.username or partes.password:
+        raise ExtraccionURLError(MENSAJE_URL_NO_PUBLICA)
+    try:
+        ips = _resolver_ips(partes.hostname)
+    except (socket.gaierror, UnicodeError):
+        raise ExtraccionURLError("No se pudo conectar a la URL proporcionada.")
+    for ip in ips:
+        direccion = ipaddress.ip_address(ip.split("%")[0])
+        if not direccion.is_global or direccion.is_multicast:
+            logger.warning("URL rechazada: %s apunta a una dirección no pública.", partes.hostname)
+            raise ExtraccionURLError(MENSAJE_URL_NO_PUBLICA)
+
+
+def _descargar(url: str) -> requests.Response:
+    """Descarga siguiendo las redirecciones a mano, para validar cada destino."""
+    for _ in range(_MAX_REDIRECCIONES + 1):
+        validar_url_publica(url)
+        response = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT_HTTP, allow_redirects=False)
+        if response.status_code in _CODIGOS_REDIRECCION and response.headers.get("location"):
+            url = urljoin(url, response.headers["location"])
+            continue
+        return response
+    raise ExtraccionURLError("La URL redirige demasiadas veces.")
+
+
 def extraer_texto_url(url: str) -> str:
     """Descarga la URL y extrae el texto relevante. Retorna texto normalizado."""
     sitio = _sitio(url)
     logger.info("Extrayendo texto de %s.", sitio)
     try:
-        response = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT_HTTP)
+        response = _descargar(url)
         response.raise_for_status()
     except requests.exceptions.Timeout:
         logger.warning("Timeout al acceder a %s", sitio)

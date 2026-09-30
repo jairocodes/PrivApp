@@ -25,8 +25,14 @@ from app.repositories.usuarios import RepositorioUsuarios
 logger = logging.getLogger(__name__)
 
 
+def normalizar_email(email: str) -> str:
+    """El correo se guarda y se busca en minúsculas: «Ana@Ejemplo.com» y
+    «ana@ejemplo.com» son la misma cuenta."""
+    return email.strip().lower()
+
+
 async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
-    return await RepositorioUsuarios(db).obtener_por_email(email)
+    return await RepositorioUsuarios(db).obtener_por_email(normalizar_email(email))
 
 
 async def get_user_by_id(db: AsyncSession, user_id: int) -> User:
@@ -58,7 +64,7 @@ async def register_user(
     ahora = datetime.now(timezone.utc)
     user = User(
         nombre=nombre,
-        email=email,
+        email=normalizar_email(email),
         hashed_password=hash_password(password),
         # El registro público nunca asigna otro rol.
         role=ROL_USUARIO,
