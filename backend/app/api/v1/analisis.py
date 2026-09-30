@@ -5,6 +5,7 @@ GET  /api/analisis/{id}/estado  — consulta el progreso de un análisis (HU-13)
 GET  /api/analisis/{id}         — devuelve el resultado de un análisis completado
 GET  /api/analisis              — lista paginada del historial del usuario
 GET  /api/analisis/{id}/pdf     — descarga el reporte del análisis en PDF
+DELETE /api/analisis/{id}       — elimina de forma definitiva un análisis propio
 """
 
 import logging
@@ -25,6 +26,7 @@ from app.schemas.analysis import AnalisisEstadoResponse, AnalisisIniciadoRespons
 from app.schemas.analisis_request import IniciarAnalisisRequest
 from app.services.analisis_service import (
     crear_analisis,
+    eliminar_analisis,
     lanzar_analisis_en_fondo,
     listar_historial,
     obtener_analisis,
@@ -127,3 +129,14 @@ async def descargar_pdf(
             "Content-Disposition": f'attachment; filename="privapp-analisis-{analisis_id}.pdf"'
         },
     )
+
+
+@router.delete("/{analisis_id}", status_code=204)
+async def eliminar(
+    analisis_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Elimina de forma definitiva un análisis del usuario autenticado."""
+    await eliminar_analisis(db, analisis_id, current_user.id)
+    return Response(status_code=204)

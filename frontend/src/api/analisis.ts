@@ -43,6 +43,10 @@ export const analisisApi = {
       params: { page, page_size: pageSize, ...parametrosDeFiltros(filtros) },
     }),
 
+  // Eliminación definitiva; el servidor responde 204 sin contenido.
+  eliminar: (id: string | number) =>
+    apiClient.delete<void>(`/api/analisis/${id}`),
+
   descargarPDF: (id: string | number) =>
     apiClient.get<Blob>(`/api/analisis/${id}/pdf`, { responseType: 'blob' }),
 }
