@@ -9,6 +9,7 @@ import Ingesta from '@/pages/Ingesta'
 import Resultados from '@/pages/Resultados'
 import Historial from '@/pages/Historial'
 import Admin from '@/pages/Admin'
+import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
+          <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analizar" element={<Ingesta />} />
