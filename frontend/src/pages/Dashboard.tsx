@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { FileSearch, ShieldCheck } from 'lucide-react'
 import Navbar from '@/components/common/Navbar'
+import PanelEstadistico from '@/components/dashboard/PanelEstadistico'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function Dashboard() {
@@ -27,7 +28,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h2 className="font-semibold text-gray-900">Analizar política</h2>
-              <p className="text-sm text-gray-500">Pega el texto o ingresa una URL</p>
+              <p className="text-sm text-gray-500">Pega el texto, ingresa una URL o carga un archivo</p>
             </div>
           </Link>
 
@@ -43,6 +44,10 @@ export default function Dashboard() {
               <p className="text-sm text-gray-500">Consulta tu historial de análisis</p>
             </div>
           </Link>
+        </div>
+
+        <div className="mt-6">
+          <PanelEstadistico />
         </div>
       </main>
     </div>

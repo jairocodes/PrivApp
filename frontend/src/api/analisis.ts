@@ -3,6 +3,7 @@ import type {
   AnalisisEstado,
   AnalisisIniciado,
   AnalisisResult,
+  EstadisticasPersonales,
   FiltrosHistorial,
   HistorialResponse,
 } from '@/types/analisis'
@@ -42,6 +43,9 @@ export const analisisApi = {
     apiClient.get<HistorialResponse>('/api/analisis', {
       params: { page, page_size: pageSize, ...parametrosDeFiltros(filtros) },
     }),
+
+  estadisticas: () =>
+    apiClient.get<EstadisticasPersonales>('/api/analisis/estadisticas'),
 
   // Eliminación definitiva; el servidor responde 204 sin contenido.
   eliminar: (id: string | number) =>

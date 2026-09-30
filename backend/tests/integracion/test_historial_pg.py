@@ -125,3 +125,22 @@ class TestBusquedaSinAcentosPg:
         assert await comentarios("politica de conservacion") == ["Uno"]
         assert await comentarios("POLÍTICA") == ["Uno"]
         assert await comentarios("detecto informacion") == ["Se detectó información sensible"]
+
+
+class TestEstadisticasPg:
+    async def test_agrupa_por_nivel_y_suma_puntajes_del_jsonb(self, db_pg):
+        ana = await _usuario(db_pg, "ana@privapp.test")
+        otro = await _usuario(db_pg, "otro@privapp.test")
+        filas = []
+        for usuario, nivel, puntaje in [(ana, "alto", 90), (ana, "alto", 70), (ana, "bajo", 20), (otro, "alto", 100)]:
+            analisis = _analisis(usuario.id, nivel, "c")
+            analisis.resultado = {**analisis.resultado, "resumen_general": {
+                **analisis.resultado["resumen_general"], "puntaje": puntaje,
+            }}
+            filas.append(analisis)
+        db_pg.add_all(filas)
+        await db_pg.commit()
+
+        resultado = sorted(await RepositorioAnalisis(db_pg).estadisticas_de_usuario(ana.id))
+
+        assert resultado == [("alto", 2, 160), ("bajo", 1, 20)]

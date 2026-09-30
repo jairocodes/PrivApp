@@ -4,6 +4,7 @@ POST /api/analisis/iniciar      — crea el análisis y lo procesa en segundo pl
 GET  /api/analisis/{id}/estado  — consulta el progreso de un análisis (HU-13)
 GET  /api/analisis/{id}         — devuelve el resultado de un análisis completado
 GET  /api/analisis              — lista paginada del historial del usuario
+GET  /api/analisis/estadisticas — totales del usuario para el panel estadístico
 GET  /api/analisis/{id}/pdf     — descarga el reporte del análisis en PDF
 DELETE /api/analisis/{id}       — elimina de forma definitiva un análisis propio
 """
@@ -22,12 +23,19 @@ from app.core.exceptions import RangoFechasInvalidoError
 from app.core.limiter import limiter
 from app.models.user import User
 from app.repositories.analisis import FiltrosHistorial
-from app.schemas.analysis import AnalisisEstadoResponse, AnalisisIniciadoResponse, AnalisisResponse, HistorialResponse
+from app.schemas.analysis import (
+    AnalisisEstadoResponse,
+    AnalisisIniciadoResponse,
+    AnalisisResponse,
+    EstadisticasResponse,
+    HistorialResponse,
+)
 from app.schemas.analisis_request import IniciarAnalisisRequest
 from app.services.analisis_service import (
     crear_analisis,
     registrar_generacion_reporte,
     eliminar_analisis,
+    estadisticas_de_usuario,
     lanzar_analisis_en_fondo,
     listar_historial,
     obtener_analisis,
@@ -63,6 +71,16 @@ async def iniciar(
     registro = await crear_analisis(db, payload.texto, current_user.id)
     lanzar_analisis_en_fondo(registro.id, payload.texto)
     return AnalisisIniciadoResponse(id_analisis=str(registro.id), estado="procesando")
+
+
+# Debe declararse antes de /{analisis_id} para que "estadisticas" no se tome como id.
+@router.get("/estadisticas", response_model=EstadisticasResponse)
+async def estadisticas(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> EstadisticasResponse:
+    """Total de análisis del usuario, su distribución por nivel y la puntuación promedio."""
+    return await estadisticas_de_usuario(db, current_user.id)
 
 
 @router.get("/{analisis_id}/estado", response_model=AnalisisEstadoResponse)
