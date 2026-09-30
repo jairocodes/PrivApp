@@ -37,6 +37,20 @@ class TokenInvalidoError(HTTPException):
         )
 
 
+MENSAJE_DECLARACION_EDAD = (
+    "Debes declarar que eres mayor de 18 años o que cuentas con el consentimiento "
+    "de tu madre, padre o persona encargada."
+)
+
+
+class DeclaracionEdadFaltanteError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=MENSAJE_DECLARACION_EDAD,
+        )
+
+
 class AvisoNoAceptadoError(HTTPException):
     def __init__(self):
         super().__init__(

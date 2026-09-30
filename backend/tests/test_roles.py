@@ -18,7 +18,7 @@ USUARIO_BASE = {
     "nombre": "Ana García",
     "email": "ana@ejemplo.com",
     "password": "Segura123",
-    "acepta_aviso": True,
+    "acepta_aviso": True, "declara_edad": True,
 }
 
 

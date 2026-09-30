@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from app.core.exceptions import MENSAJE_DECLARACION_EDAD
+
 
 def validar_fortaleza_password(v: str) -> str:
     """Reglas de fortaleza compartidas por el registro y el cambio de contraseña
@@ -18,12 +20,20 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
     acepta_aviso: bool
+    declara_edad: bool
 
     @field_validator("acepta_aviso")
     @classmethod
     def validate_acepta_aviso(cls, v: bool) -> bool:
         if not v:
             raise ValueError("Debes aceptar el aviso de privacidad para registrarte.")
+        return v
+
+    @field_validator("declara_edad")
+    @classmethod
+    def validate_declara_edad(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError(MENSAJE_DECLARACION_EDAD)
         return v
 
     @field_validator("password")

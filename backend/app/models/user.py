@@ -26,6 +26,9 @@ class User(Base):
         String(20), nullable=False, default=ROL_USUARIO, server_default=ROL_USUARIO
     )
     privacy_accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Declaración de mayoría de edad o de consentimiento de la madre, el padre o
+    # la persona encargada. Nula solo en cuentas anteriores a la migración 0009.
+    age_declaration_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sessions_valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

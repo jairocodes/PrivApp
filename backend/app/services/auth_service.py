@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AvisoNoAceptadoError,
     CredencialesInvalidasError,
+    DeclaracionEdadFaltanteError,
     CuentaConAnalisisEnCursoError,
     PasswordActualIncorrectaError,
     PasswordIncorrectaError,
@@ -41,23 +42,28 @@ async def register_user(
     email: str,
     password: str,
     acepta_aviso: bool,
+    declara_edad: bool,
 ) -> tuple[User, str]:
-    # La casilla ya se valida en el esquema; el servicio no registra a nadie
-    # sin aceptación aunque lo llame otro punto de entrada.
+    # Las casillas ya se validan en el esquema; el servicio no registra a nadie
+    # sin ellas aunque lo llame otro punto de entrada.
     if not acepta_aviso:
         raise AvisoNoAceptadoError()
+    if not declara_edad:
+        raise DeclaracionEdadFaltanteError()
 
     existing = await get_user_by_email(db, email)
     if existing:
         raise UsuarioYaExisteError()
 
+    ahora = datetime.now(timezone.utc)
     user = User(
         nombre=nombre,
         email=email,
         hashed_password=hash_password(password),
         # El registro público nunca asigna otro rol.
         role=ROL_USUARIO,
-        privacy_accepted_at=datetime.now(timezone.utc),
+        privacy_accepted_at=ahora,
+        age_declaration_at=ahora,
     )
     RepositorioUsuarios(db).agregar(user)
     await db.flush()
