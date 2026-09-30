@@ -7,6 +7,7 @@ debe ejecutarla en threadpool (ver app/api/v1/analisis.py).
 """
 
 import io
+import time
 from xml.sax.saxutils import escape as _esc
 
 from reportlab.lib import colors
@@ -142,3 +143,12 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def generar_pdf_y_medir(analisis: AnalisisResponse) -> tuple[bytes, float]:
+    """Genera el PDF y devuelve también los segundos que tardó su construcción
+    (indicador de la Tabla 1). Se mide aquí, en el hilo que lo construye, para
+    no incluir la espera en la cola de hilos."""
+    inicio = time.perf_counter()
+    contenido = generar_pdf_analisis(analisis)
+    return contenido, time.perf_counter() - inicio

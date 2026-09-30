@@ -64,6 +64,12 @@ class RepositorioAnalisis:
         )
         return result.scalar_one_or_none()
 
+    async def guardar_metadatos_reporte(self, registro: AnalysisTemp, metadatos: dict) -> None:
+        """Guarda los metadatos del reporte dentro de resultado. Se asigna un
+        diccionario nuevo para que SQLAlchemy detecte el cambio en la columna JSON."""
+        registro.resultado = {**(registro.resultado or {}), "metadatos_reporte": metadatos}
+        await self.db.flush()
+
     async def eliminar(self, registro: AnalysisTemp) -> None:
         """Eliminación definitiva (no hay borrado lógico ni papelera)."""
         await self.db.delete(registro)

@@ -606,3 +606,32 @@ async def eliminar_analisis(db: AsyncSession, analisis_id: int, user_id: int) ->
         raise AnalisisEnCursoError()
     await repo.eliminar(registro)
     logger.info("Análisis %s eliminado por el usuario %d.", analisis_id, user_id)
+
+
+# ---------------------------------------------------------------------------
+# Tiempo de generación del reporte PDF (indicador de la Tabla 1)
+# ---------------------------------------------------------------------------
+
+MAX_GENERACIONES_REGISTRADAS = 10
+
+
+async def registrar_generacion_reporte(
+    db: AsyncSession, analisis_id: int, user_id: int, segundos: float
+) -> None:
+    """Registra en resultado.metadatos_reporte la última generación del PDF, las
+    últimas MAX_GENERACIONES_REGISTRADAS mediciones y el total de generaciones."""
+    repo = RepositorioAnalisis(db)
+    registro = await repo.obtener_por_id_y_usuario(analisis_id, user_id)
+    if registro is None or registro.resultado is None:
+        return
+
+    anterior = registro.resultado.get("metadatos_reporte") or {}
+    medicion = {"fecha": datetime.now(timezone.utc).isoformat(), "segundos": round(segundos, 4)}
+    generaciones = [*anterior.get("generaciones", []), medicion][-MAX_GENERACIONES_REGISTRADAS:]
+    await repo.guardar_metadatos_reporte(registro, {
+        "ultima_generacion_segundos": medicion["segundos"],
+        "ultima_generacion_en": medicion["fecha"],
+        "total_generaciones": anterior.get("total_generaciones", 0) + 1,
+        "generaciones": generaciones,
+    })
+    logger.info("Reporte PDF del análisis %s generado en %.4f s.", analisis_id, segundos)
