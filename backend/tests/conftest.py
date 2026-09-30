@@ -1,13 +1,5 @@
 """Configuración global de pytest con base de datos SQLite en memoria para tests."""
 
-import os
-
-# Los tests parchean GeminiAdapter (unittest.mock.patch), así que el proveedor
-# activo debe ser "gemini" para que ese parche realmente intercepte la llamada
-# al LLM. Debe fijarse ANTES de importar app.main (que instancia app.config.settings),
-# y con setdefault para no pisar un LLM_PROVIDER que el entorno ya haya definido.
-os.environ.setdefault("LLM_PROVIDER", "gemini")
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

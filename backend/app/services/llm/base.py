@@ -1,7 +1,7 @@
 """Interfaz abstracta del adaptador LLM (patrón Adapter/Strategy).
 
-Permite sustituir el proveedor de LLM (Gemini → Claude, GPT, etc.)
-sin modificar la lógica del motor de análisis.
+Permite sustituir el proveedor del modelo de lenguaje sin modificar la
+lógica del motor de análisis.
 """
 
 from abc import ABC, abstractmethod
