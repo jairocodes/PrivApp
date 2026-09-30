@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.database as database
 from app.config import settings
-from app.core.exceptions import AnalisisNoEncontradoError, LLMError
+from app.core.exceptions import AnalisisEnCursoError, AnalisisNoEncontradoError, LLMError
 from app.models.analysis import AnalysisTemp
 from app.repositories.analisis import FiltrosHistorial, RepositorioAnalisis
 from app.schemas.analysis import (
@@ -588,3 +588,21 @@ async def listar_historial(
     ]
 
     return HistorialResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------------------
+# Eliminación de análisis (HU-27)
+# ---------------------------------------------------------------------------
+
+async def eliminar_analisis(db: AsyncSession, analisis_id: int, user_id: int) -> None:
+    """Elimina de forma definitiva un análisis propio. Uno ajeno o inexistente
+    responde igual (404), sin revelar si existe. Un análisis en curso no se
+    elimina: su tarea de fondo seguiría escribiendo sobre el registro."""
+    repo = RepositorioAnalisis(db)
+    registro = await repo.obtener_por_id_y_usuario(analisis_id, user_id)
+    if registro is None:
+        raise AnalisisNoEncontradoError()
+    if registro.estado == "procesando":
+        raise AnalisisEnCursoError()
+    await repo.eliminar(registro)
+    logger.info("Análisis %s eliminado por el usuario %d.", analisis_id, user_id)

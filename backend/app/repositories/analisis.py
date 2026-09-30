@@ -64,6 +64,11 @@ class RepositorioAnalisis:
         )
         return result.scalar_one_or_none()
 
+    async def eliminar(self, registro: AnalysisTemp) -> None:
+        """Eliminación definitiva (no hay borrado lógico ni papelera)."""
+        await self.db.delete(registro)
+        await self.db.flush()
+
     async def contar_completados_de_usuario(
         self, user_id: int, filtros: FiltrosHistorial | None = None
     ) -> int:

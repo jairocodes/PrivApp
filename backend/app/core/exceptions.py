@@ -160,6 +160,14 @@ class RangoFechasInvalidoError(HTTPException):
         )
 
 
+class AnalisisEnCursoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar un análisis que todavía se está procesando.",
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(
