@@ -1,10 +1,14 @@
 """Tests de roles de usuario y de las columnas nuevas de users."""
 
-from httpx import AsyncClient
+import pytest
+from fastapi import Depends, FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import decode_access_token
+from app.api.deps import require_admin
+from app.core.security import create_access_token, decode_access_token
+from app.database import get_db
 from app.models.user import ROL_ADMINISTRADOR, ROL_USUARIO, User
 
 
@@ -78,3 +82,58 @@ class TestRolEnTokenYPerfil:
         me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert me.status_code == 200
         assert me.json()["role"] == ROL_USUARIO
+
+
+# ---------------------------------------------------------------------------
+# Restricción de rutas al rol administrador
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+async def cliente_con_ruta_admin(db_session: AsyncSession):
+    """App mínima con una ruta protegida por require_admin: aún no hay rutas
+    administrativas reales, así que la dependencia se prueba de forma aislada."""
+    app_prueba = FastAPI()
+
+    @app_prueba.get("/solo-admin")
+    async def solo_admin(admin: User = Depends(require_admin)):
+        return {"id": admin.id}
+
+    async def override_get_db():
+        yield db_session
+
+    app_prueba.dependency_overrides[get_db] = override_get_db
+    async with AsyncClient(transport=ASGITransport(app=app_prueba), base_url="http://test") as ac:
+        yield ac
+
+
+class TestRutasDeAdministrador:
+    async def test_usuario_comun_recibe_403(self, cliente_con_ruta_admin, seed_user):
+        token = create_access_token(str(seed_user.id))
+        r = await cliente_con_ruta_admin.get(
+            "/solo-admin", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 403
+
+    async def test_administrador_accede(self, cliente_con_ruta_admin, db_session, seed_user):
+        seed_user.role = ROL_ADMINISTRADOR
+        await db_session.flush()
+        token = create_access_token(str(seed_user.id), ROL_ADMINISTRADOR)
+
+        r = await cliente_con_ruta_admin.get(
+            "/solo-admin", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 200
+        assert r.json() == {"id": seed_user.id}
+
+    async def test_rol_del_token_no_basta_sin_rol_en_la_base(
+        self, cliente_con_ruta_admin, seed_user
+    ):
+        token = create_access_token(str(seed_user.id), ROL_ADMINISTRADOR)
+        r = await cliente_con_ruta_admin.get(
+            "/solo-admin", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 403
+
+    async def test_sin_token_se_rechaza(self, cliente_con_ruta_admin):
+        r = await cliente_con_ruta_admin.get("/solo-admin")
+        assert r.status_code == 403

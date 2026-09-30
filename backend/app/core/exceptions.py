@@ -37,6 +37,14 @@ class TokenInvalidoError(HTTPException):
         )
 
 
+class AccesoDenegadoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para acceder a este recurso.",
+        )
+
+
 class TextoDemasiadoCortoError(HTTPException):
     def __init__(self):
         super().__init__(
