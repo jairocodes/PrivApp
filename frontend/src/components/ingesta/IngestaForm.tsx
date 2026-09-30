@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { analisisApi } from '@/api/analisis'
 import { ingestaApi } from '@/api/ingesta'
 import Button from '@/components/common/Button'
+import VistaPreviaTexto from '@/components/ingesta/VistaPreviaTexto'
+import type { IngestaResponse } from '@/types/ingesta'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { MAX_TEXTO, MIN_TEXTO, validarArchivo, validarTextoPolítica } from '@/utils/validators'
 
@@ -17,15 +19,27 @@ const ETIQUETA_PESTANA: Record<Pestana, string> = {
 const MIN_CHARS = MIN_TEXTO
 const MAX_CHARS = MAX_TEXTO
 
+function mensajeDeError(err: unknown): string {
+  // detail puede ser un texto (errores del servicio) o una lista (validación
+  // del esquema); solo el texto se muestra tal cual.
+  const detalle = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+  if (esLimiteDeSolicitudes(err)) return MENSAJE_LIMITE_SOLICITUDES
+  return typeof detalle === 'string' ? detalle : 'Ocurrió un error. Intenta de nuevo.'
+}
+
 export default function IngestaForm() {
   const navigate = useNavigate()
   const [pestana, setPestana] = useState<Pestana>('texto')
   const [texto, setTexto] = useState('')
   const [url, setUrl] = useState('')
   const [archivo, setArchivo] = useState<File | null>(null)
+  // Al cancelar se remonta el selector de archivo para vaciarlo.
+  const [claveArchivo, setClaveArchivo] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [fase, setFase] = useState<'ingesta' | 'analisis' | null>(null)
+  const [vistaPrevia, setVistaPrevia] = useState<IngestaResponse | null>(null)
+  const [iniciando, setIniciando] = useState(false)
+  const [errorInicio, setErrorInicio] = useState<string | null>(null)
 
   const chars = texto.length
   const charColor =
@@ -35,6 +49,7 @@ export default function IngestaForm() {
       ? 'text-red-500'
       : 'text-gray-500'
 
+  // Paso 1: obtener y normalizar el texto; el análisis aún no se inicia.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -58,46 +73,62 @@ export default function IngestaForm() {
 
     setLoading(true)
     try {
-      // Paso 1: ingesta
-      setFase('ingesta')
-      let textoProcesado: string
       const { data } =
         pestana === 'texto'
           ? await ingestaApi.enviarTexto(texto)
           : pestana === 'url'
             ? await ingestaApi.enviarURL(url.trim())
             : await ingestaApi.enviarArchivo(archivo as File)
-      textoProcesado = data.texto_procesado
-
-      // Paso 2: inicia el análisis (se procesa en segundo plano)
-      setFase('analisis')
-      const { data: iniciado } = await analisisApi.iniciar(textoProcesado)
-
-      // Navegar a la vista de progreso / resultados
-      navigate(`/resultados/${iniciado.id_analisis}`)
+      setErrorInicio(null)
+      setVistaPrevia(data)
     } catch (err: unknown) {
-      // detail puede ser un texto (errores del servicio) o una lista (validación
-      // del esquema); solo el texto se muestra tal cual.
-      const detalle = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
-      setError(
-        esLimiteDeSolicitudes(err)
-          ? MENSAJE_LIMITE_SOLICITUDES
-          : typeof detalle === 'string'
-            ? detalle
-            : 'Ocurrió un error. Intenta de nuevo.',
-      )
+      setError(mensajeDeError(err))
     } finally {
       setLoading(false)
-      setFase(null)
     }
   }
 
-  const mensajeCarga =
-    fase === 'ingesta'
-      ? 'Procesando texto...'
-      : fase === 'analisis'
-      ? 'Iniciando análisis...'
-      : 'Cargando...'
+  // Paso 2: solo al confirmar se inicia el análisis (en segundo plano).
+  const confirmar = async () => {
+    if (!vistaPrevia) return
+    setIniciando(true)
+    setErrorInicio(null)
+    try {
+      const { data: iniciado } = await analisisApi.iniciar(vistaPrevia.texto_procesado)
+      navigate(`/resultados/${iniciado.id_analisis}`)
+    } catch (err: unknown) {
+      setErrorInicio(mensajeDeError(err))
+      setIniciando(false)
+    }
+  }
+
+  // Corregir: vuelve al formulario conservando lo ingresado.
+  const corregir = () => setVistaPrevia(null)
+
+  // Cancelar: descarta el texto obtenido y lo ingresado.
+  const cancelar = () => {
+    setVistaPrevia(null)
+    setTexto('')
+    setUrl('')
+    setArchivo(null)
+    setClaveArchivo((clave) => clave + 1)
+    setError(null)
+  }
+
+  if (vistaPrevia) {
+    return (
+      <div className="card max-w-2xl mx-auto">
+        <VistaPreviaTexto
+          resultado={vistaPrevia}
+          iniciando={iniciando}
+          error={errorInicio}
+          onConfirmar={confirmar}
+          onCorregir={corregir}
+          onCancelar={cancelar}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="card max-w-2xl mx-auto">
@@ -152,6 +183,7 @@ export default function IngestaForm() {
               Archivo de la política (PDF o TXT, máximo 5 MB)
             </label>
             <input
+              key={claveArchivo}
               id="archivo-politica"
               type="file"
               accept=".pdf,.txt,application/pdf,text/plain"
@@ -194,7 +226,7 @@ export default function IngestaForm() {
 
         {loading && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700">{mensajeCarga}</p>
+            <p className="text-sm text-blue-700">Procesando texto...</p>
           </div>
         )}
 
@@ -204,7 +236,7 @@ export default function IngestaForm() {
           disabled={pestana === 'texto' && (chars < MIN_CHARS || chars > MAX_CHARS)}
           className="w-full"
         >
-          Analizar política
+          Revisar texto
         </Button>
       </form>
     </div>
