@@ -69,3 +69,10 @@ def _registrar_sin_acentos_en_sqlite(conexion_dbapi, _registro) -> None:
     # Solo SQLite (pruebas) necesita la función; PostgreSQL usa unaccent.
     if "sqlite" in type(conexion_dbapi).__module__:
         conexion_dbapi.create_function("sin_acentos", 1, quitar_acentos, deterministic=True)
+
+
+def patron_contiene(texto: str) -> str:
+    """Patrón LIKE que busca el texto literal (usar con escape="\\"): los
+    comodines % y _ que escriba la persona no actúan como comodines."""
+    escapado = texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escapado}%"

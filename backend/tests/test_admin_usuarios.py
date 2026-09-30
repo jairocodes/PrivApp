@@ -106,6 +106,27 @@ class TestListadoDeUsuarios:
         assert datos["total"] == 1
         assert datos["items"][0]["email"] == "luis@privapp.test"
 
+    @pytest.mark.parametrize("busqueda,esperados", [("perez", 2), ("PÉREZ", 2), ("maria lopez", 1)])
+    async def test_busca_sin_distinguir_acentos(
+        self, client: AsyncClient, db_session: AsyncSession, token_admin: str, busqueda: str, esperados: int
+    ):
+        await _crear_usuario(db_session, "Luis Pérez", "luis@privapp.test")
+        await _crear_usuario(db_session, "María López Pérez", "maria@privapp.test")
+        await _crear_usuario(db_session, "Ana Gómez", "ana@privapp.test")
+
+        r = await client.get("/api/admin/usuarios", params={"q": busqueda}, headers=_auth(token_admin))
+
+        assert r.json()["total"] == esperados
+
+    async def test_los_comodines_se_buscan_literalmente(
+        self, client: AsyncClient, db_session: AsyncSession, token_admin: str
+    ):
+        await _crear_usuario(db_session, "Luis Pérez", "luis@privapp.test")
+
+        r = await client.get("/api/admin/usuarios", params={"q": "%"}, headers=_auth(token_admin))
+
+        assert r.json()["total"] == 0
+
     async def test_rechaza_paginas_demasiado_grandes(self, client: AsyncClient, token_admin: str):
         r = await client.get("/api/admin/usuarios?page_size=51", headers=_auth(token_admin))
         assert r.status_code == 422
