@@ -13,6 +13,7 @@ import Admin from '@/pages/Admin'
 import AdminUsuarios from '@/pages/AdminUsuarios'
 import AdminCorpus from '@/pages/AdminCorpus'
 import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
+import Glosario from '@/pages/Glosario'
 import Perfil from '@/pages/Perfil'
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
           <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
+          <Route path="/glosario" element={<Glosario />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analizar" element={<Ingesta />} />

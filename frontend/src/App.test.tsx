@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -35,4 +35,13 @@ describe('App', () => {
       expect(enlace).toHaveAttribute('href', '/aviso-privacidad')
     },
   )
+
+  it('el glosario es accesible sin sesión y desde el pie de página', async () => {
+    window.history.pushState({}, '', '/glosario')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Glosario' })).toBeInTheDocument()
+    const pie = screen.getByRole('navigation', { name: 'Enlaces del pie de página' })
+    expect(within(pie).getByRole('link', { name: 'Glosario' })).toHaveAttribute('href', '/glosario')
+  })
 })
