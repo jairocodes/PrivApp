@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -38,7 +38,7 @@ describe('Historial', () => {
 
     expect(await screen.findByText('Aún no tienes análisis registrados.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Analizar una política' })).toHaveAttribute('href', '/analizar')
-    expect(analisisApi.listar).toHaveBeenCalledWith(1, 10)
+    expect(analisisApi.listar).toHaveBeenCalledWith(1, 10, {})
   })
 
   it('lista los análisis con su nivel de riesgo y enlace al detalle', async () => {
@@ -72,7 +72,82 @@ describe('Historial', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
 
     expect(await screen.findByText('Página 2 de 2')).toBeInTheDocument()
-    expect(analisisApi.listar).toHaveBeenLastCalledWith(2, 10)
+    expect(analisisApi.listar).toHaveBeenLastCalledWith(2, 10, {})
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled()
+  })
+
+  describe('búsqueda y filtros', () => {
+    it('aplica texto, nivel y fechas y reinicia a la primera página', async () => {
+      responderListado({ items: [ITEM], total: 15, page: 2 })
+      renderHistorial()
+      await screen.findByText('Página 2 de 2')
+
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar' }), 'tiktok')
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'alto')
+      fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-09-01' } })
+      fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09-30' } })
+      responderListado({ items: [ITEM], total: 1 })
+      await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+
+      expect(analisisApi.listar).toHaveBeenLastCalledWith(1, 10, {
+        texto: 'tiktok',
+        nivel: 'alto',
+        desde: '2026-09-01',
+        hasta: '2026-09-30',
+      })
+      expect(await screen.findByText('1 análisis coincide con los filtros.')).toBeInTheDocument()
+    })
+
+    it('conserva los filtros al cambiar de página', async () => {
+      responderListado({ items: [ITEM], total: 15 })
+      renderHistorial()
+      await screen.findByText('Página 1 de 2')
+
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'medio')
+      await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+      await screen.findByText('15 análisis coinciden con los filtros.')
+      await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+      expect(analisisApi.listar).toHaveBeenLastCalledWith(2, 10, expect.objectContaining({ nivel: 'medio' }))
+    })
+
+    it('distingue un historial vacío de una búsqueda sin coincidencias', async () => {
+      responderListado({ items: [ITEM], total: 1 })
+      renderHistorial()
+      await screen.findByText(ITEM.comentario_breve)
+
+      responderListado({})
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar' }), 'inexistente')
+      await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+
+      expect(await screen.findByText('No hay análisis que coincidan con los filtros.')).toBeInTheDocument()
+      expect(screen.queryByText('Aún no tienes análisis registrados.')).not.toBeInTheDocument()
+    })
+
+    it('limpiar quita los filtros y vuelve a listar todo', async () => {
+      responderListado({ items: [ITEM], total: 1 })
+      renderHistorial()
+      await screen.findByText(ITEM.comentario_breve)
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar' }), 'tiktok')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+      expect(screen.getByRole('searchbox', { name: 'Buscar' })).toHaveValue('')
+      expect(analisisApi.listar).toHaveBeenLastCalledWith(1, 10, { texto: '', nivel: '', desde: '', hasta: '' })
+    })
+
+    it('rechaza un rango de fechas invertido sin consultar', async () => {
+      responderListado({ items: [ITEM], total: 1 })
+      renderHistorial()
+      await screen.findByText(ITEM.comentario_breve)
+      const llamadas = vi.mocked(analisisApi.listar).mock.calls.length
+
+      fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-09-30' } })
+      fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09-01' } })
+      await userEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+
+      expect(screen.getByRole('alert')).toHaveTextContent('La fecha inicial no puede ser posterior a la fecha final.')
+      expect(vi.mocked(analisisApi.listar).mock.calls.length).toBe(llamadas)
+    })
   })
 })

@@ -26,7 +26,7 @@ import app.database as database
 from app.config import settings
 from app.core.exceptions import AnalisisNoEncontradoError, LLMError
 from app.models.analysis import AnalysisTemp
-from app.repositories.analisis import RepositorioAnalisis
+from app.repositories.analisis import FiltrosHistorial, RepositorioAnalisis
 from app.schemas.analysis import (
     AnalisisEstadoResponse,
     AnalisisHistorialItem,
@@ -565,12 +565,14 @@ async def listar_historial(
     user_id: int,
     page: int,
     page_size: int,
+    filtros: FiltrosHistorial | None = None,
 ) -> HistorialResponse:
-    """Lista paginada de los análisis completados del usuario, más recientes primero."""
+    """Lista paginada de los análisis completados del usuario, más recientes primero,
+    con filtros opcionales (siempre dentro de los análisis del propio usuario)."""
     repo = RepositorioAnalisis(db)
-    total = await repo.contar_completados_de_usuario(user_id)
+    total = await repo.contar_completados_de_usuario(user_id, filtros)
     registros = await repo.listar_completados_de_usuario(
-        user_id, limit=page_size, offset=(page - 1) * page_size
+        user_id, limit=page_size, offset=(page - 1) * page_size, filtros=filtros
     )
 
     items = [

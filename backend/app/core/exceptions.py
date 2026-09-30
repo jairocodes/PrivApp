@@ -152,6 +152,14 @@ class DocumentoCorpusSinTextoError(HTTPException):
         )
 
 
+class RangoFechasInvalidoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La fecha inicial no puede ser posterior a la fecha final.",
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(
