@@ -11,7 +11,7 @@ from app.core.exceptions import (
     UsuarioYaExisteError,
 )
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.user import User
+from app.models.user import ROL_USUARIO, User
 from app.repositories.usuarios import RepositorioUsuarios
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,8 @@ async def register_user(
         nombre=nombre,
         email=email,
         hashed_password=hash_password(password),
+        # El registro público nunca asigna otro rol.
+        role=ROL_USUARIO,
         # Provisional: la aceptación explícita del aviso (casilla validada en
         # el servidor) se incorpora al registro junto con la página del aviso.
         privacy_accepted_at=datetime.now(timezone.utc),
@@ -49,7 +51,7 @@ async def register_user(
     RepositorioUsuarios(db).agregar(user)
     await db.flush()
 
-    token = create_access_token(str(user.id))
+    token = create_access_token(str(user.id), user.role)
     logger.info("Usuario registrado: id=%s email=%s", user.id, user.email)
     return user, token
 
@@ -67,6 +69,6 @@ async def authenticate_user(
     if not user.is_active:
         raise CredencialesInvalidasError()
 
-    token = create_access_token(str(user.id))
+    token = create_access_token(str(user.id), user.role)
     logger.info("Login exitoso: id=%s", user.id)
     return user, token
