@@ -225,9 +225,10 @@ class TestResumen:
 # Endpoints de análisis — integración
 # ---------------------------------------------------------------------------
 
-async def _esperar_estado_final(client, headers, analisis_id, intentos=40, espera=0.05) -> dict:
+async def _esperar_estado_final(client, headers, analisis_id, intentos=200, espera=0.05) -> dict:
     """Sondea GET /estado hasta que el análisis deje de estar 'procesando'
-    (o se agoten los intentos). Usado por los tests de integración de HU-13,
+    (o se agoten los intentos: hasta 10 s, margen para máquinas lentas; en
+    una máquina normal termina en pocas décimas de segundo). Usado por los tests de integración de HU-13,
     donde el análisis corre en una tarea de fondo real (asyncio.create_task)
     y no de forma inline como bajo ASGITransport con BackgroundTasks."""
     for _ in range(intentos):
