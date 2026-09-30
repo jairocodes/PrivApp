@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { AuthProvider } from './AuthContext'
 
 vi.mock('@/api/auth', () => ({
-  authApi: { login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn() },
+  authApi: { login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn(), actualizarPerfil: vi.fn() },
 }))
 
 const USUARIO = { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }
@@ -85,6 +85,18 @@ describe('AuthProvider', () => {
     expect(localStorage.getItem('access_token')).toBeNull()
     expect(result.current.user).toBeNull()
     expect(result.current.token).toBeNull()
+  })
+
+  it('actualizarPerfil guarda el usuario devuelto por el servidor', async () => {
+    localStorage.setItem('access_token', 'token-guardado')
+    vi.mocked(authApi.actualizarPerfil).mockResolvedValue({ data: { ...USUARIO, nombre: 'Ana María' } } as never)
+    const { result } = renderHook(() => useAuth(), { wrapper: envoltorio })
+    await waitFor(() => expect(result.current.user).toEqual(USUARIO))
+
+    await act(() => result.current.actualizarPerfil('Ana María'))
+
+    expect(authApi.actualizarPerfil).toHaveBeenCalledWith('Ana María')
+    expect(result.current.user?.nombre).toBe('Ana María')
   })
 
   it('useAuth exige estar dentro del proveedor', () => {

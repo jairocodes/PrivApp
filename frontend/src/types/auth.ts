@@ -35,4 +35,5 @@ export interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   register: (nombre: string, email: string, password: string, aceptaAviso: boolean) => Promise<void>
   logout: () => void
+  actualizarPerfil: (nombre: string) => Promise<void>
 }
