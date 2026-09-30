@@ -128,6 +128,30 @@ class PdfSinTextoError(HTTPException):
         )
 
 
+class DocumentoCorpusNoEncontradoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento no encontrado en el corpus normativo.",
+        )
+
+
+class DocumentoCorpusDuplicadoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe un documento con ese nombre en el corpus normativo.",
+        )
+
+
+class DocumentoCorpusSinTextoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El documento no contiene texto suficiente para incorporarlo al corpus (mínimo 50 palabras).",
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(

@@ -132,7 +132,7 @@ def extraer_texto_url(url: str) -> str:
 # Ingesta desde archivo (PDF o TXT)
 # ---------------------------------------------------------------------------
 
-def _decodificar_txt(contenido: bytes) -> str:
+def decodificar_txt(contenido: bytes) -> str:
     """UTF-8 (con o sin BOM) y, si no lo es, Windows-1252, habitual en archivos
     guardados en español desde Windows."""
     try:
@@ -158,7 +158,7 @@ def procesar_archivo(nombre: str, tipo_contenido: str | None, contenido: bytes) 
         if not texto_raw.strip():
             raise PdfSinTextoError()
     else:
-        texto_raw = _decodificar_txt(contenido)
+        texto_raw = decodificar_txt(contenido)
 
     texto = limpiar_texto(texto_raw)
     validar_longitud_politica(texto)

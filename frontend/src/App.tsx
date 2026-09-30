@@ -11,6 +11,7 @@ import Resultados from '@/pages/Resultados'
 import Historial from '@/pages/Historial'
 import Admin from '@/pages/Admin'
 import AdminUsuarios from '@/pages/AdminUsuarios'
+import AdminCorpus from '@/pages/AdminCorpus'
 import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
 import Perfil from '@/pages/Perfil'
 
@@ -32,6 +33,7 @@ export default function App() {
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/usuarios" element={<AdminUsuarios />} />
+            <Route path="/admin/corpus" element={<AdminCorpus />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>

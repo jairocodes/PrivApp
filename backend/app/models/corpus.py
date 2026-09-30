@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, true
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,8 @@ class CorpusChunk(Base):
     texto_original: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list] = mapped_column(Vector(768), nullable=False)
     metadatos: Mapped[dict | None] = mapped_column(JSONB)
+    # Solo los fragmentos activos participan en la recuperación semántica.
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
     fecha_carga: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

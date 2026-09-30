@@ -15,5 +15,6 @@ describe('Admin', () => {
 
     expect(screen.getByRole('heading', { name: 'Administración' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Usuarios/ })).toHaveAttribute('href', '/admin/usuarios')
+    expect(screen.getByRole('link', { name: /Corpus normativo/ })).toHaveAttribute('href', '/admin/corpus')
   })
 })

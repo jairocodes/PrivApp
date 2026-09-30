@@ -15,3 +15,18 @@ export interface ListadoUsuariosResponse {
   page: number
   page_size: number
 }
+
+export type Jurisdiccion = 'guatemala' | 'internacional' | 'estandar_tecnico'
+
+export interface DocumentoCorpus {
+  documento_fuente: string
+  jurisdiccion: Jurisdiccion | string
+  fragmentos: number
+  fecha_carga: string | null
+  activo: boolean
+}
+
+export interface DocumentoCargado extends DocumentoCorpus {
+  fragmentos_insertados: number
+  fragmentos_duplicados: number
+}
