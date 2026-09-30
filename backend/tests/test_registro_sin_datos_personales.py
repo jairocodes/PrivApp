@@ -17,7 +17,7 @@ class TestCorreos:
         caplog.set_level(logging.INFO)
         r = await client.post("/api/auth/register", json={
             "nombre": "Persona Nueva", "email": "persona.nueva@ejemplo.com",
-            "password": "ClaveSegura1", "acepta_aviso": True,
+            "password": "ClaveSegura1", "acepta_aviso": True, "declara_edad": True,
         })
         assert r.status_code == 201
         assert "persona.nueva@ejemplo.com" not in _texto(caplog)

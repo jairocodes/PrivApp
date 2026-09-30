@@ -70,7 +70,7 @@ class TestEliminarCuenta:
 
         login = await client.post("/api/auth/login", json={"email": otra.email, "password": PASSWORD})
         registro = await client.post("/api/auth/register", json={
-            "nombre": "Otra persona", "email": otra.email, "password": PASSWORD, "acepta_aviso": True,
+            "nombre": "Otra persona", "email": otra.email, "password": PASSWORD, "acepta_aviso": True, "declara_edad": True,
         })
         assert login.status_code == 401
         assert registro.status_code == 201
