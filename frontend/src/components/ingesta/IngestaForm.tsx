@@ -12,6 +12,7 @@ const MAX_CHARS = 200_000
 
 interface IngestaResponse {
   texto_procesado: string
+  caracteres: number
   palabras: number
   fuente: string
 }

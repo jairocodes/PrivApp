@@ -103,3 +103,28 @@ class TestLongitudEnLosEndpoints:
         )
         assert r.status_code == 200
         assert r.json()["texto_procesado"] == CARACTERES_200
+
+
+class TestConteoEnLaRespuesta:
+    async def test_texto_directo_informa_caracteres_y_palabras(self, client):
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/ingesta/texto",
+            json={"texto": f"  {PALABRAS_40}  "},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        datos = r.json()
+        assert datos["caracteres"] == len(PALABRAS_40) == 239
+        assert datos["palabras"] == 40
+
+    async def test_url_informa_caracteres_y_palabras(self, client):
+        token = create_access_token("1")
+        with patch("app.api.v1.ingesta.extraer_texto_url", return_value=PALABRAS_40):
+            r = await client.post(
+                "/api/ingesta/url",
+                json={"url": "https://ejemplo.com/privacidad"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+        datos = r.json()
+        assert datos["caracteres"] == 239
+        assert datos["palabras"] == 40
