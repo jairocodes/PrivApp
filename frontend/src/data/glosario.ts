@@ -20,6 +20,7 @@ export const GLOSARIO: EntradaGlosario[] = [
   { id: 'cita-normativa', termino: 'Cita normativa', definicion: DEFINICION_PENDIENTE },
   { id: 'jurisdiccion', termino: 'Jurisdicción', definicion: DEFINICION_PENDIENTE },
   { id: 'referencia-internacional', termino: 'Referencia internacional', definicion: DEFINICION_PENDIENTE },
+  { id: 'sin-respaldo-en-el-corpus-normativo', termino: 'Sin respaldo en el corpus normativo', definicion: DEFINICION_PENDIENTE },
   { id: 'consentimiento', termino: 'Consentimiento', definicion: DEFINICION_PENDIENTE },
   { id: 'terceros', termino: 'Terceros', definicion: DEFINICION_PENDIENTE },
   // Los ocho tipos de tratamiento de datos (RN-08), con los textos exactos de la lista cerrada.

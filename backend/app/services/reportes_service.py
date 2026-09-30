@@ -118,9 +118,16 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
                 f"({_esc(hallazgo.tipo)}){tratamiento} — {_esc(hallazgo.descripcion)}",
                 estilos["normal"],
             ))
+            if hallazgo.sin_respaldo:
+                story.append(Paragraph(
+                    "<i>Sin respaldo en el corpus normativo: no se cita ninguna norma y "
+                    "no suma al puntaje de riesgo.</i>",
+                    estilos["cita"],
+                ))
             for fuente in hallazgo.fuentes_normativas:
+                # Los análisis anteriores no guardan la jurisdicción de la cita.
                 jurisdiccion = _LABEL_JURISDICCION.get(
-                    _inferir_jurisdiccion(fuente.documento), "Internacional"
+                    fuente.jurisdiccion or _inferir_jurisdiccion(fuente.documento), "Internacional"
                 )
                 referencia = f" — {_esc(fuente.referencia)}" if fuente.referencia else ""
                 story.append(Paragraph(

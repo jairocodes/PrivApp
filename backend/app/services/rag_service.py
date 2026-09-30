@@ -4,7 +4,8 @@ Flujo por sección de política:
 1. encode(texto_seccion) → vector 768D
 2. Búsqueda por coseno contra corpus_chunks (pgvector <=>)
 3. Filtros opcionales por jurisdicción o categoría temática
-4. Devuelve top-k fragmentos con metadatos para construir el prompt
+4. Opcionalmente agrega los fragmentos guatemaltecos más cercanos (RN-07)
+5. Devuelve top-k fragmentos con metadatos para construir el prompt
 """
 
 import asyncio
@@ -18,6 +19,8 @@ from app.utils.embeddings import encode
 
 logger = logging.getLogger(__name__)
 
+JURISDICCION_GUATEMALA = "guatemala"
+
 
 async def recuperar_contexto(
     db: AsyncSession,
@@ -25,6 +28,7 @@ async def recuperar_contexto(
     k: int = 5,
     filtro_jurisdiccion: str | None = None,
     filtro_categoria: str | None = None,
+    k_guatemala: int = 0,
 ) -> list[CorpusChunk]:
     """Recupera los k fragmentos normativos más relevantes para el texto dado.
 
@@ -34,6 +38,9 @@ async def recuperar_contexto(
         k: Número de fragmentos a recuperar.
         filtro_jurisdiccion: Si se provee, limita la búsqueda a esa jurisdicción.
         filtro_categoria: Si se provee, limita por categoría temática.
+        k_guatemala: Fragmentos de normativa guatemalteca que deben estar
+            siempre en el resultado (RN-07). Los más relevantes de Guatemala
+            que no estén ya entre los k se agregan al final.
 
     Returns:
         Lista de CorpusChunk ordenados por relevancia (mayor similitud primero).
@@ -46,7 +53,12 @@ async def recuperar_contexto(
     embedding_str = "[" + ",".join(f"{x:.6f}" for x in query_embedding) + "]"
 
     repo = RepositorioCorpusNormativo(db)
-    filas = await repo.buscar_similares(embedding_str, k, filtro_jurisdiccion, filtro_categoria)
+    filas = list(await repo.buscar_similares(embedding_str, k, filtro_jurisdiccion, filtro_categoria))
+
+    if k_guatemala and filtro_jurisdiccion is None:
+        ids = {fila["id"] for fila in filas}
+        guatemala = await repo.buscar_similares(embedding_str, k_guatemala, JURISDICCION_GUATEMALA, filtro_categoria)
+        filas.extend(fila for fila in guatemala if fila["id"] not in ids)
 
     chunks = [
         CorpusChunk(

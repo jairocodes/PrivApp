@@ -57,20 +57,22 @@ en plataformas digitales.
 
 PRINCIPIOS DE OPERACIÓN:
 
-1. COBERTURA NORMATIVA: SIEMPRE reporta todos los riesgos que encuentres en el texto,
-   independientemente de si el corpus proporcionado los cubre o no. Cuando el contexto
-   incluya un fragmento directamente aplicable, cítalo. Cuando el riesgo sea evidente
-   pero el corpus no tenga un fragmento específico, reporta el hallazgo indicando
-   "Principios generales de protección de datos" como documento fuente. NUNCA omitas
-   un riesgo obvio por falta de cita exacta. No inventes nombres de leyes ni artículos
-   que no aparezcan en el contexto.
+1. COBERTURA NORMATIVA: SIEMPRE reporta todos los riesgos que encuentres en el texto.
+   Respalda cada hallazgo indicando los NÚMEROS de los fragmentos normativos
+   proporcionados cuyo contenido lo sustenta (por ejemplo [1, 3]); no copies ni
+   redactes el texto de las normas. Indica solo fragmentos que realmente respalden
+   el hallazgo. Si ningún fragmento lo respalda, repórtalo igualmente con una lista
+   vacía: el sistema lo mostrará como hallazgo sin respaldo en el corpus. NUNCA
+   omitas un riesgo obvio por falta de respaldo y NUNCA inventes leyes, artículos
+   ni números de fragmento.
 
 2. DISTINCIÓN JURISDICCIONAL: Guatemala no cuenta con una ley específica e integral
    de protección de datos personales. Cuando una afirmación se base en normativa
    guatemalteca, indícalo claramente. Cuando se base en estándares internacionales
    o regionales (RGPD, LOPDP, Principios OEA, etc.), indica explícitamente que se
    trata de una referencia internacional aplicable como buena práctica, no como ley
-   vigente en Guatemala.
+   vigente en Guatemala. Si un fragmento de Guatemala respalda el hallazgo,
+   inclúyelo entre los fragmentos indicados.
 
 3. LENGUAJE ACCESIBLE: Tu audiencia son jóvenes (13-30 años) del municipio de
    San José Acatempa, Jutiapa. Usa lenguaje claro, sin jerga jurídica innecesaria.
@@ -123,6 +125,9 @@ BAJO RIESGO (nivel: "bajo"):
 
 # Fragmentos del corpus a recuperar por sección (5 da mejor cobertura con OpenAI)
 _K_FRAGMENTOS = 5
+# Fragmentos guatemaltecos que se agregan siempre, aunque no estén entre los 5
+# más cercanos: sin ellos el modelo casi nunca puede citar normativa nacional.
+_K_GUATEMALA = 2
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
 # Se analiza la política completa: no hay tope de secciones. Las secciones que
@@ -215,9 +220,54 @@ def _construir_contexto_normativo(chunks) -> str:
             f"Documento: {chunk.documento_fuente}\n"
             f"Jurisdicción: {chunk.jurisdiccion}\n"
             f"Referencia: {chunk.referencia or 'N/A'}\n"
-            f"Contenido: {chunk.texto_original[:600]}"
+            f"Contenido: {chunk.texto_original[:_LARGO_FRAGMENTO]}"
         )
     return "\n\n".join(partes)
+
+
+# Caracteres de cada fragmento que ve el modelo y que se muestran en la cita.
+_LARGO_FRAGMENTO = 600
+_PATRON_ARTICULO = re.compile(r"\bArt(?:[íi]culo|\.)\s*(\d+)", re.IGNORECASE)
+_EXTENSIONES_DOCUMENTO = re.compile(r"\.(?:pdf|txt|md)$", re.IGNORECASE)
+
+
+def _articulos_del_fragmento(texto: str) -> str:
+    """Artículos que aparecen en el fragmento ("Artículo 4", "Artículos 3 y 4").
+    Vacío si el fragmento no menciona ninguno."""
+    numeros = list(dict.fromkeys(_PATRON_ARTICULO.findall(texto)))[:3]
+    if not numeros:
+        return ""
+    if len(numeros) == 1:
+        return f"Artículo {numeros[0]}"
+    return f"Artículos {', '.join(numeros[:-1])} y {numeros[-1]}"
+
+
+def _fuente_desde_fragmento(chunk) -> FuenteNormativa:
+    """Cita construida con el texto real del corpus: el modelo solo elige el fragmento."""
+    texto = " ".join(chunk.texto_original.split())
+    extracto = texto if len(texto) <= _LARGO_FRAGMENTO else texto[:_LARGO_FRAGMENTO].rstrip() + "…"
+    return FuenteNormativa(
+        documento=_EXTENSIONES_DOCUMENTO.sub("", chunk.documento_fuente),
+        referencia=_articulos_del_fragmento(extracto),
+        fragmento_relevante=extracto,
+        jurisdiccion=chunk.jurisdiccion,
+    )
+
+
+def _numeros_de_fragmento(valor, total: int) -> list[int]:
+    """Números de fragmento válidos (1..total), sin repetir. Los que no existen se
+    descartan: nunca se cita un fragmento que el modelo no recibió."""
+    if not isinstance(valor, list):
+        raise ValueError(f"'fragmentos' debe ser una lista de números: {valor!r}")
+    numeros: list[int] = []
+    for elemento in valor:
+        try:
+            numero = int(elemento)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= numero <= total and numero not in numeros:
+            numeros.append(numero)
+    return numeros
 
 
 def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> str:
@@ -225,9 +275,10 @@ def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> st
         f'SECCIÓN DE LA POLÍTICA A ANALIZAR:\n"""\n{texto_seccion}\n"""\n\n'
         f"FRAGMENTOS NORMATIVOS DE REFERENCIA:\n{contexto_normativo}\n\n"
         "TAREA: Identifica y reporta TODOS los riesgos presentes en la sección anterior.\n"
-        "- Si un riesgo tiene respaldo en los fragmentos normativos, cítalo.\n"
-        "- Si un riesgo es evidente pero los fragmentos no lo cubren, repórtalo igual\n"
-        '  usando "Principios generales de protección de datos" como documento.\n'
+        '- En "fragmentos" indica los números de los fragmentos normativos que respaldan\n'
+        "  cada hallazgo.\n"
+        "- Si un riesgo es evidente pero ningún fragmento lo respalda, repórtalo igual\n"
+        '  con "fragmentos": [].\n'
         "- NUNCA devuelvas hallazgos vacíos si el texto contiene cláusulas problemáticas.\n\n"
         "Devuelve SOLO el siguiente JSON sin texto adicional:\n\n"
         "{\n"
@@ -240,13 +291,7 @@ def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> st
         '      "descripcion": "<qué riesgo representa para el usuario en lenguaje claro>",\n'
         '      "nivel": "alto",\n'
         '      "tipo_tratamiento": "<uno de los tipos de tratamiento, copiado exactamente>",\n'
-        '      "fuentes_normativas": [\n'
-        "        {\n"
-        '          "documento": "<nombre del documento normativo o Principios generales>",\n'
-        '          "referencia": "<artículo o sección>",\n'
-        '          "fragmento_relevante": "<texto exacto del fragmento que aplica>"\n'
-        "        }\n"
-        "      ]\n"
+        '      "fragmentos": [<números de los fragmentos que respaldan el hallazgo>]\n'
         "    }\n"
         "  ]\n"
         "}"
@@ -285,20 +330,18 @@ def _tipo_tratamiento_valido(valor) -> str:
     raise ValueError(f"tipo_tratamiento fuera de la lista cerrada: {valor!r}")
 
 
-def _parsear_seccion(json_str: str) -> SeccionAnalizada:
-    """Convierte la respuesta JSON del LLM en SeccionAnalizada validada."""
+def _parsear_seccion(json_str: str, chunks=()) -> SeccionAnalizada:
+    """Convierte la respuesta JSON del LLM en SeccionAnalizada validada.
+
+    Las fuentes normativas se construyen con los fragmentos recuperados
+    (`chunks`) que el modelo indica por número; un hallazgo sin fragmentos
+    válidos queda marcado como sin respaldo (RN-06)."""
     datos = json.loads(_extraer_json(json_str))
 
     hallazgos = []
     for h in datos.get("hallazgos", []):
-        fuentes = [
-            FuenteNormativa(
-                documento=f.get("documento", ""),
-                referencia=f.get("referencia", ""),
-                fragmento_relevante=f.get("fragmento_relevante", ""),
-            )
-            for f in h.get("fuentes_normativas", [])
-        ]
+        numeros = _numeros_de_fragmento(h.get("fragmentos"), len(chunks))
+        fuentes = [_fuente_desde_fragmento(chunks[n - 1]) for n in numeros]
         hallazgos.append(
             Hallazgo(
                 tipo=h.get("tipo", "neutral"),
@@ -306,6 +349,7 @@ def _parsear_seccion(json_str: str) -> SeccionAnalizada:
                 nivel=h.get("nivel", "bajo"),
                 fuentes_normativas=fuentes,
                 tipo_tratamiento=_tipo_tratamiento_valido(h.get("tipo_tratamiento")),
+                sin_respaldo=not fuentes,
             )
         )
 
@@ -325,7 +369,9 @@ _PESO_NIVEL = {"bajo": 1, "medio": 2, "alto": 3}
 
 
 def _calcular_resumen(secciones: list[SeccionAnalizada]) -> ResumenGeneral:
-    todos_hallazgos = [h for s in secciones for h in s.hallazgos]
+    # Los hallazgos sin respaldo en el corpus se muestran, pero no se presentan
+    # como fundamentados: no cuentan para el nivel global ni para el puntaje.
+    todos_hallazgos = [h for s in secciones for h in s.hallazgos if not h.sin_respaldo]
 
     if not todos_hallazgos:
         return ResumenGeneral(
@@ -513,7 +559,7 @@ async def _analizar_seccion(
     error devuelve la sección de respaldo, sin afectar a las demás."""
     try:
         async with candado_bd:
-            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
+            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS, k_guatemala=_K_GUATEMALA)
         contexto = _construir_contexto_normativo(chunks)
         # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
         user_msg = _construir_prompt_seccion(seccion, contexto)
@@ -521,7 +567,7 @@ async def _analizar_seccion(
         # Intento 1
         json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
         try:
-            return _parsear_seccion(json_str)
+            return _parsear_seccion(json_str, chunks)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
             # Intento 2: se repite la instrucción completa (sección, contexto y
@@ -533,7 +579,7 @@ async def _analizar_seccion(
             )
             json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
             try:
-                return _parsear_seccion(json_str2)
+                return _parsear_seccion(json_str2, chunks)
             except (json.JSONDecodeError, KeyError, ValueError) as e2:
                 logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
                 return _seccion_fallback(seccion, idx)

@@ -26,13 +26,7 @@ def _respuesta_llm_valida() -> str:
                 "descripcion": "La finalidad está claramente declarada.",
                 "nivel": "bajo",
                 "tipo_tratamiento": "Uso y finalidad de los datos",
-                "fuentes_normativas": [
-                    {
-                        "documento": "Principios OEA 2021",
-                        "referencia": "Principio 2",
-                        "fragmento_relevante": "Los datos deben tener finalidad declarada."
-                    }
-                ]
+                "fragmentos": [1]
             }
         ]
     })
@@ -137,13 +131,7 @@ class TestParseoJSON:
                     "descripcion": "Se comparten datos con terceros no identificados.",
                     "nivel": "alto",
                     "tipo_tratamiento": "Transferencia de datos a terceros",
-                    "fuentes_normativas": [
-                        {
-                            "documento": "RGPD",
-                            "referencia": "Artículo 5",
-                            "fragmento_relevante": "Los datos deben ser tratados con transparencia."
-                        }
-                    ]
+                    "fragmentos": [1]
                 }
             ]
         })
@@ -190,7 +178,7 @@ class TestParseoJSON:
                     "descripcion": "No se especifica plazo de retención.",
                     "nivel": "medio",
                     "tipo_tratamiento": "Tiempo de conservación de los datos",
-                    "fuentes_normativas": []
+                    "fragmentos": []
                 }
             ]
         }
@@ -727,3 +715,133 @@ class TestAnalisisEnParalelo:
         assert analizadas[1]["hallazgos"][0]["tipo"] == "neutral"
         assert registro.seccion_actual == 3
 
+
+# ---------------------------------------------------------------------------
+# Citas construidas con los fragmentos reales del corpus (RN-06)
+# ---------------------------------------------------------------------------
+
+def _fragmento(id_, documento, jurisdiccion, texto):
+    from app.models.corpus import CorpusChunk
+
+    return CorpusChunk(
+        id=id_, documento_fuente=documento, jurisdiccion=jurisdiccion,
+        referencia=documento, categoria_tematica="general", texto_original=texto, metadatos={},
+    )
+
+
+def _respuesta_con_fragmentos(*listas) -> str:
+    datos = json.loads(_respuesta_llm_valida())
+    base = datos["hallazgos"][0]
+    datos["hallazgos"] = [{**base, "tipo": "riesgo", "nivel": "alto", "fragmentos": f} for f in listas]
+    return json.dumps(datos)
+
+
+FRAGMENTOS = [
+    _fragmento(10, "RGPD.pdf", "internacional",
+               "Artículo 5. Los datos personales serán tratados de manera   lícita, leal y transparente."),
+    _fragmento(20, "Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala",
+               "Artículo 9. Datos personales: los relativos a cualquier información concerniente "
+               "a personas naturales. Artículo 10. Datos sensibles."),
+]
+
+
+class TestCitasDelCorpus:
+    def test_la_cita_usa_el_texto_real_del_fragmento_indicado(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([2]), FRAGMENTOS)
+
+        hallazgo = seccion.hallazgos[0]
+        assert hallazgo.sin_respaldo is False
+        [fuente] = hallazgo.fuentes_normativas
+        assert fuente.documento == "Decreto 57-2008 (Ley de Acceso a la Información Pública)"
+        assert fuente.jurisdiccion == "guatemala"
+        assert fuente.referencia == "Artículos 9 y 10"
+        assert fuente.fragmento_relevante.startswith("Artículo 9. Datos personales")
+
+    def test_varios_fragmentos_sin_repetir_y_espacios_normalizados(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([1, "2", 1]), FRAGMENTOS)
+
+        fuentes = seccion.hallazgos[0].fuentes_normativas
+        assert [f.documento for f in fuentes] == ["RGPD", FRAGMENTOS[1].documento_fuente[:-4]]
+        assert fuentes[0].referencia == "Artículo 5"
+        assert "lícita, leal y transparente" in fuentes[0].fragmento_relevante
+
+    def test_los_numeros_inexistentes_se_descartan(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([0, 3, 99, "x", 1]), FRAGMENTOS)
+
+        assert [f.documento for f in seccion.hallazgos[0].fuentes_normativas] == ["RGPD"]
+
+    @pytest.mark.parametrize("fragmentos", [[], [7]])
+    def test_sin_fragmentos_validos_queda_sin_respaldo(self, fragmentos):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos(fragmentos), FRAGMENTOS)
+
+        assert seccion.hallazgos[0].fuentes_normativas == []
+        assert seccion.hallazgos[0].sin_respaldo is True
+
+    @pytest.mark.parametrize("valor", [None, "1", {"n": 1}])
+    def test_fragmentos_ausentes_o_mal_formados_activan_el_reintento(self, valor):
+        from app.services.analisis_service import _parsear_seccion
+
+        datos = json.loads(_respuesta_con_fragmentos([1]))
+        if valor is None:
+            del datos["hallazgos"][0]["fragmentos"]
+        else:
+            datos["hallazgos"][0]["fragmentos"] = valor
+        with pytest.raises(ValueError, match="fragmentos"):
+            _parsear_seccion(json.dumps(datos), FRAGMENTOS)
+
+    def test_el_texto_largo_se_recorta(self):
+        from app.services.analisis_service import _LARGO_FRAGMENTO, _parsear_seccion
+
+        largo = [_fragmento(1, "RGPD.pdf", "internacional", "palabra " * 300)]
+        fuente = _parsear_seccion(_respuesta_con_fragmentos([1]), largo).hallazgos[0].fuentes_normativas[0]
+
+        assert fuente.fragmento_relevante.endswith("…")
+        assert len(fuente.fragmento_relevante) <= _LARGO_FRAGMENTO + 1
+        assert fuente.referencia == ""
+
+    def test_los_hallazgos_sin_respaldo_no_suman_al_puntaje(self):
+        from app.services.analisis_service import _calcular_resumen, _parsear_seccion
+
+        respaldado = _parsear_seccion(_respuesta_con_fragmentos([1]), FRAGMENTOS)
+        respaldado.hallazgos[0].nivel = "bajo"
+        sin_respaldo = _parsear_seccion(_respuesta_con_fragmentos([], []), FRAGMENTOS)
+
+        resumen = _calcular_resumen([respaldado, sin_respaldo])
+
+        assert resumen.nivel_riesgo_global == "bajo"
+        assert resumen.puntaje == 0
+
+    def test_la_instruccion_pide_numeros_de_fragmento(self):
+        from app.services.analisis_service import SYSTEM_PROMPT, _construir_prompt_seccion
+
+        prompt = _construir_prompt_seccion("texto", "[Fragmento 1] ...")
+        assert '"fragmentos": [' in prompt
+        assert "fragmento_relevante" not in prompt
+        assert "Principios generales" not in prompt + SYSTEM_PROMPT
+
+    async def test_el_analisis_completo_guarda_las_citas_reales(self, db_session, seed_user):
+        from app.services.analisis_service import _K_GUATEMALA, crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Terceros\n" + "Compartimos sus datos con socios comerciales. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        recuperar = AsyncMock(return_value=FRAGMENTOS)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", recuperar), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = AsyncMock(return_value=_respuesta_con_fragmentos([2], []))
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+
+        assert recuperar.await_args.kwargs["k_guatemala"] == _K_GUATEMALA
+        respaldado, sin_respaldo = registro.resultado["secciones_analizadas"][0]["hallazgos"]
+        assert respaldado["fuentes_normativas"][0]["jurisdiccion"] == "guatemala"
+        assert respaldado["sin_respaldo"] is False
+        assert sin_respaldo["sin_respaldo"] is True and sin_respaldo["fuentes_normativas"] == []

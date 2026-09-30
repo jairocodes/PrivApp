@@ -184,14 +184,13 @@ class TestConsultaDeRecuperacion:
 
         db = MagicMock()
         db.execute = AsyncMock(return_value=MagicMock(mappings=MagicMock(return_value=MagicMock(all=list))))
-        db.begin_nested = AsyncMock()
 
         await RepositorioCorpusNormativo(db).buscar_similares("[0.1]", k=5, filtro_jurisdiccion="guatemala")
 
         consulta = str(db.execute.call_args_list[-1].args[0])
         assert "active = true" in consulta
         assert "jurisdiccion = :jurisdiccion" in consulta
-        assert consulta.count("ORDER  BY distancia") == 2
+        assert "ORDER  BY embedding <=>" in consulta
 
 
 class TestPdfExtractor:
@@ -381,6 +380,40 @@ class TestRAGService:
         call_args = db_mock.execute.call_args
         sql_str = str(call_args[0][0])
         assert "jurisdiccion" in sql_str
+
+    @staticmethod
+    def _fila(id_, jurisdiccion):
+        return {
+            "id": id_, "documento_fuente": f"doc{id_}.pdf", "jurisdiccion": jurisdiccion,
+            "referencia": None, "categoria_tematica": "general",
+            "texto_original": "texto", "metadatos": {},
+        }
+
+    async def test_agrega_fragmentos_guatemaltecos_sin_repetir(self):
+        from app.services.rag_service import recuperar_contexto
+
+        cercanos = [self._fila(1, "internacional"), self._fila(2, "guatemala"), self._fila(3, "internacional")]
+        guatemala = [self._fila(2, "guatemala"), self._fila(7, "guatemala")]
+
+        with patch("app.services.rag_service.encode", return_value=[0.0] * 768), \
+             patch("app.services.rag_service.RepositorioCorpusNormativo") as Repo:
+            Repo.return_value.buscar_similares = AsyncMock(side_effect=[cercanos, guatemala])
+            chunks = await recuperar_contexto(AsyncMock(), "texto", k=3, k_guatemala=2)
+
+        assert [c.id for c in chunks] == [1, 2, 3, 7]
+        segunda = Repo.return_value.buscar_similares.call_args_list[1]
+        assert segunda.args[1:3] == (2, "guatemala")
+
+    async def test_sin_k_guatemala_hace_una_sola_busqueda(self):
+        from app.services.rag_service import recuperar_contexto
+
+        with patch("app.services.rag_service.encode", return_value=[0.0] * 768), \
+             patch("app.services.rag_service.RepositorioCorpusNormativo") as Repo:
+            Repo.return_value.buscar_similares = AsyncMock(return_value=[self._fila(1, "internacional")])
+            chunks = await recuperar_contexto(AsyncMock(), "texto", k=5)
+
+        assert len(chunks) == 1
+        assert Repo.return_value.buscar_similares.await_count == 1
 
     async def test_contar_chunks(self):
         from app.services.rag_service import contar_chunks

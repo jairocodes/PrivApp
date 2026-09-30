@@ -1,4 +1,4 @@
-import type { Jurisdiccion } from '@/types/analisis'
+import type { FuenteNormativa, Jurisdiccion } from '@/types/analisis'
 
 export const ETIQUETA_JURISDICCION: Record<Jurisdiccion, string> = {
   guatemala: 'Guatemala',
@@ -19,4 +19,12 @@ export function inferirJurisdiccion(documento: string): Jurisdiccion {
   if (CLAVES_GUATEMALA.some((clave) => d.includes(clave))) return 'guatemala'
   if (CLAVES_ESTANDAR.some((clave) => d.includes(clave))) return 'estandar_tecnico'
   return 'internacional'
+}
+
+/**
+ * Jurisdicción de una cita: la que guardó el servidor desde el fragmento del
+ * corpus o, en los análisis antiguos, la deducida del nombre del documento.
+ */
+export function jurisdiccionDeFuente(fuente: FuenteNormativa): Jurisdiccion {
+  return fuente.jurisdiccion ?? inferirJurisdiccion(fuente.documento)
 }

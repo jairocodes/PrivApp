@@ -303,6 +303,33 @@ class TestEndpointPDF:
         )
         assert "Tipo de tratamiento" not in texto
 
+    async def test_pdf_marca_los_hallazgos_sin_respaldo_y_usa_la_jurisdiccion_guardada(
+        self, client, db_session, seed_user
+    ):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        resultado = _resultado_completo(documento_fuente="Documento sin nombre conocido")
+        hallazgos = resultado["secciones_analizadas"][0]["hallazgos"]
+        hallazgos[0]["fuentes_normativas"][0]["jurisdiccion"] = "guatemala"
+        hallazgos.append({
+            "tipo": "riesgo", "descripcion": "Riesgo sin norma en el corpus.", "nivel": "alto",
+            "fuentes_normativas": [], "sin_respaldo": True,
+        })
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=resultado)
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        texto = " ".join("".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        ).split())
+        assert "[Guatemala] Documento sin nombre conocido" in texto
+        assert "Sin respaldo en el corpus normativo" in texto
+
 
 class TestJurisdiccionEnElReporte:
     @pytest.mark.parametrize("documento,esperada", [

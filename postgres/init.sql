@@ -21,9 +21,8 @@ CREATE TABLE IF NOT EXISTS corpus_chunks (
     fecha_carga         TIMESTAMP       DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_corpus_embedding
-    ON corpus_chunks USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
+-- Sin índice vectorial: la búsqueda exacta es rápida con el tamaño actual del
+-- corpus, y un índice ivfflat creado con la tabla vacía reduce la precisión.
 
 CREATE INDEX IF NOT EXISTS idx_corpus_jurisdiccion
     ON corpus_chunks(jurisdiccion);

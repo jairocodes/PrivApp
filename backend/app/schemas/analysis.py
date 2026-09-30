@@ -12,6 +12,9 @@ class FuenteNormativa(BaseModel):
     documento: str
     referencia: str
     fragmento_relevante: str
+    # La completa el servidor con la jurisdicción del fragmento del corpus.
+    # None en los análisis anteriores, que la deducen del nombre del documento.
+    jurisdiccion: str | None = None
 
 
 # Lista cerrada del tipo de tratamiento de datos (RN-08). Los textos deben ser
@@ -48,6 +51,9 @@ class Hallazgo(BaseModel):
     # None solo en análisis realizados antes de incorporar la clasificación;
     # toda respuesta nueva del modelo debe traerlo (ver _parsear_seccion).
     tipo_tratamiento: TipoTratamiento | None = None
+    # True si ningún fragmento del corpus respalda el hallazgo (RN-06): se
+    # muestra marcado y no suma al puntaje.
+    sin_respaldo: bool = False
 
 
 class SeccionAnalizada(BaseModel):

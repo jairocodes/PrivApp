@@ -1,6 +1,6 @@
 import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import type { FuenteNormativa, Jurisdiccion } from '@/types/analisis'
-import { inferirJurisdiccion } from '@/utils/jurisdiccion'
+import { jurisdiccionDeFuente } from '@/utils/jurisdiccion'
 
 interface Props {
   fuente: FuenteNormativa
@@ -26,7 +26,7 @@ const BADGE: Record<string, { bg: string; text: string; label: string }> = {
 }
 
 export default function CitaNormativa({ fuente, jurisdiccion }: Props) {
-  const jur = jurisdiccion ?? inferirJurisdiccion(fuente.documento)
+  const jur = jurisdiccion ?? jurisdiccionDeFuente(fuente)
   const badge = BADGE[jur] ?? BADGE.internacional
 
   return (

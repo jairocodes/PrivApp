@@ -2,13 +2,8 @@
 
 from typing import Mapping, Sequence
 
-import logging
-
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = logging.getLogger(__name__)
 
 
 class RepositorioCorpusNormativo:
@@ -36,42 +31,20 @@ class RepositorioCorpusNormativo:
 
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-        # La consulta exterior reordena por distancia: la búsqueda iterativa
-        # (ver _activar_busqueda_iterativa) puede entregar los candidatos
-        # ligeramente desordenados.
+        # Búsqueda exacta (sin índice aproximado, ver la migración 0008): los
+        # filtros se aplican antes de ordenar, así que siempre se completan k
+        # fragmentos mientras haya suficientes activos.
         sql = text(f"""
-            WITH candidatos AS MATERIALIZED (
-                SELECT id, documento_fuente, jurisdiccion, referencia,
-                       categoria_tematica, texto_original, metadatos,
-                       embedding <=> CAST(:embedding AS vector) AS distancia
-                FROM   corpus_chunks
-                {where_sql}
-                ORDER  BY distancia
-                LIMIT  :k
-            )
             SELECT id, documento_fuente, jurisdiccion, referencia,
                    categoria_tematica, texto_original, metadatos
-            FROM   candidatos
-            ORDER  BY distancia
+            FROM   corpus_chunks
+            {where_sql}
+            ORDER  BY embedding <=> CAST(:embedding AS vector)
+            LIMIT  :k
         """)
 
-        await self._activar_busqueda_iterativa()
         result = await self.db.execute(sql, params)
         return result.mappings().all()
-
-    async def _activar_busqueda_iterativa(self) -> None:
-        """El índice ivfflat aplica los filtros (p. ej. active = true) después de
-        recorrer sus listas, así que con documentos desactivados podría devolver
-        menos de k fragmentos. La búsqueda iterativa de pgvector >= 0.8 sigue
-        recorriendo hasta completarlos. SET LOCAL la limita a la transacción; el
-        punto de guardado evita romper la búsqueda con una versión anterior."""
-        punto = await self.db.begin_nested()
-        try:
-            await self.db.execute(text("SET LOCAL ivfflat.iterative_scan = relaxed_order"))
-            await punto.commit()
-        except DBAPIError:
-            await punto.rollback()
-            logger.warning("pgvector sin búsqueda iterativa; se usa la búsqueda estándar.")
 
     _RESUMEN_DOCUMENTO = """
         SELECT documento_fuente,

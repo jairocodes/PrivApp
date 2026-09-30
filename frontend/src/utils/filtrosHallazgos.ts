@@ -1,5 +1,5 @@
 import type { Hallazgo, Jurisdiccion, NivelRiesgo, SeccionAnalizada } from '@/types/analisis'
-import { inferirJurisdiccion } from '@/utils/jurisdiccion'
+import { jurisdiccionDeFuente } from '@/utils/jurisdiccion'
 
 export interface FiltroHallazgos {
   nivel: NivelRiesgo | ''
@@ -23,7 +23,7 @@ export function hallazgoCoincide(hallazgo: Hallazgo, filtro: FiltroHallazgos): b
   if (filtro.nivel && hallazgo.nivel !== filtro.nivel) return false
   if (filtro.jurisdiccion) {
     return hallazgo.fuentes_normativas.some(
-      (fuente) => inferirJurisdiccion(fuente.documento) === filtro.jurisdiccion,
+      (fuente) => jurisdiccionDeFuente(fuente) === filtro.jurisdiccion,
     )
   }
   return true

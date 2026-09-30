@@ -186,3 +186,11 @@ class TestCargaDeDocumentos:
         assert respuesta.fragmentos == respuesta.fragmentos_insertados > 1
         filas = await RepositorioCorpusNormativo(db_pg).buscar_similares(CONSULTA, k=3)
         assert {f["documento_fuente"] for f in filas} == {"Norma cargada.txt"}
+
+
+class TestBusquedaExacta:
+    async def test_no_hay_indice_aproximado_sobre_los_vectores(self, db_pg):
+        indices = (await db_pg.execute(text(
+            "SELECT indexdef FROM pg_indexes WHERE tablename = 'corpus_chunks'"
+        ))).scalars().all()
+        assert not any("ivfflat" in i or "hnsw" in i for i in indices)
