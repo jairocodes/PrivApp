@@ -184,14 +184,13 @@ class TestConsultaDeRecuperacion:
 
         db = MagicMock()
         db.execute = AsyncMock(return_value=MagicMock(mappings=MagicMock(return_value=MagicMock(all=list))))
-        db.begin_nested = AsyncMock()
 
         await RepositorioCorpusNormativo(db).buscar_similares("[0.1]", k=5, filtro_jurisdiccion="guatemala")
 
         consulta = str(db.execute.call_args_list[-1].args[0])
         assert "active = true" in consulta
         assert "jurisdiccion = :jurisdiccion" in consulta
-        assert consulta.count("ORDER  BY distancia") == 2
+        assert "ORDER  BY embedding <=>" in consulta
 
 
 class TestPdfExtractor:
