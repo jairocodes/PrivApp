@@ -1,6 +1,7 @@
 """Repositorio de acceso a datos para los análisis (AnalysisTemp)."""
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,8 @@ class FiltrosHistorial:
     completados del propio usuario."""
 
     nivel: str | None = None
+    desde: datetime | None = None  # inclusive, con zona horaria
+    hasta: datetime | None = None  # inclusive, con zona horaria
 
 
 def _aplicar_filtros(consulta: Select, filtros: FiltrosHistorial | None) -> Select:
@@ -23,6 +26,10 @@ def _aplicar_filtros(consulta: Select, filtros: FiltrosHistorial | None) -> Sele
     if filtros.nivel:
         nivel = json_texto(AnalysisTemp.resultado, "resumen_general", "nivel_riesgo_global")
         consulta = consulta.where(nivel == filtros.nivel)
+    if filtros.desde:
+        consulta = consulta.where(AnalysisTemp.created_at >= filtros.desde)
+    if filtros.hasta:
+        consulta = consulta.where(AnalysisTemp.created_at <= filtros.hasta)
     return consulta
 
 

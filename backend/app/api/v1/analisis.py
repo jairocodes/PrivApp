@@ -8,6 +8,7 @@ GET  /api/analisis/{id}/pdf     — descarga el reporte del análisis en PDF
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -16,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user
 from app.database import get_db
+from app.core.exceptions import RangoFechasInvalidoError
 from app.core.limiter import limiter
 from app.models.user import User
 from app.repositories.analisis import FiltrosHistorial
@@ -80,16 +82,28 @@ async def obtener(
     return await obtener_analisis(db, analisis_id, current_user.id)
 
 
+def _a_utc(fecha: datetime | None) -> datetime | None:
+    """Las fechas sin zona se toman como UTC; todas se comparan en UTC."""
+    if fecha is None:
+        return None
+    return fecha.replace(tzinfo=timezone.utc) if fecha.tzinfo is None else fecha.astimezone(timezone.utc)
+
+
 @router.get("", response_model=HistorialResponse)
 async def listar(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
     nivel: Literal["bajo", "medio", "alto"] | None = Query(None, description="Nivel de riesgo global"),
+    desde: datetime | None = Query(None, description="Desde esta fecha y hora (ISO 8601, inclusive)"),
+    hasta: datetime | None = Query(None, description="Hasta esta fecha y hora (ISO 8601, inclusive)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HistorialResponse:
     """Lista paginada de los análisis del usuario autenticado, más recientes primero."""
-    filtros = FiltrosHistorial(nivel=nivel)
+    desde, hasta = _a_utc(desde), _a_utc(hasta)
+    if desde and hasta and desde > hasta:
+        raise RangoFechasInvalidoError()
+    filtros = FiltrosHistorial(nivel=nivel, desde=desde, hasta=hasta)
     return await listar_historial(db, current_user.id, page, page_size, filtros)
 
 

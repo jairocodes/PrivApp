@@ -68,3 +68,21 @@ class TestFiltrosDelHistorial:
 
         assert [r.resultado["resumen_general"]["comentario_breve"] for r in registros] == ["A1"]
         assert await repo.contar_completados_de_usuario(ana.id, filtros) == 1
+
+
+class TestFiltroPorFechasPg:
+    async def test_compara_fechas_con_zona_horaria(self, db_pg):
+        from datetime import timedelta
+
+        ana = await _usuario(db_pg, "ana@privapp.test")
+        base = datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc)
+        db_pg.add_all([
+            _analisis(ana.id, "alto", "Antes", created_at=base - timedelta(days=1)),
+            _analisis(ana.id, "alto", "Dentro", created_at=base),
+        ])
+        await db_pg.commit()
+
+        filtros = FiltrosHistorial(desde=base - timedelta(hours=1), hasta=base + timedelta(hours=1))
+        registros = await RepositorioAnalisis(db_pg).listar_completados_de_usuario(ana.id, 10, 0, filtros)
+
+        assert [r.resultado["resumen_general"]["comentario_breve"] for r in registros] == ["Dentro"]
