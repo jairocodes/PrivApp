@@ -43,4 +43,5 @@ export interface AuthContextValue {
   logout: () => void
   actualizarPerfil: (nombre: string) => Promise<void>
   cambiarPassword: (datos: CambioPasswordRequest) => Promise<void>
+  eliminarCuenta: (password: string) => Promise<void>
 }
