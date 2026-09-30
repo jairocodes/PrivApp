@@ -8,6 +8,7 @@ GET  /api/analisis/{id}/pdf     — descarga el reporte del análisis en PDF
 """
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,7 @@ from app.api.deps import get_current_user
 from app.database import get_db
 from app.core.limiter import limiter
 from app.models.user import User
+from app.repositories.analisis import FiltrosHistorial
 from app.schemas.analysis import AnalisisEstadoResponse, AnalisisIniciadoResponse, AnalisisResponse, HistorialResponse
 from app.schemas.analisis_request import IniciarAnalisisRequest
 from app.services.analisis_service import (
@@ -82,11 +84,13 @@ async def obtener(
 async def listar(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    nivel: Literal["bajo", "medio", "alto"] | None = Query(None, description="Nivel de riesgo global"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HistorialResponse:
     """Lista paginada de los análisis del usuario autenticado, más recientes primero."""
-    return await listar_historial(db, current_user.id, page, page_size)
+    filtros = FiltrosHistorial(nivel=nivel)
+    return await listar_historial(db, current_user.id, page, page_size, filtros)
 
 
 @router.get("/{analisis_id}/pdf")

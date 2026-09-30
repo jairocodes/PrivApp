@@ -1,0 +1,70 @@
+"""Pruebas de integración del historial contra PostgreSQL (filtros sobre JSONB).
+
+Se ejecutan solo si PRIVAPP_TEST_PG_URL apunta a una base con las migraciones
+aplicadas; vacían users y analysis_temp, así que nunca deben apuntar a una base
+con datos reales.
+"""
+
+import os
+from datetime import datetime, timezone
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.models.analysis import AnalysisTemp
+from app.models.user import User
+from app.repositories.analisis import FiltrosHistorial, RepositorioAnalisis
+
+PG_URL = os.environ.get("PRIVAPP_TEST_PG_URL")
+
+pytestmark = pytest.mark.skipif(not PG_URL, reason="requiere PRIVAPP_TEST_PG_URL (PostgreSQL)")
+
+
+@pytest.fixture
+async def db_pg():
+    engine = create_async_engine(PG_URL)
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE analysis_temp, users RESTART IDENTITY CASCADE"))
+    sesiones = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    async with sesiones() as sesion:
+        yield sesion
+    async with engine.begin() as conn:
+        await conn.execute(text("TRUNCATE analysis_temp, users RESTART IDENTITY CASCADE"))
+    await engine.dispose()
+
+
+async def _usuario(db: AsyncSession, email: str) -> User:
+    user = User(nombre="Persona", email=email, hashed_password="x", privacy_accepted_at=datetime.now(timezone.utc))
+    db.add(user)
+    await db.flush()
+    return user
+
+
+def _analisis(user_id: int, nivel: str, comentario: str, **kwargs) -> AnalysisTemp:
+    return AnalysisTemp(
+        user_id=user_id,
+        texto_original=kwargs.pop("texto", "Texto de la política"),
+        estado="completado",
+        resultado={"resumen_general": {"nivel_riesgo_global": nivel, "puntaje": 50, "comentario_breve": comentario}},
+        **kwargs,
+    )
+
+
+class TestFiltrosDelHistorial:
+    async def test_filtra_por_nivel_dentro_del_jsonb(self, db_pg):
+        ana = await _usuario(db_pg, "ana@privapp.test")
+        otro = await _usuario(db_pg, "otro@privapp.test")
+        db_pg.add_all([
+            _analisis(ana.id, "alto", "A1"),
+            _analisis(ana.id, "bajo", "B1"),
+            _analisis(otro.id, "alto", "Ajeno"),
+        ])
+        await db_pg.commit()
+        repo = RepositorioAnalisis(db_pg)
+        filtros = FiltrosHistorial(nivel="alto")
+
+        registros = await repo.listar_completados_de_usuario(ana.id, 10, 0, filtros)
+
+        assert [r.resultado["resumen_general"]["comentario_breve"] for r in registros] == ["A1"]
+        assert await repo.contar_completados_de_usuario(ana.id, filtros) == 1
