@@ -2,6 +2,7 @@
 
 GET   /api/admin/usuarios              — lista paginada de usuarios, con búsqueda
 PATCH /api/admin/usuarios/{id}/estado  — activa o desactiva una cuenta
+GET   /api/admin/corpus                — documentos del corpus normativo
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -11,6 +12,8 @@ from app.api.deps import require_admin
 from app.database import get_db
 from app.models.user import User
 from app.schemas.admin import CambioEstadoUsuarioRequest, ListadoUsuariosResponse, UsuarioAdminItem
+from app.schemas.corpus import ListadoCorpusResponse
+from app.services import corpus_service
 from app.services.admin_service import cambiar_estado_usuario, listar_usuarios
 
 router = APIRouter(dependencies=[Depends(require_admin)])
@@ -36,3 +39,9 @@ async def cambiar_estado(
 ) -> UsuarioAdminItem:
     """Activa o desactiva una cuenta; un administrador no puede desactivarse a sí mismo."""
     return await cambiar_estado_usuario(db, admin, user_id, body.activo)
+
+
+@router.get("/corpus", response_model=ListadoCorpusResponse)
+async def listar_corpus(db: AsyncSession = Depends(get_db)) -> ListadoCorpusResponse:
+    """Documentos fuente del corpus, con jurisdicción, fragmentos, fecha y estado."""
+    return await corpus_service.listar_documentos(db)

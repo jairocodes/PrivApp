@@ -89,3 +89,17 @@ class TestRecuperacionSoloActivos:
 
         documentos = [f["documento_fuente"] for f in filas]
         assert documentos == ["cercano.pdf"] * 3 + ["lejano.pdf"] * 3
+
+
+class TestListadoDeDocumentos:
+    async def test_agrupa_por_documento_fuente(self, db_pg):
+        await _insertar(db_pg, "RGPD.pdf", 4, 0.9)
+        await _insertar(db_pg, "LOPDP.pdf", 2, 0.8)
+        await db_pg.execute(text("UPDATE corpus_chunks SET active = false WHERE documento_fuente = 'LOPDP.pdf'"))
+        await db_pg.commit()
+
+        documentos = await RepositorioCorpusNormativo(db_pg).listar_documentos()
+
+        resumen = {d["documento_fuente"]: (d["fragmentos"], d["activo"]) for d in documentos}
+        assert resumen == {"LOPDP.pdf": (2, False), "RGPD.pdf": (4, True)}
+        assert all(d["jurisdiccion"] == "internacional" and d["fecha_carga"] for d in documentos)

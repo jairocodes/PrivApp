@@ -73,6 +73,20 @@ class RepositorioCorpusNormativo:
             await punto.rollback()
             logger.warning("pgvector sin búsqueda iterativa; se usa la búsqueda estándar.")
 
+    async def listar_documentos(self) -> Sequence[Mapping]:
+        """Un registro por documento fuente, con su número de fragmentos."""
+        result = await self.db.execute(text("""
+            SELECT documento_fuente,
+                   MIN(jurisdiccion)  AS jurisdiccion,
+                   COUNT(*)           AS fragmentos,
+                   MIN(fecha_carga)   AS fecha_carga,
+                   BOOL_AND(active)   AS activo
+            FROM   corpus_chunks
+            GROUP  BY documento_fuente
+            ORDER  BY documento_fuente
+        """))
+        return result.mappings().all()
+
     async def contar(self) -> int:
         result = await self.db.execute(text("SELECT COUNT(*) FROM corpus_chunks"))
         return result.scalar_one()
