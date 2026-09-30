@@ -34,7 +34,7 @@ describe('Resultados', () => {
     vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'procesando', seccionActual: 1, seccionesTotal: 3 })
     renderResultados()
 
-    expect(screen.getByText('Analizando sección 1 de 3...')).toBeInTheDocument()
+    expect(screen.getByText('Analizando la política: 1 de 3 secciones listas...')).toBeInTheDocument()
     expect(obtener).not.toHaveBeenCalled()
   })
 
