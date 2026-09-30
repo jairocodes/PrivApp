@@ -416,7 +416,89 @@ def _calcular_resumen(secciones: list[SeccionAnalizada]) -> ResumenGeneral:
     )
 
 
+SYSTEM_PROMPT_RECOMENDACIONES = """Eres un asistente experto en privacidad que orienta a jóvenes
+de Guatemala (13-30 años). A partir de los hallazgos de riesgo encontrados en una política de
+privacidad, redacta recomendaciones prácticas: acciones concretas que la persona puede realizar
+para proteger su privacidad frente a esos riesgos.
+
+REGLAS:
+- Entre 3 y 5 recomendaciones, de la más a la menos importante.
+- Cada una empieza con un verbo en imperativo (tú) y tiene como máximo dos oraciones.
+- Básate solo en los hallazgos proporcionados; no inventes riesgos.
+- No inventes nombres de menús, opciones ni funciones de la plataforma: si sugieres revisar la
+  configuración, hazlo de forma general.
+- Usa lenguaje claro, sin jerga jurídica, y no des asesoría legal.
+- Responde EXCLUSIVAMENTE en formato JSON válido."""
+
+# Hallazgos que se envían para redactar las recomendaciones y límites de la respuesta.
+_MAX_HALLAZGOS_RECOMENDACIONES = 15
+_MAX_RECOMENDACIONES = 5
+_MAX_CARACTERES_RECOMENDACION = 400
+
+
+def _hallazgos_para_recomendaciones(secciones: list[SeccionAnalizada]) -> list[Hallazgo]:
+    """Riesgos de nivel alto y medio: primero los altos y, dentro de cada nivel,
+    primero los respaldados por el corpus."""
+    riesgos = [
+        h for s in secciones for h in s.hallazgos
+        if h.tipo == "riesgo" and h.nivel in ("alto", "medio")
+    ]
+    riesgos.sort(key=lambda h: (h.nivel != "alto", h.sin_respaldo))
+    return riesgos[:_MAX_HALLAZGOS_RECOMENDACIONES]
+
+
+def _construir_prompt_recomendaciones(hallazgos: list[Hallazgo]) -> str:
+    lista = "\n".join(
+        f"- [{h.nivel}] ({h.tipo_tratamiento or 'Sin clasificar'}) {h.descripcion[:300]}" for h in hallazgos
+    )
+    return (
+        f"HALLAZGOS DE RIESGO:\n{lista}\n\n"
+        "Devuelve SOLO el siguiente JSON sin texto adicional:\n\n"
+        '{\n  "recomendaciones": ["<recomendación práctica>", "..."]\n}'
+    )
+
+
+def _parsear_recomendaciones(json_str: str) -> list[str]:
+    datos = json.loads(_extraer_json(json_str))
+    valores = datos.get("recomendaciones")
+    if not isinstance(valores, list):
+        raise ValueError("'recomendaciones' debe ser una lista")
+    recomendaciones: list[str] = []
+    for valor in valores:
+        if not isinstance(valor, str):
+            continue
+        texto = " ".join(valor.split())
+        if texto and len(texto) <= _MAX_CARACTERES_RECOMENDACION and texto not in recomendaciones:
+            recomendaciones.append(texto)
+    if not recomendaciones:
+        raise ValueError("sin recomendaciones válidas")
+    return recomendaciones[:_MAX_RECOMENDACIONES]
+
+
+async def _generar_recomendaciones_practicas(
+    llm: LLMAdapter, secciones: list[SeccionAnalizada], analisis_id: int
+) -> list[str]:
+    """Recomendaciones prácticas redactadas por el modelo a partir de los riesgos
+    encontrados. Sin riesgos altos ni medios no se llama al modelo; si la
+    llamada falla, se usan las recomendaciones básicas."""
+    hallazgos = _hallazgos_para_recomendaciones(secciones)
+    if not hallazgos:
+        return _generar_recomendaciones(secciones)
+    try:
+        respuesta = await llm.generar_analisis(
+            SYSTEM_PROMPT_RECOMENDACIONES, _construir_prompt_recomendaciones(hallazgos), ""
+        )
+        return _parsear_recomendaciones(respuesta)
+    except LLMError as exc:
+        logger.warning("Análisis %s: recomendaciones básicas (%s).", analisis_id, exc.detail)
+    except Exception as exc:
+        logger.warning("Análisis %s: recomendaciones básicas (%s).", analisis_id, exc)
+    return _generar_recomendaciones(secciones)
+
+
 def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
+    """Recomendaciones básicas, sin el modelo: se usan si la política no tiene
+    riesgos altos ni medios o si falla la redacción de las recomendaciones prácticas."""
     recomendaciones: list[str] = []
     for seccion in secciones:
         for hallazgo in seccion.hallazgos:
@@ -524,7 +606,7 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
             ))
 
             resumen = _calcular_resumen(secciones_analizadas)
-            recomendaciones = _generar_recomendaciones(secciones_analizadas)
+            recomendaciones = await _generar_recomendaciones_practicas(llm, secciones_analizadas, analisis_id)
 
             respuesta = AnalisisResponse(
                 id_analisis=str(analisis_id),
