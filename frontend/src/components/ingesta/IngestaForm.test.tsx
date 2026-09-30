@@ -111,4 +111,69 @@ describe('IngestaForm', () => {
 
     expect(await screen.findByText('Ocurrió un error. Intenta de nuevo.')).toBeInTheDocument()
   })
+
+  describe('carga de archivo', () => {
+    async function abrirPestanaArchivo() {
+      renderIngesta()
+      await userEvent.click(screen.getByRole('tab', { name: 'Desde archivo' }))
+    }
+
+    function seleccionar(archivo: File) {
+      fireEvent.change(screen.getByLabelText(/Archivo de la política/), { target: { files: [archivo] } })
+    }
+
+    it('envía el archivo como FormData y continúa con el análisis', async () => {
+      await abrirPestanaArchivo()
+      const archivo = new File(['%PDF-1.4 contenido'], 'politica.pdf', { type: 'application/pdf' })
+      seleccionar(archivo)
+      expect(screen.getByText(/politica\.pdf/)).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+      const [ruta, cuerpo, config] = vi.mocked(apiClient.post).mock.calls[0]
+      expect(ruta).toBe('/api/ingesta/archivo')
+      expect(cuerpo).toBeInstanceOf(FormData)
+      expect((cuerpo as FormData).get('archivo')).toBe(archivo)
+      expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' } })
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+      expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
+    })
+
+    it('exige seleccionar un archivo', async () => {
+      await abrirPestanaArchivo()
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+      expect(screen.getByText('Selecciona un archivo PDF o TXT.')).toBeInTheDocument()
+      expect(apiClient.post).not.toHaveBeenCalled()
+    })
+
+    it('rechaza extensiones no permitidas sin enviarlas', async () => {
+      await abrirPestanaArchivo()
+      seleccionar(new File(['x'], 'politica.docx', { type: 'application/octet-stream' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+      expect(screen.getByText('Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt).')).toBeInTheDocument()
+      expect(apiClient.post).not.toHaveBeenCalled()
+    })
+
+    it('rechaza archivos de más de 5 MB sin enviarlos', async () => {
+      await abrirPestanaArchivo()
+      seleccionar(new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.txt', { type: 'text/plain' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+      expect(screen.getByText('El archivo supera el tamaño máximo de 5 MB.')).toBeInTheDocument()
+      expect(apiClient.post).not.toHaveBeenCalled()
+    })
+
+    it('muestra el error del servidor para un PDF sin texto', async () => {
+      const detalle = 'No se encontró texto en el PDF. Si es un documento escaneado, el sistema no puede leerlo.'
+      vi.mocked(apiClient.post).mockRejectedValue({ response: { status: 422, data: { detail: detalle } } })
+      await abrirPestanaArchivo()
+      seleccionar(new File(['%PDF-1.4'], 'escaneado.pdf', { type: 'application/pdf' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+      expect(await screen.findByText(detalle)).toBeInTheDocument()
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+    })
+  })
 })

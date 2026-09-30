@@ -167,6 +167,58 @@ class TestPdfExtractor:
         assert "Texto de la página uno" in resultado
 
 
+class TestPdfExtractorEnMemoria:
+    """Extracción desde bytes con PDF reales generados con ReportLab."""
+
+    def test_extrae_el_texto_de_un_pdf_real(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        texto = extraer_texto_pdf_bytes(pdf_con_texto(LINEAS_POLITICA), "politica.pdf")
+
+        assert "Recopilamos su nombre" in texto
+        assert "eliminacion de sus datos" in texto
+
+    def test_pdf_de_varias_paginas(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import pdf_con_texto
+
+        lineas = [f"Linea numero {i} de la politica." for i in range(120)]
+        texto = extraer_texto_pdf_bytes(pdf_con_texto(lineas))
+
+        assert "Linea numero 0 " in texto
+        assert "Linea numero 119 " in texto
+
+    def test_pdf_sin_texto_devuelve_vacio(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import pdf_sin_texto
+
+        assert extraer_texto_pdf_bytes(pdf_sin_texto()) == ""
+
+    def test_contenido_que_no_es_pdf_devuelve_vacio(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+
+        assert extraer_texto_pdf_bytes(b"%PDF-1.4 esto no es un PDF valido") == ""
+
+    def test_si_pdfplumber_falla_usa_pypdf(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        with patch("pdfplumber.open", side_effect=RuntimeError("fallo simulado")):
+            texto = extraer_texto_pdf_bytes(pdf_con_texto(LINEAS_POLITICA))
+
+        assert "Recopilamos su nombre" in texto
+
+    def test_extrae_desde_disco_como_el_script_del_corpus(self, tmp_path):
+        from app.utils.pdf_extractor import extraer_texto_pdf
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        ruta = tmp_path / "norma.pdf"
+        ruta.write_bytes(pdf_con_texto(LINEAS_POLITICA))
+
+        assert "Conservamos la informacion" in extraer_texto_pdf(ruta)
+
+
 # ---------------------------------------------------------------------------
 # Embeddings — no carga el modelo real
 # ---------------------------------------------------------------------------

@@ -1,19 +1,27 @@
-"""Servicio de ingesta: limpieza de texto plano y extracción desde URL.
+"""Servicio de ingesta: limpieza de texto plano, extracción desde URL y desde archivo.
 
 Responsabilidades:
 - Normalizar y sanear texto pegado directamente
 - Extraer texto de una URL usando requests + BeautifulSoup4
+- Extraer texto de un archivo PDF o TXT recibido en memoria (no se guarda)
 - Validar la longitud del texto limpio con la regla única (utils.validacion_texto)
 """
 
 import logging
 import re
 import unicodedata
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
 
-from app.core.exceptions import ExtraccionURLError
+from app.core.exceptions import (
+    ArchivoDemasiadoGrandeError,
+    ArchivoNoPermitidoError,
+    ExtraccionURLError,
+    PdfSinTextoError,
+)
+from app.utils.pdf_extractor import extraer_texto_pdf_bytes
 from app.utils.validacion_texto import (  # noqa: F401 (reexportadas)
     MAX_CARACTERES,
     MIN_CARACTERES,
@@ -24,6 +32,14 @@ from app.utils.validacion_texto import (  # noqa: F401 (reexportadas)
 logger = logging.getLogger(__name__)
 
 _TIMEOUT_HTTP = 10
+
+TAMANO_MAXIMO_ARCHIVO = 5 * 1024 * 1024  # 5 MB
+
+# Extensión → tipos de contenido aceptados para esa extensión.
+TIPOS_ARCHIVO_PERMITIDOS: dict[str, set[str]] = {
+    ".pdf": {"application/pdf", "application/x-pdf"},
+    ".txt": {"text/plain"},
+}
 
 _HEADERS = {
     "User-Agent": (
@@ -109,4 +125,42 @@ def extraer_texto_url(url: str) -> str:
 
     validar_longitud_politica(texto)
     logger.info("Texto extraído de '%s' [%d palabras].", url, len(texto.split()))
+    return texto
+
+
+# ---------------------------------------------------------------------------
+# Ingesta desde archivo (PDF o TXT)
+# ---------------------------------------------------------------------------
+
+def _decodificar_txt(contenido: bytes) -> str:
+    """UTF-8 (con o sin BOM) y, si no lo es, Windows-1252, habitual en archivos
+    guardados en español desde Windows."""
+    try:
+        return contenido.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return contenido.decode("cp1252", errors="replace")
+
+
+def procesar_archivo(nombre: str, tipo_contenido: str | None, contenido: bytes) -> str:
+    """Valida el archivo, extrae su texto y lo normaliza. El archivo solo existe
+    en memoria durante la solicitud: no se escribe en disco ni en la base."""
+    extension = Path(nombre or "").suffix.lower()
+    tipo = (tipo_contenido or "").split(";")[0].strip().lower()
+    if extension not in TIPOS_ARCHIVO_PERMITIDOS or tipo not in TIPOS_ARCHIVO_PERMITIDOS[extension]:
+        raise ArchivoNoPermitidoError()
+    if len(contenido) > TAMANO_MAXIMO_ARCHIVO:
+        raise ArchivoDemasiadoGrandeError()
+
+    if extension == ".pdf":
+        if not contenido.startswith(b"%PDF-"):
+            raise ArchivoNoPermitidoError()
+        texto_raw = extraer_texto_pdf_bytes(contenido, nombre)
+        if not texto_raw.strip():
+            raise PdfSinTextoError()
+    else:
+        texto_raw = _decodificar_txt(contenido)
+
+    texto = limpiar_texto(texto_raw)
+    validar_longitud_politica(texto)
+    logger.info("Archivo %s aceptado [%d palabras].", extension, len(texto.split()))
     return texto
