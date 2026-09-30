@@ -188,3 +188,28 @@ class TestCargaDeDocumentos:
             await _cargar(client, token_admin, "C:\\docs\\norma.pdf")
 
         assert insertar.await_args.args[1] == "norma.pdf"
+
+
+class TestProteccionDeLaCarga:
+    async def test_un_envio_enorme_se_rechaza_antes_de_leerlo(self, client: AsyncClient, token_admin: str):
+        r = await client.post(
+            "/api/admin/corpus",
+            content=b"x" * (6 * 1024 * 1024 + 1),
+            headers={**_auth(token_admin), "Content-Type": "multipart/form-data; boundary=limite"},
+        )
+        assert r.status_code == 413
+        assert r.json()["detail"] == "El archivo supera el tamaño máximo de 5 MB."
+
+    async def test_el_listado_del_corpus_no_se_ve_afectado(self, client: AsyncClient, token_admin: str):
+        # El rechazo temprano solo aplica a POST: GET /api/admin/corpus sigue igual.
+        with patch(f"{REPO}.listar_documentos", AsyncMock(return_value=[])):
+            r = await client.get("/api/admin/corpus", headers={**_auth(token_admin), "Content-Length": str(10**9)})
+        assert r.status_code == 200
+
+    async def test_limita_las_cargas_por_minuto(self, client: AsyncClient, token_admin: str):
+        codigos = []
+        for _ in range(6):
+            r = await _cargar(client, token_admin, "norma.docx", b"x", "application/octet-stream")
+            codigos.append(r.status_code)
+        assert codigos == [415] * 5 + [429]
+

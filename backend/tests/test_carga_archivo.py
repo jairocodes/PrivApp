@@ -134,6 +134,7 @@ class TestRechazoTemprano:
         middleware = LimiteCargaArchivoMiddleware(app_interna, max_bytes=10)
         scope = {
             "type": "http",
+            "method": "POST",
             "path": "/api/ingesta/archivo",
             "headers": [(b"content-length", b"11")],
         }

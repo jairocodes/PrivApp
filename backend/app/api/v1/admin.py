@@ -10,10 +10,11 @@ POST  /api/admin/corpus                — incorpora un documento normativo nuev
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
+from app.core.limiter import limiter
 from app.database import get_db
 from app.models.user import User
 from app.schemas.admin import CambioEstadoUsuarioRequest, ListadoUsuariosResponse, UsuarioAdminItem
@@ -68,7 +69,10 @@ async def cambiar_estado_corpus(
 
 
 @router.post("/corpus", response_model=DocumentoCargadoResponse, status_code=201)
+# Cada carga genera representaciones vectoriales, un trabajo pesado para el servidor.
+@limiter.limit("5/minute")
 async def cargar_documento_corpus(
+    request: Request,
     archivo: UploadFile = File(..., description="Documento normativo en PDF o TXT, máximo 5 MB"),
     jurisdiccion: Literal["guatemala", "internacional", "estandar_tecnico"] = Form(...),
     db: AsyncSession = Depends(get_db),
