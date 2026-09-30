@@ -20,7 +20,7 @@ describe('VistaProgreso', () => {
 
   it('muestra la sección actual y el total', () => {
     render(<VistaProgreso seccionActual={2} seccionesTotal={4} />)
-    expect(screen.getByText('Analizando sección 2 de 4...')).toBeInTheDocument()
+    expect(screen.getByText('Analizando la política: 2 de 4 secciones listas...')).toBeInTheDocument()
   })
 
   it('rota los consejos de privacidad mientras espera', () => {

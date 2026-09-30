@@ -36,7 +36,7 @@ export default function VistaProgreso({ seccionActual, seccionesTotal }: Props) 
       <div>
         <p className="text-gray-700 font-medium">
           {seccionesTotal
-            ? `Analizando sección ${seccionActual} de ${seccionesTotal}...`
+            ? `Analizando la política: ${seccionActual} de ${seccionesTotal} secciones listas...`
             : 'Preparando el análisis...'}
         </p>
         {progreso !== null && (

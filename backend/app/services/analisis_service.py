@@ -125,8 +125,14 @@ BAJO RIESGO (nivel: "bajo"):
 _K_FRAGMENTOS = 5
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
-# Máximo de secciones a analizar (prototipo: limitar costo/latencia)
-_MAX_SECCIONES = 8
+# Se analiza la política completa: no hay tope de secciones. Las secciones que
+# superan _MAX_PALABRAS_SECCION se dividen en bloques de _TAM_BLOQUE palabras,
+# el mismo tamaño que se usa para el texto sin encabezados.
+_MAX_PALABRAS_SECCION = 700
+_TAM_BLOQUE = 500
+# Secciones que se envían al modelo al mismo tiempo: acorta el análisis de las
+# políticas largas sin acercarse a los límites de solicitudes del proveedor.
+_CONCURRENCIA_LLM = 4
 
 
 # ---------------------------------------------------------------------------
@@ -169,16 +175,29 @@ def segmentar_politica(texto: str) -> list[str]:
         if len(contenido.split()) >= _MIN_PALABRAS_SECCION:
             secciones.append(contenido)
 
-    # Fallback: si no se detectaron secciones, dividir en bloques de ~400 palabras
+    # Fallback: si no se detectaron secciones, dividir todo el texto en bloques
     if not secciones:
-        palabras = texto.split()
-        tam = 400
-        for i in range(0, len(palabras), tam):
-            bloque = " ".join(palabras[i : i + tam])
-            if len(bloque.split()) >= _MIN_PALABRAS_SECCION:
-                secciones.append(bloque)
+        return [b for b in _dividir_en_bloques(texto) if len(b.split()) >= _MIN_PALABRAS_SECCION]
 
-    return secciones[:_MAX_SECCIONES]
+    # Las secciones muy largas se dividen para que ningún fragmento llegue al
+    # modelo con un tamaño desproporcionado.
+    resultado: list[str] = []
+    for seccion in secciones:
+        if len(seccion.split()) > _MAX_PALABRAS_SECCION:
+            resultado.extend(_dividir_en_bloques(seccion))
+        else:
+            resultado.append(seccion)
+    return resultado
+
+
+def _dividir_en_bloques(texto: str) -> list[str]:
+    """Divide el texto en bloques de _TAM_BLOQUE palabras. Si el último bloque
+    quedaría demasiado corto, se une al anterior para no perder ese texto."""
+    palabras = texto.split()
+    bloques = [palabras[i : i + _TAM_BLOQUE] for i in range(0, len(palabras), _TAM_BLOQUE)]
+    if len(bloques) > 1 and len(bloques[-1]) < _MIN_PALABRAS_SECCION:
+        bloques[-2].extend(bloques.pop())
+    return [" ".join(b) for b in bloques]
 
 
 # ---------------------------------------------------------------------------
@@ -432,46 +451,28 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
             registro.secciones_total = len(secciones)
             await db.commit()
 
-            secciones_analizadas: list[SeccionAnalizada] = []
-            for idx, seccion in enumerate(secciones, 1):
-                logger.info("Análisis %s: analizando sección %d/%d...", analisis_id, idx, len(secciones))
-                try:
-                    chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
-                    contexto = _construir_contexto_normativo(chunks)
-                    # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
-                    user_msg = _construir_prompt_seccion(seccion, contexto)
+            # Las llamadas al modelo corren en paralelo (hasta _CONCURRENCIA_LLM);
+            # la sesión de BD no admite uso concurrente, así que la búsqueda en el
+            # corpus y el guardado del progreso se serializan con un candado.
+            candado_bd = asyncio.Lock()
+            limite = asyncio.Semaphore(_CONCURRENCIA_LLM)
+            completadas = 0
 
-                    # Intento 1
-                    json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
-                    try:
-                        sec_analizada = _parsear_seccion(json_str)
-                    except (json.JSONDecodeError, KeyError, ValueError) as e:
-                        logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
-                        # Intento 2: se repite la instrucción completa (sección, contexto y
-                        # esquema) con el motivo del rechazo, para que el modelo pueda corregirla.
-                        prompt_correccion = (
-                            f"{user_msg}\n\n"
-                            f"Tu respuesta anterior no cumplía el formato requerido ({str(e)[:200]}). "
-                            "Devuelve ÚNICAMENTE el JSON corregido, sin texto adicional."
-                        )
-                        json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
-                        try:
-                            sec_analizada = _parsear_seccion(json_str2)
-                        except (json.JSONDecodeError, KeyError, ValueError) as e2:
-                            logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
-                            sec_analizada = _seccion_fallback(seccion, idx)
+            async def procesar(idx: int, seccion: str) -> SeccionAnalizada:
+                nonlocal completadas
+                async with limite:
+                    resultado = await _analizar_seccion(llm, db, candado_bd, idx, seccion)
+                async with candado_bd:
+                    completadas += 1
+                    registro.seccion_actual = completadas
+                    await db.commit()
+                logger.info("Análisis %s: %d/%d secciones analizadas.", analisis_id, completadas, len(secciones))
+                return resultado
 
-                    secciones_analizadas.append(sec_analizada)
-
-                except LLMError as exc:
-                    logger.error("LLMError en sección %d: %s", idx, exc.detail)
-                    secciones_analizadas.append(_seccion_fallback(seccion, idx))
-                except Exception as exc:
-                    logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
-                    secciones_analizadas.append(_seccion_fallback(seccion, idx))
-
-                registro.seccion_actual = idx
-                await db.commit()
+            # gather conserva el orden original de las secciones.
+            secciones_analizadas = list(await asyncio.gather(
+                *(procesar(idx, seccion) for idx, seccion in enumerate(secciones, 1))
+            ))
 
             resumen = _calcular_resumen(secciones_analizadas)
             recomendaciones = _generar_recomendaciones(secciones_analizadas)
@@ -502,6 +503,46 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
                     await db.commit()
             except Exception:
                 logger.exception("No fue posible marcar el análisis %s como error.", analisis_id)
+
+
+async def _analizar_seccion(
+    llm: LLMAdapter, db: AsyncSession, candado_bd: asyncio.Lock, idx: int, seccion: str
+) -> SeccionAnalizada:
+    """Analiza una sección: contexto normativo, llamada al modelo y, si la
+    respuesta no es válida, un reintento con el motivo del rechazo. Ante un
+    error devuelve la sección de respaldo, sin afectar a las demás."""
+    try:
+        async with candado_bd:
+            chunks = await recuperar_contexto(db, seccion, k=_K_FRAGMENTOS)
+        contexto = _construir_contexto_normativo(chunks)
+        # El prompt completo (con esquema JSON y contexto RAG) va como mensaje de usuario
+        user_msg = _construir_prompt_seccion(seccion, contexto)
+
+        # Intento 1
+        json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
+        try:
+            return _parsear_seccion(json_str)
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
+            # Intento 2: se repite la instrucción completa (sección, contexto y
+            # esquema) con el motivo del rechazo, para que el modelo pueda corregirla.
+            prompt_correccion = (
+                f"{user_msg}\n\n"
+                f"Tu respuesta anterior no cumplía el formato requerido ({str(e)[:200]}). "
+                "Devuelve ÚNICAMENTE el JSON corregido, sin texto adicional."
+            )
+            json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+            try:
+                return _parsear_seccion(json_str2)
+            except (json.JSONDecodeError, KeyError, ValueError) as e2:
+                logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
+                return _seccion_fallback(seccion, idx)
+    except LLMError as exc:
+        logger.error("LLMError en sección %d: %s", idx, exc.detail)
+        return _seccion_fallback(seccion, idx)
+    except Exception as exc:
+        logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
+        return _seccion_fallback(seccion, idx)
 
 
 def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:
