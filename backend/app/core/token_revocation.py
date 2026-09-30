@@ -1,4 +1,4 @@
-"""Lista de revocación de tokens JWT (jti) respaldada por Redis (TICKET-03).
+"""Lista de revocación de tokens JWT (jti) respaldada por Redis.
 
 El estado vive en Redis (compartido entre instancias), no en memoria del
 proceso, para respetar el diseño stateless del servidor (RE-01). El TTL de

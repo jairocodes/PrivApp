@@ -33,7 +33,7 @@ def create_access_token(subject: str) -> str:
 def decode_access_token(token: str) -> dict:
     """Decodifica y valida firma/expiración. Devuelve el payload completo
     (incluye 'jti' para poder comprobar revocación en deps.py; los tokens
-    emitidos antes de introducir 'jti' no lo tendrán, ver TICKET-03)."""
+    emitidos antes de introducir 'jti' no lo tendrán)."""
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         if payload.get("sub") is None:
