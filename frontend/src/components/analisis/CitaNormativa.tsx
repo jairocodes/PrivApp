@@ -1,5 +1,6 @@
 import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import type { FuenteNormativa, Jurisdiccion } from '@/types/analisis'
+import { inferirJurisdiccion } from '@/utils/jurisdiccion'
 
 interface Props {
   fuente: FuenteNormativa
@@ -22,13 +23,6 @@ const BADGE: Record<string, { bg: string; text: string; label: string }> = {
     text: 'text-gray-600',
     label: 'Estándar técnico',
   },
-}
-
-function inferirJurisdiccion(documento: string): string {
-  const d = documento.toLowerCase()
-  if (d.includes('constituci') || d.includes('laip') || d.includes('guatemal')) return 'guatemala'
-  if (d.includes('opp') || d.includes('tosdr')) return 'estandar_tecnico'
-  return 'internacional'
 }
 
 export default function CitaNormativa({ fuente, jurisdiccion }: Props) {
