@@ -27,9 +27,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str, role: str = ROL_USUARIO) -> str:
     """Emite el token. El rol viaja como dato informativo para el cliente; la
-    autorización del servidor consulta siempre el rol vigente en la base."""
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiration_hours)
-    payload = {"sub": subject, "role": role, "exp": expire, "jti": str(uuid.uuid4())}
+    autorización del servidor consulta siempre el rol vigente en la base.
+
+    'iat' se emite con fracción de segundo (NumericDate admite decimales) para
+    compararlo sin ambigüedad con users.sessions_valid_from: un token emitido
+    justo después de invalidar las sesiones no debe quedar rechazado."""
+    ahora = datetime.now(timezone.utc)
+    expire = ahora + timedelta(hours=settings.jwt_expiration_hours)
+    payload = {
+        "sub": subject,
+        "role": role,
+        "iat": ahora.timestamp(),
+        "exp": expire,
+        "jti": str(uuid.uuid4()),
+    }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
