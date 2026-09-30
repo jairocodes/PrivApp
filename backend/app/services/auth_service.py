@@ -1,6 +1,7 @@
 """Servicio de autenticación y gestión de usuarios."""
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +42,9 @@ async def register_user(
         nombre=nombre,
         email=email,
         hashed_password=hash_password(password),
+        # Provisional: la aceptación explícita del aviso (casilla validada en
+        # el servidor) se incorpora al registro junto con la página del aviso.
+        privacy_accepted_at=datetime.now(timezone.utc),
     )
     RepositorioUsuarios(db).agregar(user)
     await db.flush()

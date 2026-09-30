@@ -155,6 +155,7 @@ class TestEndpointHistorial:
             email="otro@privapp.test",
             hashed_password=hash_password("OtraPass123"),
             is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()
@@ -203,6 +204,7 @@ class TestEndpointPDF:
             email="otro-pdf@privapp.test",
             hashed_password=hash_password("OtraPass123"),
             is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()
