@@ -61,6 +61,9 @@ class SeccionAnalizada(BaseModel):
     titulo: str
     texto_original: str
     hallazgos: list[Hallazgo]
+    # False si la sección no pudo analizarse (respuesta inválida o error del
+    # modelo): se muestra el aviso, pero no cuenta para el nivel ni la puntuación.
+    analizada: bool = True
 
 
 class ResumenGeneral(BaseModel):

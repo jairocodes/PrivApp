@@ -369,7 +369,7 @@ class TestEndpointsAnalisis:
         response = await client.get("/api/analisis/1")
         assert response.status_code == 403
 
-    async def test_obtener_analisis_en_procesamiento_retorna_404(self, client, db_session, seed_user):
+    async def test_obtener_analisis_en_procesamiento_retorna_409(self, client, db_session, seed_user):
         from app.core.security import create_access_token
         from app.models.analysis import AnalysisTemp
 
@@ -383,7 +383,8 @@ class TestEndpointsAnalisis:
         response = await client.get(
             f"/api/analisis/{registro.id}", headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 404
+        assert response.status_code == 409
+        assert response.json()["detail"] == "El análisis todavía se está procesando."
 
 
 class TestEstadoYProgreso:
