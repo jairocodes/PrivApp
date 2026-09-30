@@ -36,6 +36,8 @@ from app.schemas.analysis import (
     HistorialResponse,
     ResumenGeneral,
     SeccionAnalizada,
+    TIPO_TRATAMIENTO_OTRO,
+    TIPOS_TRATAMIENTO,
 )
 from app.services.llm.base import LLMAdapter
 from app.services.llm.openai_adapter import OpenAIAdapter
@@ -78,6 +80,18 @@ PRINCIPIOS DE OPERACIÓN:
 
 5. FORMATO DE SALIDA: Responde EXCLUSIVAMENTE en formato JSON válido según el
    esquema definido. No incluyas texto explicativo fuera del JSON.
+
+6. TIPO DE TRATAMIENTO DE DATOS: Clasifica cada hallazgo en UNO SOLO de los
+   siguientes tipos, copiando el texto exactamente como aparece:
+   - Recopilación de datos personales
+   - Uso y finalidad de los datos
+   - Transferencia de datos a terceros
+   - Tiempo de conservación de los datos
+   - Seguridad de los datos
+   - Derechos del usuario sobre sus datos
+   - Cambios en la política
+   - Otro
+   Usa "Otro" solo si el hallazgo no corresponde a ninguno de los anteriores.
 
 CRITERIOS DE RIESGO:
 
@@ -204,6 +218,7 @@ def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> st
         '      "tipo": "riesgo",\n'
         '      "descripcion": "<qué riesgo representa para el usuario en lenguaje claro>",\n'
         '      "nivel": "alto",\n'
+        '      "tipo_tratamiento": "<uno de los tipos de tratamiento, copiado exactamente>",\n'
         '      "fuentes_normativas": [\n'
         "        {\n"
         '          "documento": "<nombre del documento normativo o Principios generales>",\n'
@@ -235,6 +250,20 @@ def _extraer_json(texto: str) -> str:
     return texto.strip()
 
 
+_TIPOS_TRATAMIENTO_NORMALIZADOS = {" ".join(t.split()).casefold(): t for t in TIPOS_TRATAMIENTO}
+
+
+def _tipo_tratamiento_valido(valor) -> str:
+    """Devuelve el texto exacto de la lista cerrada. Tolera solo diferencias de
+    mayúsculas o espacios; cualquier otro valor (o su ausencia) es inválido y
+    activa el reintento."""
+    if isinstance(valor, str):
+        canonico = _TIPOS_TRATAMIENTO_NORMALIZADOS.get(" ".join(valor.split()).casefold())
+        if canonico:
+            return canonico
+    raise ValueError(f"tipo_tratamiento fuera de la lista cerrada: {valor!r}")
+
+
 def _parsear_seccion(json_str: str) -> SeccionAnalizada:
     """Convierte la respuesta JSON del LLM en SeccionAnalizada validada."""
     datos = json.loads(_extraer_json(json_str))
@@ -255,6 +284,7 @@ def _parsear_seccion(json_str: str) -> SeccionAnalizada:
                 descripcion=h.get("descripcion", ""),
                 nivel=h.get("nivel", "bajo"),
                 fuentes_normativas=fuentes,
+                tipo_tratamiento=_tipo_tratamiento_valido(h.get("tipo_tratamiento")),
             )
         )
 
@@ -414,17 +444,19 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
                     try:
                         sec_analizada = _parsear_seccion(json_str)
                     except (json.JSONDecodeError, KeyError, ValueError) as e:
-                        logger.warning("Sección %d: JSON inválido en intento 1 (%s). Reintentando...", idx, e)
-                        # Intento 2: pedir corrección explícita
+                        logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
+                        # Intento 2: se repite la instrucción completa (sección, contexto y
+                        # esquema) con el motivo del rechazo, para que el modelo pueda corregirla.
                         prompt_correccion = (
-                            f"Tu respuesta anterior no era JSON válido. "
-                            f"Devuelve ÚNICAMENTE el JSON corregido sin texto adicional:\n{json_str[:500]}"
+                            f"{user_msg}\n\n"
+                            f"Tu respuesta anterior no cumplía el formato requerido ({str(e)[:200]}). "
+                            "Devuelve ÚNICAMENTE el JSON corregido, sin texto adicional."
                         )
                         json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
                         try:
                             sec_analizada = _parsear_seccion(json_str2)
                         except (json.JSONDecodeError, KeyError, ValueError) as e2:
-                            logger.error("Sección %d: JSON inválido tras corrección (%s). Usando fallback.", idx, e2)
+                            logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
                             sec_analizada = _seccion_fallback(seccion, idx)
 
                     secciones_analizadas.append(sec_analizada)
@@ -482,6 +514,7 @@ def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:
                 descripcion="No fue posible analizar esta sección automáticamente.",
                 nivel="bajo",
                 fuentes_normativas=[],
+                tipo_tratamiento=TIPO_TRATAMIENTO_OTRO,
             )
         ],
     )
