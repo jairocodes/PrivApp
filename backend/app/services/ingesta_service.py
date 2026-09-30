@@ -3,7 +3,7 @@
 Responsabilidades:
 - Normalizar y sanear texto pegado directamente
 - Extraer texto de una URL usando requests + BeautifulSoup4
-- Validar longitudes mínima/máxima antes de devolver
+- Validar la longitud del texto limpio con la regla única (utils.validacion_texto)
 """
 
 import logging
@@ -13,16 +13,16 @@ import unicodedata
 import requests
 from bs4 import BeautifulSoup
 
-from app.core.exceptions import (
-    ExtraccionURLError,
-    TextoDemasiadoCortoError,
-    TextoDemasiadoLargoError,
+from app.core.exceptions import ExtraccionURLError
+from app.utils.validacion_texto import (  # noqa: F401 (reexportadas)
+    MAX_CARACTERES,
+    MIN_CARACTERES,
+    MIN_PALABRAS,
+    validar_longitud_politica,
 )
 
 logger = logging.getLogger(__name__)
 
-MIN_PALABRAS = 40
-MAX_CARACTERES = 200_000
 _TIMEOUT_HTTP = 10
 
 _HEADERS = {
@@ -49,14 +49,6 @@ def limpiar_texto(texto: str) -> str:
     return texto.strip()
 
 
-def _validar_longitud(texto: str) -> None:
-    palabras = len(texto.split())
-    if palabras < MIN_PALABRAS:
-        raise TextoDemasiadoCortoError()
-    if len(texto) > MAX_CARACTERES:
-        raise TextoDemasiadoLargoError()
-
-
 # ---------------------------------------------------------------------------
 # Ingesta desde texto directo
 # ---------------------------------------------------------------------------
@@ -64,7 +56,7 @@ def _validar_longitud(texto: str) -> None:
 def procesar_texto_directo(texto_raw: str) -> str:
     """Limpia y valida texto pegado por el usuario. Retorna texto normalizado."""
     texto = limpiar_texto(texto_raw)
-    _validar_longitud(texto)
+    validar_longitud_politica(texto)
     logger.info("Texto directo aceptado [%d palabras].", len(texto.split()))
     return texto
 
@@ -115,6 +107,6 @@ def extraer_texto_url(url: str) -> str:
     if not texto:
         raise ExtraccionURLError("La página no contiene texto extraíble.")
 
-    _validar_longitud(texto)
+    validar_longitud_politica(texto)
     logger.info("Texto extraído de '%s' [%d palabras].", url, len(texto.split()))
     return texto

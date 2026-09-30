@@ -1,0 +1,105 @@
+"""Tests de la regla única de longitud (RN-01) en las vías de ingesta.
+
+Tras la limpieza: mínimo 200 caracteres y 40 palabras, máximo 200,000.
+"""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from app.core.exceptions import TextoDemasiadoCortoError, TextoDemasiadoLargoError
+from app.core.security import create_access_token
+from app.services.ingesta_service import extraer_texto_url, procesar_texto_directo
+
+
+def _texto(palabras: int, largo_palabra: int, extra: int = 0) -> str:
+    """Texto de `palabras` palabras de `largo_palabra` letras; `extra` alarga la última."""
+    lista = ["a" * largo_palabra] * palabras
+    lista[-1] += "b" * extra
+    return " ".join(lista)
+
+
+def _por_url(texto: str) -> str:
+    respuesta = MagicMock()
+    respuesta.text = f"<html><body><main><p>{texto}</p></main></body></html>"
+    respuesta.headers = {"content-type": "text/html; charset=utf-8"}
+    respuesta.raise_for_status = MagicMock()
+    with patch("app.services.ingesta_service.requests.get", return_value=respuesta):
+        return extraer_texto_url("https://ejemplo.com/privacidad")
+
+
+VIAS = [pytest.param(procesar_texto_directo, id="texto_directo"), pytest.param(_por_url, id="url")]
+
+# 40 palabras de 4 letras con 39 espacios = 199 caracteres.
+CARACTERES_199 = _texto(40, 4)
+CARACTERES_200 = _texto(40, 4, extra=1)
+# 39 y 40 palabras de 5 letras (233 y 239 caracteres).
+PALABRAS_39 = _texto(39, 5)
+PALABRAS_40 = _texto(40, 5)
+# 40,000 palabras de 4 letras con 39,999 espacios = 199,999 caracteres.
+CARACTERES_200000 = _texto(40_000, 4, extra=1)
+CARACTERES_200001 = _texto(40_000, 4, extra=2)
+
+
+def test_los_textos_de_prueba_tienen_la_longitud_esperada():
+    assert len(CARACTERES_199) == 199 and len(CARACTERES_200) == 200
+    assert len(PALABRAS_39.split()) == 39 and len(PALABRAS_40.split()) == 40
+    assert len(CARACTERES_200000) == 200_000 and len(CARACTERES_200001) == 200_001
+
+
+@pytest.mark.parametrize("via", VIAS)
+class TestLimitesDeLongitud:
+    def test_199_caracteres_se_rechaza(self, via):
+        with pytest.raises(TextoDemasiadoCortoError):
+            via(CARACTERES_199)
+
+    def test_200_caracteres_se_acepta(self, via):
+        assert via(CARACTERES_200) == CARACTERES_200
+
+    def test_39_palabras_se_rechaza(self, via):
+        with pytest.raises(TextoDemasiadoCortoError):
+            via(PALABRAS_39)
+
+    def test_40_palabras_se_acepta(self, via):
+        assert via(PALABRAS_40) == PALABRAS_40
+
+    def test_200000_caracteres_se_acepta(self, via):
+        assert len(via(CARACTERES_200000)) == 200_000
+
+    def test_mas_de_200000_caracteres_se_rechaza(self, via):
+        with pytest.raises(TextoDemasiadoLargoError):
+            via(CARACTERES_200001)
+
+    def test_la_regla_se_aplica_despues_de_la_limpieza(self, via):
+        # 30 palabras separadas por muchos espacios: más de 200 caracteres
+        # en crudo, pero la limpieza los colapsa y queda por debajo del mínimo.
+        crudo = "          ".join(["palabra"] * 30)
+        assert len(crudo) > 200
+        with pytest.raises(TextoDemasiadoCortoError):
+            via(crudo)
+
+
+class TestLongitudEnLosEndpoints:
+    async def test_texto_directo_por_debajo_del_minimo_devuelve_422_con_la_regla(self, client):
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/ingesta/texto",
+            json={"texto": PALABRAS_39},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 422
+        assert r.json()["detail"] == "El texto debe tener al menos 200 caracteres y 40 palabras."
+
+    async def test_texto_crudo_largo_que_cumple_tras_limpiar_se_acepta(self, client):
+        # 200,500 caracteres en crudo (por espacios repetidos) que quedan en
+        # rango tras la limpieza: antes se rechazaba sin limpiar.
+        crudo = CARACTERES_200 + " " * 200_300
+        assert len(crudo) > 200_000
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/ingesta/texto",
+            json={"texto": crudo},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["texto_procesado"] == CARACTERES_200

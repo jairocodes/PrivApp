@@ -81,7 +81,7 @@ class TextoDemasiadoCortoError(HTTPException):
     def __init__(self):
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="El texto debe tener al menos 200 caracteres.",
+            detail="El texto debe tener al menos 200 caracteres y 40 palabras.",
         )
 
 
