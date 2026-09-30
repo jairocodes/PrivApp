@@ -1,5 +1,7 @@
 """Dependencias de FastAPI reutilizables."""
 
+from datetime import datetime, timezone
+
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +23,19 @@ async def get_current_token_payload(
     return decode_access_token(credentials.credentials)
 
 
+def _emitido_antes_de_invalidacion(payload: dict, sesiones_validas_desde: datetime | None) -> bool:
+    """True si el token es anterior a la última invalidación de todas las sesiones
+    del usuario (cambio de contraseña o desactivación de la cuenta). Un token sin
+    'iat' no puede demostrar que es posterior, así que también se rechaza."""
+    if sesiones_validas_desde is None:
+        return False
+    if sesiones_validas_desde.tzinfo is None:
+        # SQLite (pruebas) devuelve fechas sin zona; se guardan siempre en UTC.
+        sesiones_validas_desde = sesiones_validas_desde.replace(tzinfo=timezone.utc)
+    iat = payload.get("iat")
+    return iat is None or iat < sesiones_validas_desde.timestamp()
+
+
 async def get_current_user_id(
     payload: dict = Depends(get_current_token_payload),
 ) -> int:
@@ -40,6 +55,8 @@ async def get_current_user(
 
     user = await get_user_by_id(db, user_id)
     if not user.is_active:
+        raise TokenInvalidoError()
+    if _emitido_antes_de_invalidacion(payload, user.sessions_valid_from):
         raise TokenInvalidoError()
     return user
 
