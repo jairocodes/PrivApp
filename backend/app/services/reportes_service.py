@@ -7,6 +7,7 @@ debe ejecutarla en threadpool (ver app/api/v1/analisis.py).
 """
 
 import io
+import time
 from xml.sax.saxutils import escape as _esc
 
 from reportlab.lib import colors
@@ -142,3 +143,32 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def generar_pdf_y_medir(analisis: AnalisisResponse) -> tuple[bytes, float]:
+    """Genera el PDF y devuelve también los segundos que tardó su construcción
+    (indicador de la Tabla 1). Se mide aquí, en el hilo que lo construye, para
+    no incluir la espera en la cola de hilos."""
+    inicio = time.perf_counter()
+    contenido = generar_pdf_analisis(analisis)
+    return contenido, time.perf_counter() - inicio
+
+
+def resumir_tiempos(segundos: list[float]) -> dict:
+    """Estadísticas de una lista de tiempos de generación, en segundos."""
+    if not segundos:
+        return {"mediciones": 0}
+    ordenados = sorted(segundos)
+    n = len(ordenados)
+    mitad = n // 2
+    mediana = ordenados[mitad] if n % 2 else (ordenados[mitad - 1] + ordenados[mitad]) / 2
+    # Percentil 95 por el método del rango más cercano.
+    p95 = ordenados[max(0, -(-95 * n // 100) - 1)]
+    return {
+        "mediciones": n,
+        "promedio": sum(ordenados) / n,
+        "mediana": mediana,
+        "minimo": ordenados[0],
+        "maximo": ordenados[-1],
+        "p95": p95,
+    }

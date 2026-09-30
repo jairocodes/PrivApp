@@ -26,13 +26,14 @@ from app.schemas.analysis import AnalisisEstadoResponse, AnalisisIniciadoRespons
 from app.schemas.analisis_request import IniciarAnalisisRequest
 from app.services.analisis_service import (
     crear_analisis,
+    registrar_generacion_reporte,
     eliminar_analisis,
     lanzar_analisis_en_fondo,
     listar_historial,
     obtener_analisis,
     obtener_estado_analisis,
 )
-from app.services.reportes_service import generar_pdf_analisis
+from app.services.reportes_service import generar_pdf_y_medir
 from app.utils.validacion_texto import validar_longitud_politica
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,12 @@ async def descargar_pdf(
 ) -> Response:
     """Genera y descarga el reporte en PDF de un análisis ya completado."""
     analisis = await obtener_analisis(db, analisis_id, current_user.id)
-    pdf_bytes = await run_in_threadpool(generar_pdf_analisis, analisis)
+    pdf_bytes, segundos = await run_in_threadpool(generar_pdf_y_medir, analisis)
+    try:
+        await registrar_generacion_reporte(db, analisis_id, current_user.id, segundos)
+    except Exception:
+        # La medición nunca debe impedir la descarga del reporte.
+        logger.exception("No se pudo registrar el tiempo del reporte del análisis %s.", analisis_id)
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
