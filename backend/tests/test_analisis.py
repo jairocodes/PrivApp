@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-def _respuesta_gemini_valida() -> str:
+def _respuesta_llm_valida() -> str:
     return json.dumps({
         "categoria_opp115": "First Party Collection/Use",
         "titulo": "Recopilación de datos personales",
@@ -271,9 +271,9 @@ class TestEndpointsAnalisis:
         ) * 6
 
         with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
-             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
-            instancia = MockGemini.return_value
-            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            instancia = MockLLM.return_value
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_llm_valida())
 
             response = await client.post(
                 "/api/analisis/iniciar", json={"texto": texto_largo}, headers=headers,
@@ -297,7 +297,7 @@ class TestEndpointsAnalisis:
         assert "recomendaciones" in datos
         assert datos["resumen_general"]["nivel_riesgo_global"] in ("bajo", "medio", "alto")
 
-    async def test_iniciar_con_gemini_fallido_usa_fallback(self, client):
+    async def test_iniciar_con_llm_fallido_usa_fallback(self, client):
         from app.core.security import create_access_token
         from app.core.exceptions import LLMError
 
@@ -309,8 +309,8 @@ class TestEndpointsAnalisis:
         ) * 10
 
         with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
-             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
-            instancia = MockGemini.return_value
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            instancia = MockLLM.return_value
             instancia.generar_analisis = AsyncMock(
                 side_effect=LLMError("Error de red simulado")
             )
@@ -427,9 +427,9 @@ class TestEstadoYProgreso:
         registro = await crear_analisis(db_session, texto_largo, seed_user.id)
 
         with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
-             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
-            instancia = MockGemini.return_value
-            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            instancia = MockLLM.return_value
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_llm_valida())
             await ejecutar_analisis_background(registro.id, texto_largo)
 
         await db_session.refresh(registro)
@@ -463,9 +463,9 @@ class TestEstadoYProgreso:
         texto_largo = "Política de privacidad de prueba para integración. " * 20
 
         with patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
-             patch("app.services.analisis_service.GeminiAdapter") as MockGemini:
-            instancia = MockGemini.return_value
-            instancia.generar_analisis = AsyncMock(return_value=_respuesta_gemini_valida())
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            instancia = MockLLM.return_value
+            instancia.generar_analisis = AsyncMock(return_value=_respuesta_llm_valida())
 
             response = await client.post(
                 "/api/analisis/iniciar", json={"texto": texto_largo}, headers=headers,

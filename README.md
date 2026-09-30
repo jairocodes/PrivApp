@@ -8,7 +8,7 @@
 
 ## Descripción
 
-PrivApp es un sistema web que analiza automáticamente políticas de privacidad de servicios digitales y traduce sus implicaciones a lenguaje accesible para jóvenes del municipio de San José Acatempa, Jutiapa. Utiliza arquitectura RAG (Retrieval-Augmented Generation) con corpus normativo verificable y el modelo Gemini de Google para generar análisis fundamentados en fuentes legales reales.
+PrivApp es un sistema web que analiza automáticamente políticas de privacidad de servicios digitales y traduce sus implicaciones a lenguaje accesible para jóvenes del municipio de San José Acatempa, Jutiapa. Utiliza arquitectura RAG (Retrieval-Augmented Generation) con corpus normativo verificable y el modelo GPT-4o-mini de OpenAI para generar análisis fundamentados en fuentes legales reales.
 
 ## Tecnologías
 
@@ -16,7 +16,7 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 |---|---|
 | Backend | Python 3.11, FastAPI, SQLAlchemy async, Alembic |
 | Base de datos | PostgreSQL 16 + pgvector |
-| LLM | Google Gemini (`gemini-1.5-flash`) |
+| LLM | OpenAI (`gpt-4o-mini`) |
 | Embeddings | Sentence Transformers (`paraphrase-multilingual-mpnet-base-v2`, local) |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Infraestructura | Docker, Docker Compose |
@@ -24,7 +24,7 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 ## Requisitos previos
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) v4.0+ (incluye Docker Compose v2)
-- API key de Google Gemini — [obtener gratis en aistudio.google.com](https://aistudio.google.com/)
+- API key de OpenAI — [obtener en platform.openai.com](https://platform.openai.com/api-keys)
 - PDFs del corpus normativo (ver `corpus_normativo/README.md`)
 
 ## Instalación rápida
@@ -36,7 +36,7 @@ cd sistema-privacidad-sja
 
 # 2. Configurar variables de entorno
 cp .env.example .env
-# Edita .env y completa: POSTGRES_PASSWORD, JWT_SECRET_KEY, GEMINI_API_KEY
+# Edita .env y completa: POSTGRES_PASSWORD, JWT_SECRET_KEY, OPENAI_API_KEY
 
 # 3. Colocar los PDFs del corpus normativo (ver corpus_normativo/README.md)
 
@@ -69,9 +69,10 @@ JWT_SECRET_KEY=clave_aleatoria_minimo_32_caracteres
 JWT_ALGORITHM=HS256
 JWT_EXPIRATION_HOURS=24
 
-# Gemini
-GEMINI_API_KEY=tu_api_key_de_gemini
-GEMINI_MODEL=gemini-1.5-flash
+# OpenAI
+LLM_PROVIDER=openai
+OPENAI_API_KEY=tu_api_key_de_openai
+OPENAI_MODEL=gpt-4o-mini
 
 # General
 ENVIRONMENT=development
@@ -118,7 +119,7 @@ docker compose logs -f backend
 | Autenticación JWT (registro, login, logout, `/me`) | Completado | Sprint 1 |
 | Corpus normativo + arquitectura RAG | Completado | Sprint 2 |
 | Ingesta de políticas (texto directo + URL) | Completado | Sprint 3 |
-| Motor de Análisis (RAG + Gemini + OPP-115) | Completado | Sprint 4 |
+| Motor de Análisis (RAG + OpenAI + OPP-115) | Completado | Sprint 4 |
 | Panel de Visualización (mobile-first) | Completado | Sprint 5 |
 
 **Módulos excluidos del prototipo** (se implementarán en Proyecto de Graduación II):

@@ -22,7 +22,6 @@ passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
 
 # LLM
-google-generativeai==0.8.3
 openai==1.82.0
 
 # Embeddings
@@ -45,7 +44,7 @@ tenacity==9.0.0
 # Rate limiting
 slowapi==0.1.9
 
-# Lista de revocación de tokens JWT (TICKET-03)
+# Lista de revocación de tokens JWT
 redis==5.2.1
 
 # Linters / Formateo (solo desarrollo)

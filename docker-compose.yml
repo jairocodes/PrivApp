@@ -37,6 +37,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Entorno de desarrollo: recarga automática sobre el código montado.
+    # El arranque de producción (CMD del Dockerfile) no usa --reload.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips=*"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
@@ -46,8 +49,6 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
       ENVIRONMENT: ${ENVIRONMENT}
       CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

@@ -1,0 +1,80 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { describe, expect, it, vi } from 'vitest'
+import { AuthContext } from '@/context/AuthContext'
+import { crearAuthValue } from '@/test/fixtures'
+import type { AuthContextValue } from '@/types/auth'
+import RegisterForm from './RegisterForm'
+
+function renderRegistro(auth: AuthContextValue) {
+  render(
+    <AuthContext.Provider value={auth}>
+      <MemoryRouter initialEntries={['/registro']}>
+        <Routes>
+          <Route path="/registro" element={<RegisterForm />} />
+          <Route path="/dashboard" element={<p>Panel principal</p>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
+  )
+}
+
+async function completar(datos: { nombre: string; email: string; password: string; confirmacion: string }) {
+  await userEvent.type(screen.getByLabelText('Nombre completo'), datos.nombre)
+  await userEvent.type(screen.getByLabelText('Correo electrónico'), datos.email)
+  await userEvent.type(screen.getByLabelText('Contraseña'), datos.password)
+  await userEvent.type(screen.getByLabelText('Confirmar contraseña'), datos.confirmacion)
+  await userEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }))
+}
+
+const VALIDOS = {
+  nombre: 'Ana López',
+  email: 'ana@privapp.test',
+  password: 'Segura123',
+  confirmacion: 'Segura123',
+}
+
+describe('RegisterForm', () => {
+  it('valida nombre, correo y fortaleza de la contraseña', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ nombre: 'A', email: 'x@privapp.test', password: 'debil', confirmacion: 'debil' })
+
+    expect(screen.getByText('El nombre debe tener al menos 2 caracteres.')).toBeInTheDocument()
+    expect(screen.getByText('La contraseña debe tener al menos 8 caracteres.')).toBeInTheDocument()
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('exige que las contraseñas coincidan', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ ...VALIDOS, confirmacion: 'Distinta123' })
+
+    expect(screen.getByText('Las contraseñas no coinciden.')).toBeInTheDocument()
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('registra al usuario y navega al panel principal', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ ...VALIDOS, nombre: '  Ana López  ' })
+
+    expect(auth.register).toHaveBeenCalledWith('Ana López', 'ana@privapp.test', 'Segura123')
+    expect(await screen.findByText('Panel principal')).toBeInTheDocument()
+  })
+
+  it('avisa si el correo ya está registrado (409)', async () => {
+    const auth = crearAuthValue({
+      register: vi.fn().mockRejectedValue({ response: { status: 409 } }),
+    })
+    renderRegistro(auth)
+
+    await completar(VALIDOS)
+
+    expect(await screen.findByText('Este correo ya está registrado.')).toBeInTheDocument()
+  })
+})

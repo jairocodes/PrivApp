@@ -1,11 +1,11 @@
-"""Motor de Análisis: orquesta segmentación, RAG, prompts y llamada a Gemini.
+"""Motor de Análisis: orquesta segmentación, RAG, prompts y llamada al modelo de lenguaje.
 
 Flujo completo por política:
 1. segmentar_politica(texto)        → list[str]  (secciones temáticas)
 2. Para cada sección:
    a. recuperar_contexto(db, sec)   → list[CorpusChunk]
    b. construir_prompt(sec, chunks) → str
-   c. gemini.generar_analisis(...)  → str JSON
+   c. llm.generar_analisis(...)     → str JSON
    d. parsear_seccion(json_str)     → SeccionAnalizada  (con re-intento si inválido)
 3. calcular_resumen(secciones)      → ResumenGeneral
 4. Persistir en analysis_temp
@@ -38,7 +38,7 @@ from app.schemas.analysis import (
     SeccionAnalizada,
 )
 from app.services.llm.base import LLMAdapter
-from app.services.llm.gemini_adapter import GeminiAdapter
+from app.services.llm.openai_adapter import OpenAIAdapter
 from app.services.rag_service import recuperar_contexto
 
 logger = logging.getLogger(__name__)
@@ -338,11 +338,10 @@ def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _crear_adaptador_llm() -> LLMAdapter:
-    """Selecciona el adaptador LLM según LLM_PROVIDER en el .env."""
+    """Selecciona el adaptador del modelo de lenguaje según LLM_PROVIDER en el .env."""
     if settings.llm_provider == "openai":
-        from app.services.llm.openai_adapter import OpenAIAdapter
         return OpenAIAdapter(api_key=settings.openai_api_key, model=settings.openai_model)
-    return GeminiAdapter(api_key=settings.gemini_api_key, model=settings.gemini_model)
+    raise ValueError(f"Proveedor de modelo de lenguaje no soportado: {settings.llm_provider}")
 
 
 async def crear_analisis(
