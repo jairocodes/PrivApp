@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Users } from 'lucide-react'
+import { Library, Users } from 'lucide-react'
 import Navbar from '@/components/common/Navbar'
 
 export default function Admin() {
@@ -21,6 +21,17 @@ export default function Admin() {
           <div>
             <p className="font-semibold text-gray-900">Usuarios</p>
             <p className="text-sm text-gray-500">Consultar las cuentas y activarlas o desactivarlas.</p>
+          </div>
+        </Link>
+
+        <Link
+          to="/admin/corpus"
+          className="card flex items-center gap-3 mt-3 hover:border-blue-300 hover:shadow-md transition-all"
+        >
+          <Library size={22} className="text-blue-600 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold text-gray-900">Corpus normativo</p>
+            <p className="text-sm text-gray-500">Consultar, cargar y activar o desactivar documentos normativos.</p>
           </div>
         </Link>
       </main>
