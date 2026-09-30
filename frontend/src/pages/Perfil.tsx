@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Navbar from '@/components/common/Navbar'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
+import FormCambioPassword from '@/components/perfil/FormCambioPassword'
 import { useAuth } from '@/hooks/useAuth'
 
 const NOMBRE_MIN = 2
@@ -83,6 +84,8 @@ export default function Perfil() {
             Guardar cambios
           </Button>
         </form>
+
+        <FormCambioPassword />
       </main>
     </div>
   )

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { authApi } from '@/api/auth'
-import type { AuthContextValue, User } from '@/types/auth'
+import type { AuthContextValue, CambioPasswordRequest, User } from '@/types/auth'
 
 export const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -52,6 +52,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.data)
   }, [])
 
+  // El servidor cierra todas las sesiones y devuelve un token nuevo para esta.
+  const cambiarPassword = useCallback(async (datos: CambioPasswordRequest) => {
+    const res = await authApi.cambiarPassword(datos)
+    localStorage.setItem('access_token', res.data.access_token)
+    setToken(res.data.access_token)
+  }, [])
+
   const logout = useCallback(() => {
     authApi.logout().catch(() => {})
     localStorage.removeItem('access_token')
@@ -60,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, actualizarPerfil }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, actualizarPerfil, cambiarPassword }}>
       {children}
     </AuthContext.Provider>
   )

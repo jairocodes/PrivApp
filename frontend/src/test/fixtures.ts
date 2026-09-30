@@ -49,6 +49,7 @@ export function crearAuthValue(parcial: Partial<AuthContextValue> = {}): AuthCon
     register: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn(),
     actualizarPerfil: vi.fn().mockResolvedValue(undefined),
+    cambiarPassword: vi.fn().mockResolvedValue(undefined),
     ...parcial,
   }
 }

@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { LoginRequest, RegisterRequest, TokenResponse, User } from '@/types/auth'
+import type { CambioPasswordRequest, LoginRequest, RegisterRequest, TokenResponse, User } from '@/types/auth'
 
 export const authApi = {
   login: (data: LoginRequest) =>
@@ -16,4 +16,7 @@ export const authApi = {
 
   actualizarPerfil: (nombre: string) =>
     apiClient.patch<User>('/api/auth/me', { nombre }),
+
+  cambiarPassword: (datos: CambioPasswordRequest) =>
+    apiClient.post<TokenResponse>('/api/auth/change-password', datos),
 }

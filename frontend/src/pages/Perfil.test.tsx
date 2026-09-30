@@ -69,6 +69,11 @@ describe('Perfil', () => {
     expect(auth.actualizarPerfil).not.toHaveBeenCalled()
   })
 
+  it('incluye el formulario de cambio de contraseña', () => {
+    renderPerfil(crearAuthValue({ user: usuarioComun, token: 't' }))
+    expect(screen.getByRole('heading', { name: 'Cambiar contraseña' })).toBeInTheDocument()
+  })
+
   it('informa si el servidor rechaza el cambio', async () => {
     const auth = crearAuthValue({
       user: usuarioComun,
