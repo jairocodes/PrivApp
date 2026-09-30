@@ -12,11 +12,9 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import settings
 from app.core.limite_carga import LimiteCargaArchivoMiddleware
 from app.core.limiter import limiter
+from app.core.registro import configurar_registro
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-)
+configurar_registro(settings.log_level)
 
 logger = logging.getLogger(__name__)
 
