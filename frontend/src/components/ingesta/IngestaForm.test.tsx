@@ -89,4 +89,26 @@ describe('IngestaForm', () => {
 
     expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
   })
+
+  it('exige 40 palabras aunque el texto supere los 200 caracteres', async () => {
+    renderIngesta()
+    escribirTexto('a'.repeat(250))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+    expect(screen.getByText('El texto debe tener al menos 200 caracteres y 40 palabras.')).toBeInTheDocument()
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+
+  it('no falla si el servidor devuelve la lista de errores de validación', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue({
+      response: { status: 422, data: { detail: [{ loc: ['body', 'texto'], msg: 'error' }] } },
+    })
+    renderIngesta()
+    escribirTexto(TEXTO_VALIDO)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+    expect(await screen.findByText('Ocurrió un error. Intenta de nuevo.')).toBeInTheDocument()
+  })
 })
