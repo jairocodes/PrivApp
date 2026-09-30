@@ -53,6 +53,14 @@ class AccesoDenegadoError(HTTPException):
         )
 
 
+class AutodesactivacionError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes desactivar tu propia cuenta.",
+        )
+
+
 class TextoDemasiadoCortoError(HTTPException):
     def __init__(self):
         super().__init__(

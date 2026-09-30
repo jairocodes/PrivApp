@@ -10,6 +10,7 @@ import Ingesta from '@/pages/Ingesta'
 import Resultados from '@/pages/Resultados'
 import Historial from '@/pages/Historial'
 import Admin from '@/pages/Admin'
+import AdminUsuarios from '@/pages/AdminUsuarios'
 import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
           </Route>
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/usuarios" element={<AdminUsuarios />} />
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
