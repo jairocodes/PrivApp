@@ -17,16 +17,9 @@ class Settings(BaseSettings):
     # Redis (lista de revocación de tokens JWT)
     redis_url: str
 
-    # Proveedor LLM activo: "openai" | "gemini"
-    llm_provider: str = "openai"
-
-    # OpenAI
+    # OpenAI (proveedor del modelo de lenguaje)
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
-
-    # Gemini (se mantiene por compatibilidad)
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
 
     # General
     environment: str = "development"

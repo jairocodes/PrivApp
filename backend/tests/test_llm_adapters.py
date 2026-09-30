@@ -6,7 +6,6 @@ import httpx
 import pytest
 from openai import APIStatusError
 
-from app.services.llm.gemini_adapter import GeminiAdapter
 from app.services.llm.openai_adapter import OpenAIAdapter
 
 
@@ -65,59 +64,3 @@ class TestRetryOpenAIAdapter:
                 )
 
         assert mock_create.call_count == 1
-
-
-class TestRetryGeminiAdapter:
-    """El decorador @retry de GeminiAdapter usaba retry_if_exception_type(Exception),
-    reintentando incluso errores ya clasificados como no reintentables (bug
-    encontrado e independiente de TICKET-01, corregido junto con este ticket
-    por decisión del usuario)."""
-
-    async def test_error_transitorio_dispara_reintentos_y_termina_en_exito(self):
-        adapter = GeminiAdapter(api_key="fake-key")
-
-        respuesta_ok = type("Respuesta", (), {"text": "respuesta ok"})()
-        mock_modelo = AsyncMock()
-        mock_modelo.generate_content_async = AsyncMock(
-            side_effect=[
-                ConnectionError("network timeout"),
-                ConnectionError("network timeout"),
-                respuesta_ok,
-            ]
-        )
-
-        with patch(
-            "app.services.llm.gemini_adapter.genai.GenerativeModel",
-            return_value=mock_modelo,
-        ), patch("asyncio.sleep", AsyncMock()):
-            resultado = await adapter.generar_analisis(
-                system_prompt="system",
-                texto_seccion="texto",
-                contexto_normativo="contexto",
-            )
-
-        assert resultado == "respuesta ok"
-        assert mock_modelo.generate_content_async.call_count == 3
-
-    async def test_error_no_reintentable_no_reintenta_y_se_traduce_a_llmerror(self):
-        from app.core.exceptions import LLMError
-
-        adapter = GeminiAdapter(api_key="fake-key")
-
-        mock_modelo = AsyncMock()
-        mock_modelo.generate_content_async = AsyncMock(
-            side_effect=ValueError("API_KEY inválida")
-        )
-
-        with patch(
-            "app.services.llm.gemini_adapter.genai.GenerativeModel",
-            return_value=mock_modelo,
-        ):
-            with pytest.raises(LLMError):
-                await adapter.generar_analisis(
-                    system_prompt="system",
-                    texto_seccion="texto",
-                    contexto_normativo="contexto",
-                )
-
-        assert mock_modelo.generate_content_async.call_count == 1
