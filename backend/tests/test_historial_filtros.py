@@ -132,3 +132,63 @@ class TestFiltroPorFechas:
     async def test_fecha_con_formato_invalido_se_rechaza(self, client, seed_user):
         r = await client.get("/api/analisis", params={"desde": "ayer"}, headers=_auth(seed_user))
         assert r.status_code == 422
+
+
+async def _con_texto(db_session, user, texto: str, comentario: str, **kwargs):
+    registro = await _crear_analisis(db_session, user.id, comentario=comentario, **kwargs)
+    registro.texto_original = texto
+    await db_session.flush()
+    return registro
+
+
+class TestFiltroPorTexto:
+    async def test_busca_en_el_texto_de_la_politica(self, client, db_session, seed_user):
+        await _con_texto(db_session, seed_user, "Política de privacidad de TikTok", "c1")
+        await _con_texto(db_session, seed_user, "Política de privacidad de Spotify", "c2")
+
+        datos = await _historial(client, seed_user, q="tiktok")
+
+        assert [i["comentario_breve"] for i in datos["items"]] == ["c1"]
+
+    async def test_busca_en_el_comentario_del_resumen(self, client, db_session, seed_user):
+        await _con_texto(db_session, seed_user, "texto", "Presenta 2 hallazgos de riesgo alto")
+        await _con_texto(db_session, seed_user, "texto", "Riesgo bajo en general")
+
+        datos = await _historial(client, seed_user, q="HALLAZGOS")
+
+        assert [i["comentario_breve"] for i in datos["items"]] == ["Presenta 2 hallazgos de riesgo alto"]
+
+    async def test_los_comodines_se_buscan_literalmente(self, client, db_session, seed_user):
+        await _con_texto(db_session, seed_user, "Descuento del 100% en datos", "con porcentaje")
+        await _con_texto(db_session, seed_user, "Descuento del 1000 en datos", "sin porcentaje")
+
+        porcentaje = await _historial(client, seed_user, q="100%")
+        guion = await _historial(client, seed_user, q="_")
+
+        assert [i["comentario_breve"] for i in porcentaje["items"]] == ["con porcentaje"]
+        assert guion["total"] == 0
+
+    async def test_un_texto_vacio_no_filtra(self, client, db_session, seed_user):
+        await _con_texto(db_session, seed_user, "a", "c1")
+        await _con_texto(db_session, seed_user, "b", "c2")
+
+        datos = await _historial(client, seed_user, q="   ")
+
+        assert datos["total"] == 2
+
+    async def test_combina_texto_nivel_y_fecha_solo_en_los_propios(self, client, db_session, seed_user):
+        otro = await _otro_usuario(db_session)
+        dia = datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc)
+        await _con_texto(db_session, seed_user, "Política de TikTok", "propio", nivel="alto", fecha=dia)
+        await _con_texto(db_session, seed_user, "Política de TikTok", "otro nivel", nivel="bajo", fecha=dia)
+        await _con_texto(db_session, otro, "Política de TikTok", "ajeno", nivel="alto", fecha=dia)
+
+        datos = await _historial(
+            client, seed_user, q="tiktok", nivel="alto", desde="2026-09-10T00:00:00Z"
+        )
+
+        assert [i["comentario_breve"] for i in datos["items"]] == ["propio"]
+
+    async def test_rechaza_textos_demasiado_largos(self, client, seed_user):
+        r = await client.get("/api/analisis", params={"q": "x" * 101}, headers=_auth(seed_user))
+        assert r.status_code == 422

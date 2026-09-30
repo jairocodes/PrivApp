@@ -96,6 +96,7 @@ async def listar(
     nivel: Literal["bajo", "medio", "alto"] | None = Query(None, description="Nivel de riesgo global"),
     desde: datetime | None = Query(None, description="Desde esta fecha y hora (ISO 8601, inclusive)"),
     hasta: datetime | None = Query(None, description="Hasta esta fecha y hora (ISO 8601, inclusive)"),
+    q: str | None = Query(None, max_length=100, description="Texto en la política o en el resumen"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HistorialResponse:
@@ -103,7 +104,8 @@ async def listar(
     desde, hasta = _a_utc(desde), _a_utc(hasta)
     if desde and hasta and desde > hasta:
         raise RangoFechasInvalidoError()
-    filtros = FiltrosHistorial(nivel=nivel, desde=desde, hasta=hasta)
+    texto = q.strip() if q else None
+    filtros = FiltrosHistorial(nivel=nivel, desde=desde, hasta=hasta, texto=texto or None)
     return await listar_historial(db, current_user.id, page, page_size, filtros)
 
 

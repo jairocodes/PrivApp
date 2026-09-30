@@ -86,3 +86,23 @@ class TestFiltroPorFechasPg:
         registros = await RepositorioAnalisis(db_pg).listar_completados_de_usuario(ana.id, 10, 0, filtros)
 
         assert [r.resultado["resumen_general"]["comentario_breve"] for r in registros] == ["Dentro"]
+
+
+class TestFiltroPorTextoPg:
+    async def test_busca_en_texto_y_en_el_comentario_jsonb(self, db_pg):
+        ana = await _usuario(db_pg, "ana@privapp.test")
+        db_pg.add_all([
+            _analisis(ana.id, "alto", "Comentario común", texto="Política de TikTok"),
+            _analisis(ana.id, "bajo", "Presenta HALLAZGOS graves", texto="Otra política"),
+            _analisis(ana.id, "medio", "Nada", texto="Descuento del 1000"),
+        ])
+        await db_pg.commit()
+        repo = RepositorioAnalisis(db_pg)
+
+        async def comentarios(texto):
+            registros = await repo.listar_completados_de_usuario(ana.id, 10, 0, FiltrosHistorial(texto=texto))
+            return sorted(r.resultado["resumen_general"]["comentario_breve"] for r in registros)
+
+        assert await comentarios("tiktok") == ["Comentario común"]
+        assert await comentarios("hallazgos") == ["Presenta HALLAZGOS graves"]
+        assert await comentarios("100%") == []
