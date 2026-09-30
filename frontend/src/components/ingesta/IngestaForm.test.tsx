@@ -12,11 +12,19 @@ vi.mock('@/api/ingesta', () => ({
 vi.mock('@/api/analisis', () => ({ analisisApi: { iniciar: vi.fn() } }))
 
 const TEXTO_VALIDO = 'Política de privacidad de ejemplo. '.repeat(10)
+const REVISAR = { name: 'Revisar texto' }
+const CONFIRMAR = { name: 'Confirmar y analizar' }
 
 const ningunaViaLlamada = () =>
   [ingestaApi.enviarTexto, ingestaApi.enviarURL, ingestaApi.enviarArchivo].every(
     (via) => vi.mocked(via).mock.calls.length === 0,
   )
+
+function responder(fuente: string) {
+  return {
+    data: { texto_procesado: 'texto normalizado', caracteres: 400, palabras: 50, fuente },
+  } as Awaited<ReturnType<typeof ingestaApi.enviarTexto>>
+}
 
 function renderIngesta() {
   render(
@@ -35,14 +43,18 @@ function escribirTexto(texto: string) {
   })
 }
 
+async function revisarTextoValido() {
+  renderIngesta()
+  escribirTexto(TEXTO_VALIDO)
+  await userEvent.click(screen.getByRole('button', REVISAR))
+  await screen.findByRole('heading', { name: 'Revisa el texto antes de analizarlo' })
+}
+
 describe('IngestaForm', () => {
   beforeEach(() => {
-    const respuesta = {
-      data: { texto_procesado: 'texto normalizado', caracteres: 400, palabras: 50, fuente: 'texto_directo' },
-    } as Awaited<ReturnType<typeof ingestaApi.enviarTexto>>
-    vi.mocked(ingestaApi.enviarTexto).mockResolvedValue(respuesta)
-    vi.mocked(ingestaApi.enviarURL).mockResolvedValue(respuesta)
-    vi.mocked(ingestaApi.enviarArchivo).mockResolvedValue(respuesta)
+    vi.mocked(ingestaApi.enviarTexto).mockResolvedValue(responder('texto_directo'))
+    vi.mocked(ingestaApi.enviarURL).mockResolvedValue(responder('https://ejemplo.com/privacidad'))
+    vi.mocked(ingestaApi.enviarArchivo).mockResolvedValue(responder('politica.pdf'))
     vi.mocked(analisisApi.iniciar).mockResolvedValue({
       data: { id_analisis: '5', estado: 'procesando' },
     } as Awaited<ReturnType<typeof analisisApi.iniciar>>)
@@ -53,25 +65,76 @@ describe('IngestaForm', () => {
     escribirTexto('Texto demasiado corto')
 
     expect(screen.getByText('(mínimo 200)')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Analizar política' })).toBeDisabled()
+    expect(screen.getByRole('button', REVISAR)).toBeDisabled()
   })
 
-  it('ingesta el texto, inicia el análisis y navega a los resultados', async () => {
-    renderIngesta()
-    escribirTexto(TEXTO_VALIDO)
+  describe('vista previa y confirmación', () => {
+    it('muestra el texto normalizado y su número de caracteres sin iniciar el análisis', async () => {
+      await revisarTextoValido()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      expect(ingestaApi.enviarTexto).toHaveBeenCalledWith(TEXTO_VALIDO)
+      expect(screen.getByLabelText('Texto que se analizará')).toHaveTextContent('texto normalizado')
+      expect(screen.getByText('400')).toBeInTheDocument()
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+    })
 
-    expect(ingestaApi.enviarTexto).toHaveBeenCalledWith(TEXTO_VALIDO)
-    expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
-    expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
+    it('confirmar inicia el análisis con el texto normalizado y navega a los resultados', async () => {
+      await revisarTextoValido()
+
+      await userEvent.click(screen.getByRole('button', CONFIRMAR))
+
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+      expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
+    })
+
+    it('cancelar no inicia el análisis y descarta lo ingresado', async () => {
+      await revisarTextoValido()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+      expect(screen.getByPlaceholderText(/Pega aquí el texto completo/)).toHaveValue('')
+    })
+
+    it('corregir vuelve al formulario conservando el texto', async () => {
+      await revisarTextoValido()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Corregir' }))
+
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+      expect(screen.getByPlaceholderText(/Pega aquí el texto completo/)).toHaveValue(TEXTO_VALIDO)
+    })
+
+    it('muestra en la vista previa un error al iniciar el análisis', async () => {
+      vi.mocked(analisisApi.iniciar).mockRejectedValue({ response: { status: 429 } })
+      await revisarTextoValido()
+
+      await userEvent.click(screen.getByRole('button', CONFIRMAR))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Hiciste demasiados intentos.')
+      expect(screen.getByRole('button', CONFIRMAR)).toBeEnabled()
+    })
+
+    it('la dirección web también pasa por la vista previa', async () => {
+      renderIngesta()
+      await userEvent.click(screen.getByRole('tab', { name: 'Desde URL' }))
+      await userEvent.type(screen.getByPlaceholderText(/ejemplo\.com/), ' https://ejemplo.com/privacidad ')
+      await userEvent.click(screen.getByRole('button', REVISAR))
+
+      expect(ingestaApi.enviarURL).toHaveBeenCalledWith('https://ejemplo.com/privacidad')
+      expect(await screen.findByText('Dirección web: https://ejemplo.com/privacidad')).toBeInTheDocument()
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByRole('button', CONFIRMAR))
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+    })
   })
 
   it('exige una dirección en la pestaña de URL', async () => {
     renderIngesta()
     await userEvent.click(screen.getByRole('tab', { name: 'Desde URL' }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+    await userEvent.click(screen.getByRole('button', REVISAR))
 
     expect(screen.getByText('Por favor ingresa una URL válida.')).toBeInTheDocument()
     expect(ningunaViaLlamada()).toBe(true)
@@ -84,7 +147,7 @@ describe('IngestaForm', () => {
     renderIngesta()
     escribirTexto(TEXTO_VALIDO)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+    await userEvent.click(screen.getByRole('button', REVISAR))
 
     expect(await screen.findByText('El texto es demasiado corto para analizarlo.')).toBeInTheDocument()
     expect(analisisApi.iniciar).not.toHaveBeenCalled()
@@ -95,7 +158,7 @@ describe('IngestaForm', () => {
     renderIngesta()
     escribirTexto(TEXTO_VALIDO)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+    await userEvent.click(screen.getByRole('button', REVISAR))
 
     expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
   })
@@ -104,7 +167,7 @@ describe('IngestaForm', () => {
     renderIngesta()
     escribirTexto('a'.repeat(250))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+    await userEvent.click(screen.getByRole('button', REVISAR))
 
     expect(screen.getByText('El texto debe tener al menos 200 caracteres y 40 palabras.')).toBeInTheDocument()
     expect(ningunaViaLlamada()).toBe(true)
@@ -117,7 +180,7 @@ describe('IngestaForm', () => {
     renderIngesta()
     escribirTexto(TEXTO_VALIDO)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+    await userEvent.click(screen.getByRole('button', REVISAR))
 
     expect(await screen.findByText('Ocurrió un error. Intenta de nuevo.')).toBeInTheDocument()
   })
@@ -132,22 +195,37 @@ describe('IngestaForm', () => {
       fireEvent.change(screen.getByLabelText(/Archivo de la política/), { target: { files: [archivo] } })
     }
 
-    it('envía el archivo como FormData y continúa con el análisis', async () => {
+    it('envía el archivo, muestra la vista previa y analiza al confirmar', async () => {
       await abrirPestanaArchivo()
       const archivo = new File(['%PDF-1.4 contenido'], 'politica.pdf', { type: 'application/pdf' })
       seleccionar(archivo)
-      expect(screen.getByText(/politica\.pdf/)).toBeInTheDocument()
+      expect(screen.getByText(/politica\.pdf ·/)).toBeInTheDocument()
 
-      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
 
       expect(ingestaApi.enviarArchivo).toHaveBeenCalledWith(archivo)
+      expect(await screen.findByText('Archivo: politica.pdf')).toBeInTheDocument()
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+
+      await userEvent.click(screen.getByRole('button', CONFIRMAR))
       expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
       expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
     })
 
+    it('cancelar descarta también el archivo seleccionado', async () => {
+      await abrirPestanaArchivo()
+      seleccionar(new File(['%PDF-1.4'], 'politica.pdf', { type: 'application/pdf' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
+      await userEvent.click(await screen.findByRole('button', { name: 'Cancelar' }))
+
+      await userEvent.click(screen.getByRole('tab', { name: 'Desde archivo' }))
+      expect(screen.queryByText(/politica\.pdf ·/)).not.toBeInTheDocument()
+      expect(analisisApi.iniciar).not.toHaveBeenCalled()
+    })
+
     it('exige seleccionar un archivo', async () => {
       await abrirPestanaArchivo()
-      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
 
       expect(screen.getByText('Selecciona un archivo PDF o TXT.')).toBeInTheDocument()
       expect(ningunaViaLlamada()).toBe(true)
@@ -156,7 +234,7 @@ describe('IngestaForm', () => {
     it('rechaza extensiones no permitidas sin enviarlas', async () => {
       await abrirPestanaArchivo()
       seleccionar(new File(['x'], 'politica.docx', { type: 'application/octet-stream' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
 
       expect(screen.getByText('Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt).')).toBeInTheDocument()
       expect(ningunaViaLlamada()).toBe(true)
@@ -165,7 +243,7 @@ describe('IngestaForm', () => {
     it('rechaza archivos de más de 5 MB sin enviarlos', async () => {
       await abrirPestanaArchivo()
       seleccionar(new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.txt', { type: 'text/plain' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
 
       expect(screen.getByText('El archivo supera el tamaño máximo de 5 MB.')).toBeInTheDocument()
       expect(ningunaViaLlamada()).toBe(true)
@@ -176,7 +254,7 @@ describe('IngestaForm', () => {
       vi.mocked(ingestaApi.enviarArchivo).mockRejectedValue({ response: { status: 422, data: { detail: detalle } } })
       await abrirPestanaArchivo()
       seleccionar(new File(['%PDF-1.4'], 'escaneado.pdf', { type: 'application/pdf' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+      await userEvent.click(screen.getByRole('button', REVISAR))
 
       expect(await screen.findByText(detalle)).toBeInTheDocument()
       expect(analisisApi.iniciar).not.toHaveBeenCalled()
