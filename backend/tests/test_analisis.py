@@ -650,3 +650,80 @@ class TestTipoTratamiento:
         assert r.json()["secciones_analizadas"][0]["hallazgos"][0]["tipo_tratamiento"] is None
         assert pdf.status_code == 200
 
+
+# ---------------------------------------------------------------------------
+# Cobertura completa y análisis en paralelo
+# ---------------------------------------------------------------------------
+
+class TestAnalisisEnParalelo:
+    async def _analizar(self, db_session, seed_user, secciones, generar):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "\n\n".join(secciones)
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=secciones), \
+             patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = generar
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+        return registro
+
+    @staticmethod
+    def _respuesta_para(user_msg: str) -> str:
+        datos = json.loads(_respuesta_llm_valida())
+        # El título identifica a qué sección corresponde la respuesta.
+        datos["titulo"] = user_msg.split('"""')[1].strip().split()[0]
+        return json.dumps(datos)
+
+    async def test_conserva_el_orden_y_completa_el_progreso(self, db_session, seed_user):
+        secciones = [f"S{i} " + "texto de la sección " * 10 for i in range(1, 13)]
+
+        async def generar(_sistema, user_msg, _contexto):
+            # Las primeras secciones tardan más: terminan en otro orden.
+            numero = int(user_msg.split('"""')[1].strip().split()[0][1:])
+            await asyncio.sleep(0.02 * (13 - numero))
+            return self._respuesta_para(user_msg)
+
+        registro = await self._analizar(db_session, seed_user, secciones, generar)
+
+        assert registro.estado == "completado"
+        assert registro.secciones_total == registro.seccion_actual == 12
+        titulos = [s["titulo"] for s in registro.resultado["secciones_analizadas"]]
+        assert titulos == [f"S{i}" for i in range(1, 13)]
+
+    async def test_no_supera_el_limite_de_llamadas_simultaneas(self, db_session, seed_user):
+        from app.services.analisis_service import _CONCURRENCIA_LLM
+
+        activas = 0
+        maximo = 0
+
+        async def generar(_sistema, user_msg, _contexto):
+            nonlocal activas, maximo
+            activas += 1
+            maximo = max(maximo, activas)
+            await asyncio.sleep(0.02)
+            activas -= 1
+            return self._respuesta_para(user_msg)
+
+        secciones = [f"S{i} " + "texto " * 40 for i in range(1, 11)]
+        await self._analizar(db_session, seed_user, secciones, generar)
+
+        assert maximo == _CONCURRENCIA_LLM
+
+    async def test_una_seccion_fallida_no_afecta_a_las_demas(self, db_session, seed_user):
+        from app.core.exceptions import LLMError
+
+        async def generar(_sistema, user_msg, _contexto):
+            if user_msg.split('"""')[1].strip().startswith("S2 "):
+                raise LLMError("fallo simulado")
+            return self._respuesta_para(user_msg)
+
+        secciones = [f"S{i} " + "texto " * 40 for i in range(1, 4)]
+        registro = await self._analizar(db_session, seed_user, secciones, generar)
+
+        analizadas = registro.resultado["secciones_analizadas"]
+        assert [s["titulo"] for s in analizadas] == ["S1", "Sección 2", "S3"]
+        assert analizadas[1]["hallazgos"][0]["tipo"] == "neutral"
+        assert registro.seccion_actual == 3
+
