@@ -1,11 +1,14 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileSearch, ShieldAlert } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileSearch, ShieldAlert, Trash2 } from 'lucide-react'
+import { analisisApi } from '@/api/analisis'
+import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Navbar from '@/components/common/Navbar'
 import IndicadorSemaforo from '@/components/analisis/IndicadorSemaforo'
 import FormFiltrosHistorial from '@/components/historial/FormFiltrosHistorial'
 import { useHistorial } from '@/hooks/useHistorial'
 import type { AnalisisHistorialItem, FiltrosHistorial } from '@/types/analisis'
+import { MENSAJE_ELIMINAR_ANALISIS, detalleDeError } from '@/utils/errores'
 
 const hayFiltros = (filtros: FiltrosHistorial) =>
   Object.values(filtros).some((valor) => typeof valor === 'string' && valor.trim() !== '')
@@ -18,6 +21,26 @@ export default function Historial() {
   }, [])
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize))
+
+  const [porEliminar, setPorEliminar] = useState<AnalisisHistorialItem | null>(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+
+  const confirmarEliminacion = async () => {
+    if (!porEliminar) return
+    setEliminando(true)
+    setErrorEliminar(null)
+    try {
+      await analisisApi.eliminar(porEliminar.id_analisis)
+      setPorEliminar(null)
+      // Si era el último de la página, se vuelve a la anterior.
+      await cargar(items.length === 1 && page > 1 ? page - 1 : page)
+    } catch (err: unknown) {
+      setErrorEliminar(detalleDeError(err, 'No fue posible eliminar el análisis. Intenta nuevamente.'))
+    } finally {
+      setEliminando(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -47,7 +70,14 @@ export default function Historial() {
           <>
             <div className="space-y-3">
               {items.map((item) => (
-                <TarjetaHistorial key={item.id_analisis} item={item} />
+                <TarjetaHistorial
+                  key={item.id_analisis}
+                  item={item}
+                  onEliminar={() => {
+                    setErrorEliminar(null)
+                    setPorEliminar(item)
+                  }}
+                />
               ))}
             </div>
 
@@ -60,33 +90,54 @@ export default function Historial() {
           </>
         )}
       </main>
+
+      <DialogoConfirmacion
+        abierto={porEliminar !== null}
+        titulo="¿Eliminar este análisis?"
+        mensaje={MENSAJE_ELIMINAR_ANALISIS}
+        textoConfirmar="Eliminar"
+        procesando={eliminando}
+        error={errorEliminar}
+        onConfirmar={confirmarEliminacion}
+        onCancelar={() => setPorEliminar(null)}
+      />
     </div>
   )
 }
 
-function TarjetaHistorial({ item }: { item: AnalisisHistorialItem }) {
+function TarjetaHistorial({ item, onEliminar }: { item: AnalisisHistorialItem; onEliminar: () => void }) {
   const fechaFormateada = new Date(item.fecha).toLocaleString('es-GT', {
     day: '2-digit', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
 
   return (
-    <Link
-      to={`/resultados/${item.id_analisis}`}
-      className="card flex items-center justify-between gap-3 hover:border-blue-300 hover:shadow-md transition-all"
-    >
-      <div className="min-w-0">
-        <p className="text-xs text-gray-400">{fechaFormateada}</p>
-        <p className="text-sm text-gray-700 mt-0.5 truncate">{item.comentario_breve}</p>
-        <div className="mt-2">
-          <IndicadorSemaforo nivel={item.nivel_riesgo_global} size="sm" />
+    <div className="card flex items-center gap-3 hover:border-blue-300 hover:shadow-md transition-all">
+      <Link
+        to={`/resultados/${item.id_analisis}`}
+        className="flex flex-1 min-w-0 items-center justify-between gap-3"
+      >
+        <div className="min-w-0">
+          <p className="text-xs text-gray-400">{fechaFormateada}</p>
+          <p className="text-sm text-gray-700 mt-0.5 truncate">{item.comentario_breve}</p>
+          <div className="mt-2">
+            <IndicadorSemaforo nivel={item.nivel_riesgo_global} size="sm" />
+          </div>
         </div>
-      </div>
-      <div className="flex flex-col items-center justify-center w-12 h-12 rounded-full border-2 border-gray-100 bg-white shrink-0">
-        <span className="text-sm font-black leading-none text-gray-700">{item.puntaje}</span>
-        <span className="text-[10px] text-gray-400 leading-none">/100</span>
-      </div>
-    </Link>
+        <div className="flex flex-col items-center justify-center w-12 h-12 rounded-full border-2 border-gray-100 bg-white shrink-0">
+          <span className="text-sm font-black leading-none text-gray-700">{item.puntaje}</span>
+          <span className="text-[10px] text-gray-400 leading-none">/100</span>
+        </div>
+      </Link>
+      <button
+        type="button"
+        onClick={onEliminar}
+        aria-label={`Eliminar el análisis del ${fechaFormateada}`}
+        className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
+      >
+        <Trash2 size={18} aria-hidden="true" />
+      </button>
+    </div>
   )
 }
 

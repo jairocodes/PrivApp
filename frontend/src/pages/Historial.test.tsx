@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,7 @@ import type { AnalisisHistorialItem, HistorialResponse } from '@/types/analisis'
 import Historial from './Historial'
 
 vi.mock('@/components/common/Navbar', () => ({ default: () => null }))
-vi.mock('@/api/analisis', () => ({ analisisApi: { listar: vi.fn() } }))
+vi.mock('@/api/analisis', () => ({ analisisApi: { listar: vi.fn(), eliminar: vi.fn() } }))
 
 const ITEM: AnalisisHistorialItem = {
   id_analisis: '12',
@@ -148,6 +148,71 @@ describe('Historial', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent('La fecha inicial no puede ser posterior a la fecha final.')
       expect(vi.mocked(analisisApi.listar).mock.calls.length).toBe(llamadas)
+    })
+  })
+
+  describe('eliminación', () => {
+    const OTRO = { ...ITEM, id_analisis: '13', comentario_breve: 'Otro análisis.' }
+
+    it('elimina un análisis tras confirmar y vuelve a cargar el historial', async () => {
+      responderListado({ items: [ITEM, OTRO], total: 2 })
+      vi.mocked(analisisApi.eliminar).mockResolvedValue({} as Awaited<ReturnType<typeof analisisApi.eliminar>>)
+      renderHistorial()
+
+      const botones = await screen.findAllByRole('button', { name: /Eliminar el análisis del/ })
+      await userEvent.click(botones[0])
+      const dialogo = screen.getByRole('alertdialog', { name: '¿Eliminar este análisis?' })
+      expect(dialogo).toHaveTextContent('no se puede deshacer')
+      expect(analisisApi.eliminar).not.toHaveBeenCalled()
+
+      responderListado({ items: [OTRO], total: 1 })
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }))
+
+      expect(analisisApi.eliminar).toHaveBeenCalledWith('12')
+      expect(await screen.findByText('Otro análisis.')).toBeInTheDocument()
+      expect(screen.queryByText(ITEM.comentario_breve)).not.toBeInTheDocument()
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+
+    it('cancelar no elimina', async () => {
+      responderListado({ items: [ITEM], total: 1 })
+      renderHistorial()
+
+      await userEvent.click(await screen.findByRole('button', { name: /Eliminar el análisis del/ }))
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(analisisApi.eliminar).not.toHaveBeenCalled()
+      expect(screen.getByText(ITEM.comentario_breve)).toBeInTheDocument()
+    })
+
+    it('si era el último de la página, vuelve a la anterior', async () => {
+      responderListado({ items: [ITEM, OTRO], total: 11 })
+      vi.mocked(analisisApi.eliminar).mockResolvedValue({} as Awaited<ReturnType<typeof analisisApi.eliminar>>)
+      renderHistorial()
+      await screen.findByText('Página 1 de 2')
+      responderListado({ items: [OTRO], total: 11, page: 2 })
+      await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+      await screen.findByText('Página 2 de 2')
+
+      responderListado({ items: [ITEM], total: 10 })
+      await userEvent.click(screen.getByRole('button', { name: /Eliminar el análisis del/ }))
+      await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+      expect(analisisApi.listar).toHaveBeenLastCalledWith(1, 10, {})
+    })
+
+    it('muestra en el diálogo el error del servidor', async () => {
+      responderListado({ items: [ITEM], total: 1 })
+      vi.mocked(analisisApi.eliminar).mockRejectedValue({
+        response: { status: 409, data: { detail: 'No se puede eliminar un análisis que todavía se está procesando.' } },
+      })
+      renderHistorial()
+
+      await userEvent.click(await screen.findByRole('button', { name: /Eliminar el análisis del/ }))
+      await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+      expect(await screen.findByText('No se puede eliminar un análisis que todavía se está procesando.')).toBeInTheDocument()
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     })
   })
 })
