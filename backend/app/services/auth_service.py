@@ -63,7 +63,7 @@ async def register_user(
     await db.flush()
 
     token = create_access_token(str(user.id), user.role)
-    logger.info("Usuario registrado: id=%s email=%s", user.id, user.email)
+    logger.info("Usuario registrado: id=%s", user.id)
     return user, token
 
 
@@ -74,7 +74,8 @@ async def authenticate_user(
 ) -> tuple[User, str]:
     user = await get_user_by_email(db, email)
     if not user or not verify_password(password, user.hashed_password):
-        logger.warning("Intento de login fallido para email=%s", email)
+        # Sin el correo: los registros no guardan datos personales.
+        logger.warning("Intento de inicio de sesión fallido.")
         raise CredencialesInvalidasError()
 
     if not user.is_active:

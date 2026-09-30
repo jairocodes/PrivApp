@@ -11,6 +11,7 @@ import logging
 import re
 import unicodedata
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -81,25 +82,32 @@ def procesar_texto_directo(texto_raw: str) -> str:
 # Ingesta desde URL
 # ---------------------------------------------------------------------------
 
+def _sitio(url: str) -> str:
+    """Solo el nombre del sitio: los registros no guardan la dirección completa
+    (puede incluir datos de la persona en la ruta o en los parámetros)."""
+    return urlparse(url).hostname or "sitio desconocido"
+
+
 def extraer_texto_url(url: str) -> str:
     """Descarga la URL y extrae el texto relevante. Retorna texto normalizado."""
-    logger.info("Extrayendo texto de URL: %s", url)
+    sitio = _sitio(url)
+    logger.info("Extrayendo texto de %s.", sitio)
     try:
         response = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT_HTTP)
         response.raise_for_status()
     except requests.exceptions.Timeout:
-        logger.warning("Timeout al acceder a %s", url)
+        logger.warning("Timeout al acceder a %s", sitio)
         raise ExtraccionURLError("La URL tardó demasiado en responder.")
     except requests.exceptions.ConnectionError:
-        logger.warning("No se pudo conectar a %s", url)
+        logger.warning("No se pudo conectar a %s", sitio)
         raise ExtraccionURLError("No se pudo conectar a la URL proporcionada.")
     except requests.exceptions.HTTPError as exc:
-        logger.warning("HTTP %s para %s", exc.response.status_code, url)
+        logger.warning("HTTP %s para %s", exc.response.status_code, sitio)
         raise ExtraccionURLError(
             f"La URL devolvió el estado HTTP {exc.response.status_code}."
         )
     except requests.exceptions.RequestException as exc:
-        logger.error("Error inesperado al acceder a %s: %s", url, exc)
+        logger.error("Error inesperado al acceder a %s: %s", sitio, type(exc).__name__)
         raise ExtraccionURLError("Error al acceder a la URL.") from exc
 
     content_type = response.headers.get("content-type", "")
@@ -124,7 +132,7 @@ def extraer_texto_url(url: str) -> str:
         raise ExtraccionURLError("La página no contiene texto extraíble.")
 
     validar_longitud_politica(texto)
-    logger.info("Texto extraído de '%s' [%d palabras].", url, len(texto.split()))
+    logger.info("Texto extraído de %s [%d palabras].", sitio, len(texto.split()))
     return texto
 
 
@@ -154,7 +162,7 @@ def procesar_archivo(nombre: str, tipo_contenido: str | None, contenido: bytes) 
     if extension == ".pdf":
         if not contenido.startswith(b"%PDF-"):
             raise ArchivoNoPermitidoError()
-        texto_raw = extraer_texto_pdf_bytes(contenido, nombre)
+        texto_raw = extraer_texto_pdf_bytes(contenido, "archivo cargado")
         if not texto_raw.strip():
             raise PdfSinTextoError()
     else:

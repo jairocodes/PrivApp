@@ -59,7 +59,7 @@ async def ingestar_url(
 ) -> IngestaResponse:
     """Descarga la URL indicada y extrae el texto de la política."""
     texto_limpio = extraer_texto_url(str(payload.url))
-    logger.info("Usuario %d ingresó URL '%s' [%d palabras].", current_user.id, payload.url, len(texto_limpio.split()))
+    logger.info("Usuario %d ingresó una URL [%d palabras].", current_user.id, len(texto_limpio.split()))
     return IngestaResponse(
         texto_procesado=texto_limpio,
         caracteres=len(texto_limpio),
