@@ -14,7 +14,7 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: 'Aviso de privacidad de PrivApp' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('PENDIENTE_CONTENIDO')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '1. ¿Quién es responsable de sus datos?' })).toBeInTheDocument()
   })
 
   it('una pantalla protegida sin sesión lleva al inicio de sesión', async () => {
