@@ -86,6 +86,19 @@ class HistorialResponse(BaseModel):
     page_size: int
 
 
+class DistribucionNiveles(BaseModel):
+    bajo: int = 0
+    medio: int = 0
+    alto: int = 0
+
+
+class EstadisticasResponse(BaseModel):
+    total: int
+    por_nivel: DistribucionNiveles
+    # 0 cuando el usuario aún no tiene análisis.
+    puntaje_promedio: float
+
+
 class AnalisisIniciadoResponse(BaseModel):
     id_analisis: str
     estado: Literal["procesando"]

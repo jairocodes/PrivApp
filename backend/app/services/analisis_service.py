@@ -31,6 +31,8 @@ from app.schemas.analysis import (
     AnalisisEstadoResponse,
     AnalisisHistorialItem,
     AnalisisResponse,
+    DistribucionNiveles,
+    EstadisticasResponse,
     FuenteNormativa,
     Hallazgo,
     HistorialResponse,
@@ -661,3 +663,21 @@ async def estadisticas_tiempos_reporte(db: AsyncSession) -> dict:
         "resumen": resumir_tiempos(todas),
         "por_analisis": por_analisis,
     }
+
+
+# ---------------------------------------------------------------------------
+# Panel estadístico personal (HU-25)
+# ---------------------------------------------------------------------------
+
+async def estadisticas_de_usuario(db: AsyncSession, user_id: int) -> EstadisticasResponse:
+    """Total de análisis completados del usuario, su distribución por nivel de
+    riesgo y la puntuación promedio (ceros si aún no tiene análisis)."""
+    filas = await RepositorioAnalisis(db).estadisticas_de_usuario(user_id)
+    por_nivel = {nivel: cantidad for nivel, cantidad, _ in filas if nivel in ("bajo", "medio", "alto")}
+    total = sum(cantidad for _, cantidad, _ in filas)
+    suma_puntajes = sum(suma for _, _, suma in filas)
+    return EstadisticasResponse(
+        total=total,
+        por_nivel=DistribucionNiveles(**por_nivel),
+        puntaje_promedio=round(suma_puntajes / total, 1) if total else 0,
+    )

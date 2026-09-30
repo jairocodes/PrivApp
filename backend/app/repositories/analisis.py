@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, func, literal, or_, select
+from sqlalchemy import Integer, Select, cast, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import AnalysisTemp
@@ -82,6 +82,17 @@ class RepositorioAnalisis:
             r for r in result.scalars().all()
             if r.resultado and r.resultado.get("metadatos_reporte")
         ]
+
+    async def estadisticas_de_usuario(self, user_id: int) -> list[tuple[str, int, int]]:
+        """(nivel de riesgo, cantidad, suma de puntajes) de los análisis completados del usuario."""
+        nivel = json_texto(AnalysisTemp.resultado, "resumen_general", "nivel_riesgo_global")
+        puntaje = cast(json_texto(AnalysisTemp.resultado, "resumen_general", "puntaje"), Integer)
+        result = await self.db.execute(
+            select(nivel, func.count(), func.coalesce(func.sum(puntaje), 0))
+            .where(AnalysisTemp.user_id == user_id, AnalysisTemp.estado == "completado")
+            .group_by(nivel)
+        )
+        return [(fila[0], fila[1], fila[2]) for fila in result.all()]
 
     async def eliminar(self, registro: AnalysisTemp) -> None:
         """Eliminación definitiva (no hay borrado lógico ni papelera)."""
