@@ -55,11 +55,12 @@ app.add_middleware(
 )
 
 # Routers
-from app.api.v1 import analisis, auth, ingesta  # noqa: E402
+from app.api.v1 import admin, analisis, auth, ingesta  # noqa: E402
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Autenticación"])
 app.include_router(ingesta.router, prefix="/api/ingesta", tags=["Ingesta"])
 app.include_router(analisis.router, prefix="/api/analisis", tags=["Análisis"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Administración"])
 
 
 @app.get("/health", tags=["Sistema"])
