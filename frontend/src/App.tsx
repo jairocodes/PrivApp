@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
 import AdminRoute from '@/components/common/AdminRoute'
+import Footer from '@/components/common/Footer'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
@@ -9,6 +10,7 @@ import Ingesta from '@/pages/Ingesta'
 import Resultados from '@/pages/Resultados'
 import Historial from '@/pages/Historial'
 import Admin from '@/pages/Admin'
+import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
 
 export default function App() {
   return (
@@ -17,6 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Register />} />
+          <Route path="/aviso-privacidad" element={<AvisoPrivacidad />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/analizar" element={<Ingesta />} />
@@ -28,6 +31,7 @@ export default function App() {
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        <Footer />
       </AuthProvider>
     </BrowserRouter>
   )

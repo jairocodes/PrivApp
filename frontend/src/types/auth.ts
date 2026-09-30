@@ -20,6 +20,7 @@ export interface RegisterRequest {
   nombre: string
   email: string
   password: string
+  acepta_aviso: boolean
 }
 
 export interface TokenResponse {
@@ -32,6 +33,6 @@ export interface AuthContextValue {
   token: string | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (nombre: string, email: string, password: string) => Promise<void>
+  register: (nombre: string, email: string, password: string, aceptaAviso: boolean) => Promise<void>
   logout: () => void
 }

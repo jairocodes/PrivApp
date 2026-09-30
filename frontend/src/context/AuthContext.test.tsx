@@ -62,12 +62,13 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => useAuth(), { wrapper: envoltorio })
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-    await act(() => result.current.register('Ana', 'ana@privapp.test', 'Segura123'))
+    await act(() => result.current.register('Ana', 'ana@privapp.test', 'Segura123', true))
 
     expect(authApi.register).toHaveBeenCalledWith({
       nombre: 'Ana',
       email: 'ana@privapp.test',
       password: 'Segura123',
+      acepta_aviso: true,
     })
     expect(localStorage.getItem('access_token')).toBe('token-registro')
     expect(result.current.user).toEqual(USUARIO)

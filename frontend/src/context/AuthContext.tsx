@@ -36,8 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const register = useCallback(
-    async (nombre: string, email: string, password: string) => {
-      const res = await authApi.register({ nombre, email, password })
+    async (nombre: string, email: string, password: string, aceptaAviso: boolean) => {
+      const res = await authApi.register({ nombre, email, password, acepta_aviso: aceptaAviso })
       const { access_token } = res.data
       localStorage.setItem('access_token', access_token)
       setToken(access_token)

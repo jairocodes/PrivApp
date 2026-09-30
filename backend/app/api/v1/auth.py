@@ -24,7 +24,7 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """Registra un nuevo usuario y devuelve un token JWT."""
-    _, token = await register_user(db, body.nombre, body.email, body.password)
+    _, token = await register_user(db, body.nombre, body.email, body.password, body.acepta_aviso)
     return TokenResponse(access_token=token)
 
 

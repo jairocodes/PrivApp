@@ -10,6 +10,7 @@ interface FormState {
   email: string
   password: string
   confirmPassword: string
+  aceptaAviso: boolean
 }
 
 interface FormErrors {
@@ -17,6 +18,7 @@ interface FormErrors {
   email?: string
   password?: string
   confirmPassword?: string
+  aceptaAviso?: string
   general?: string
 }
 
@@ -29,6 +31,7 @@ export default function RegisterForm() {
     email: '',
     password: '',
     confirmPassword: '',
+    aceptaAviso: false,
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -45,6 +48,9 @@ export default function RegisterForm() {
     if (form.password !== form.confirmPassword)
       newErrors.confirmPassword = 'Las contraseñas no coinciden.'
 
+    if (!form.aceptaAviso)
+      newErrors.aceptaAviso = 'Debes aceptar el aviso de privacidad para registrarte.'
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -56,7 +62,7 @@ export default function RegisterForm() {
     setIsLoading(true)
     setErrors({})
     try {
-      await register(form.nombre.trim(), form.email, form.password)
+      await register(form.nombre.trim(), form.email, form.password, form.aceptaAviso)
       navigate('/dashboard')
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
@@ -128,6 +134,31 @@ export default function RegisterForm() {
         error={errors.confirmPassword}
         placeholder="Repite tu contraseña"
       />
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="aceptaAviso" className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            id="aceptaAviso"
+            checked={form.aceptaAviso}
+            onChange={(e) => setForm({ ...form, aceptaAviso: e.target.checked })}
+            aria-invalid={Boolean(errors.aceptaAviso)}
+            className="mt-0.5"
+          />
+          <span>
+            He leído y acepto el{' '}
+            <Link
+              to="/aviso-privacidad"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline font-medium"
+            >
+              aviso de privacidad
+            </Link>
+          </span>
+        </label>
+        {errors.aceptaAviso && <p className="text-sm text-red-600">{errors.aceptaAviso}</p>}
+      </div>
 
       <Button type="submit" isLoading={isLoading} className="w-full mt-2">
         Crear cuenta
