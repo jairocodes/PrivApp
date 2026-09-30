@@ -45,6 +45,10 @@ class RepositorioUsuarios:
         user.nombre = nombre
         await self.db.flush()
 
+    async def actualizar_password(self, user: User, hashed_password: str) -> None:
+        user.hashed_password = hashed_password
+        await self.db.flush()
+
     async def cambiar_estado(self, user: User, activo: bool) -> None:
         user.is_active = activo
         await self.db.flush()

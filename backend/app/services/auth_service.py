@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import (
     AvisoNoAceptadoError,
     CredencialesInvalidasError,
+    PasswordActualIncorrectaError,
+    PasswordRepetidaError,
     UsuarioNoEncontradoError,
     UsuarioYaExisteError,
 )
@@ -96,3 +98,25 @@ async def actualizar_perfil(db: AsyncSession, user: User, nombre: str) -> User:
     await RepositorioUsuarios(db).actualizar_perfil(user, nombre)
     logger.info("Perfil actualizado: id=%s", user.id)
     return user
+
+
+async def cambiar_password(
+    db: AsyncSession,
+    user: User,
+    password_actual: str,
+    password_nueva: str,
+) -> str:
+    """Cambia la contraseña, invalida todas las sesiones del usuario y devuelve
+    un token nuevo para que la sesión desde la que se hizo el cambio continúe."""
+    if not verify_password(password_actual, user.hashed_password):
+        logger.warning("Cambio de contraseña rechazado (actual incorrecta): id=%s", user.id)
+        raise PasswordActualIncorrectaError()
+    if verify_password(password_nueva, user.hashed_password):
+        raise PasswordRepetidaError()
+
+    repo = RepositorioUsuarios(db)
+    await repo.actualizar_password(user, hash_password(password_nueva))
+    await repo.invalidar_sesiones(user)
+    logger.info("Contraseña cambiada y sesiones invalidadas: id=%s", user.id)
+    # Se emite después de invalidar: su 'iat' es posterior a sessions_valid_from.
+    return create_access_token(str(user.id), user.role)

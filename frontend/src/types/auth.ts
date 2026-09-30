@@ -23,6 +23,12 @@ export interface RegisterRequest {
   acepta_aviso: boolean
 }
 
+export interface CambioPasswordRequest {
+  password_actual: string
+  password_nueva: string
+  confirmar_password: string
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: string
@@ -36,4 +42,5 @@ export interface AuthContextValue {
   register: (nombre: string, email: string, password: string, aceptaAviso: boolean) => Promise<void>
   logout: () => void
   actualizarPerfil: (nombre: string) => Promise<void>
+  cambiarPassword: (datos: CambioPasswordRequest) => Promise<void>
 }

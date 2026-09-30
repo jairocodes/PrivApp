@@ -1,4 +1,4 @@
-"""Router de autenticación — registro, login, logout, consulta y edición del perfil."""
+"""Router de autenticación — registro, login, logout, perfil y cambio de contraseña."""
 
 import time
 
@@ -12,12 +12,18 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     ActualizarPerfilRequest,
+    CambioPasswordRequest,
     LoginRequest,
     RegisterRequest,
     TokenResponse,
     UserResponse,
 )
-from app.services.auth_service import actualizar_perfil, authenticate_user, register_user
+from app.services.auth_service import (
+    actualizar_perfil,
+    authenticate_user,
+    cambiar_password,
+    register_user,
+)
 
 router = APIRouter()
 
@@ -73,3 +79,17 @@ async def editar_perfil(
 ):
     """Actualiza el nombre del usuario autenticado; el correo no es editable."""
     return await actualizar_perfil(db, current_user, body.nombre)
+
+
+@router.post("/change-password", response_model=TokenResponse)
+@limiter.limit("5/minute")
+async def change_password(
+    request: Request,
+    body: CambioPasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cambia la contraseña: cierra todas las sesiones y devuelve un token nuevo
+    para la sesión actual."""
+    token = await cambiar_password(db, current_user, body.password_actual, body.password_nueva)
+    return TokenResponse(access_token=token)

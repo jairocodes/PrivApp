@@ -45,6 +45,22 @@ class AvisoNoAceptadoError(HTTPException):
         )
 
 
+class PasswordActualIncorrectaError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta.",
+        )
+
+
+class PasswordRepetidaError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La nueva contraseña debe ser distinta de la actual.",
+        )
+
+
 class AccesoDenegadoError(HTTPException):
     def __init__(self):
         super().__init__(
