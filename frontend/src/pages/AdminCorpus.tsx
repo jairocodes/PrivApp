@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { adminApi } from '@/api/admin'
+import FormCargaDocumento from '@/components/admin/FormCargaDocumento'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Navbar from '@/components/common/Navbar'
-import type { DocumentoCorpus } from '@/types/admin'
+import type { DocumentoCargado, DocumentoCorpus } from '@/types/admin'
 
 export const ETIQUETA_JURISDICCION: Record<string, string> = {
   guatemala: 'Guatemala',
@@ -42,6 +43,12 @@ export default function AdminCorpus() {
     cargar()
   }, [])
 
+  const agregarCargado = ({ fragmentos_insertados: _i, fragmentos_duplicados: _d, ...documento }: DocumentoCargado) => {
+    setDocumentos((actuales) =>
+      [...actuales, documento].sort((a, b) => a.documento_fuente.localeCompare(b.documento_fuente)),
+    )
+  }
+
   const confirmarCambio = async () => {
     if (!pendiente) return
     setProcesando(true)
@@ -74,6 +81,8 @@ export default function AdminCorpus() {
           </Link>
           <h1 className="text-xl font-bold text-gray-900">Corpus normativo</h1>
         </div>
+
+        <FormCargaDocumento onCargado={agregarCargado} />
 
         {cargando && <p className="text-sm text-gray-500 text-center py-10">Cargando documentos...</p>}
         {error && !cargando && (

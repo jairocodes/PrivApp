@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -95,6 +95,23 @@ describe('AdminCorpus', () => {
 
     expect(adminApi.cambiarEstadoDocumento).toHaveBeenCalledWith('Decreto 57-2008.pdf', true)
     expect(await screen.findByRole('button', { name: 'Desactivar Decreto 57-2008.pdf' })).toBeInTheDocument()
+  })
+
+  it('agrega a la lista el documento recién cargado', async () => {
+    vi.mocked(adminApi.cargarDocumento).mockResolvedValue({
+      data: { ...RGPD, documento_fuente: 'Acuerdo nuevo.pdf', fragmentos: 12, fragmentos_insertados: 12, fragmentos_duplicados: 0 },
+    } as Awaited<ReturnType<typeof adminApi.cargarDocumento>>)
+    renderPantalla()
+    await screen.findByText('RGPD.pdf')
+
+    fireEvent.change(screen.getByLabelText(/Archivo \(PDF o TXT/), {
+      target: { files: [new File(['%PDF-1.4'], 'Acuerdo nuevo.pdf', { type: 'application/pdf' })] },
+    })
+    await userEvent.selectOptions(screen.getByLabelText('Jurisdicción'), 'internacional')
+    await userEvent.click(screen.getByRole('button', { name: 'Cargar documento' }))
+
+    const nombres = (await screen.findAllByRole('listitem')).map((li) => li.querySelector('p')?.textContent)
+    expect(nombres).toEqual(['Acuerdo nuevo.pdf', 'Decreto 57-2008.pdf', 'RGPD.pdf'])
   })
 
   it('cancelar no cambia el estado', async () => {
