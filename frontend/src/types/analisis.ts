@@ -73,3 +73,15 @@ export interface FiltrosHistorial {
   desde?: string
   hasta?: string
 }
+
+export interface DistribucionNiveles {
+  bajo: number
+  medio: number
+  alto: number
+}
+
+export interface EstadisticasPersonales {
+  total: number
+  por_nivel: DistribucionNiveles
+  puntaje_promedio: number
+}
