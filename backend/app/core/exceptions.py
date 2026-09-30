@@ -37,6 +37,14 @@ class TokenInvalidoError(HTTPException):
         )
 
 
+class AvisoNoAceptadoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Debes aceptar el aviso de privacidad para registrarte.",
+        )
+
+
 class AccesoDenegadoError(HTTPException):
     def __init__(self):
         super().__init__(

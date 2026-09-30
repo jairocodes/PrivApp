@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
+    AvisoNoAceptadoError,
     CredencialesInvalidasError,
     UsuarioNoEncontradoError,
     UsuarioYaExisteError,
@@ -33,7 +34,13 @@ async def register_user(
     nombre: str,
     email: str,
     password: str,
+    acepta_aviso: bool,
 ) -> tuple[User, str]:
+    # La casilla ya se valida en el esquema; el servicio no registra a nadie
+    # sin aceptación aunque lo llame otro punto de entrada.
+    if not acepta_aviso:
+        raise AvisoNoAceptadoError()
+
     existing = await get_user_by_email(db, email)
     if existing:
         raise UsuarioYaExisteError()
@@ -44,8 +51,6 @@ async def register_user(
         hashed_password=hash_password(password),
         # El registro público nunca asigna otro rol.
         role=ROL_USUARIO,
-        # Provisional: la aceptación explícita del aviso (casilla validada en
-        # el servidor) se incorpora al registro junto con la página del aviso.
         privacy_accepted_at=datetime.now(timezone.utc),
     )
     RepositorioUsuarios(db).agregar(user)

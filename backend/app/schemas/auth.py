@@ -7,6 +7,14 @@ class RegisterRequest(BaseModel):
     nombre: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=100)
+    acepta_aviso: bool
+
+    @field_validator("acepta_aviso")
+    @classmethod
+    def validate_acepta_aviso(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("Debes aceptar el aviso de privacidad para registrarte.")
+        return v
 
     @field_validator("password")
     @classmethod
