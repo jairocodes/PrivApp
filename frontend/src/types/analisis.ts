@@ -13,6 +13,8 @@ export interface Hallazgo {
   descripcion: string
   nivel: NivelRiesgo
   fuentes_normativas: FuenteNormativa[]
+  // Ausente en los análisis realizados antes de incorporar la clasificación.
+  tipo_tratamiento?: string | null
 }
 
 export interface SeccionAnalizada {

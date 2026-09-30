@@ -11,6 +11,7 @@ export const seccionEjemplo: SeccionAnalizada = {
       tipo: 'riesgo',
       descripcion: 'Tus datos pueden llegar a empresas que no conoces.',
       nivel: 'alto',
+      tipo_tratamiento: 'Transferencia de datos a terceros',
       fuentes_normativas: [
         {
           documento: 'RGPD',

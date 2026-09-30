@@ -14,11 +14,40 @@ class FuenteNormativa(BaseModel):
     fragmento_relevante: str
 
 
+# Lista cerrada del tipo de tratamiento de datos (RN-08). Los textos deben ser
+# exactamente estos: el cuestionario posprueba usa cuatro de ellos.
+TIPOS_TRATAMIENTO: tuple[str, ...] = (
+    "Recopilación de datos personales",
+    "Uso y finalidad de los datos",
+    "Transferencia de datos a terceros",
+    "Tiempo de conservación de los datos",
+    "Seguridad de los datos",
+    "Derechos del usuario sobre sus datos",
+    "Cambios en la política",
+    "Otro",
+)
+TIPO_TRATAMIENTO_OTRO = "Otro"
+
+TipoTratamiento = Literal[
+    "Recopilación de datos personales",
+    "Uso y finalidad de los datos",
+    "Transferencia de datos a terceros",
+    "Tiempo de conservación de los datos",
+    "Seguridad de los datos",
+    "Derechos del usuario sobre sus datos",
+    "Cambios en la política",
+    "Otro",
+]
+
+
 class Hallazgo(BaseModel):
     tipo: Literal["riesgo", "transparencia", "neutral"]
     descripcion: str
     nivel: Literal["bajo", "medio", "alto"]
     fuentes_normativas: list[FuenteNormativa]
+    # None solo en análisis realizados antes de incorporar la clasificación;
+    # toda respuesta nueva del modelo debe traerlo (ver _parsear_seccion).
+    tipo_tratamiento: TipoTratamiento | None = None
 
 
 class SeccionAnalizada(BaseModel):

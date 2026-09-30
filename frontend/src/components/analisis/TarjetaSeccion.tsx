@@ -84,6 +84,15 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <NivelChip nivel={hallazgo.nivel} />
                         <span className="text-xs text-gray-500 capitalize">{hallazgo.tipo}</span>
+                        {hallazgo.tipo_tratamiento && (
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium"
+                            title="Tipo de tratamiento de datos"
+                          >
+                            <span className="sr-only">Tipo de tratamiento: </span>
+                            {hallazgo.tipo_tratamiento}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-800 leading-relaxed">{hallazgo.descripcion}</p>
                     </div>
