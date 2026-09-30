@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
+from app.core.exceptions import UsuarioNoEncontradoError
 from app.core.security import create_access_token, decode_access_token
 from app.database import get_db
 from app.models.user import ROL_ADMINISTRADOR, ROL_USUARIO, User
+from app.services.auth_service import promover_a_administrador
 
 
 USUARIO_BASE = {
@@ -137,3 +139,18 @@ class TestRutasDeAdministrador:
     async def test_sin_token_se_rechaza(self, cliente_con_ruta_admin):
         r = await cliente_con_ruta_admin.get("/solo-admin")
         assert r.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Promoción a administrador (fuera de la API)
+# ---------------------------------------------------------------------------
+
+class TestPromoverAdministrador:
+    async def test_promueve_a_un_usuario_existente(self, db_session, seed_user):
+        user = await promover_a_administrador(db_session, seed_user.email)
+        assert user.id == seed_user.id
+        assert user.role == ROL_ADMINISTRADOR
+
+    async def test_correo_inexistente_lanza_error(self, db_session):
+        with pytest.raises(UsuarioNoEncontradoError):
+            await promover_a_administrador(db_session, "nadie@privapp.test")

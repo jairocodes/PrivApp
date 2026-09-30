@@ -11,7 +11,7 @@ from app.core.exceptions import (
     UsuarioYaExisteError,
 )
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.user import ROL_USUARIO, User
+from app.models.user import ROL_ADMINISTRADOR, ROL_USUARIO, User
 from app.repositories.usuarios import RepositorioUsuarios
 
 logger = logging.getLogger(__name__)
@@ -72,3 +72,15 @@ async def authenticate_user(
     token = create_access_token(str(user.id), user.role)
     logger.info("Login exitoso: id=%s", user.id)
     return user, token
+
+
+async def promover_a_administrador(db: AsyncSession, email: str) -> User:
+    """Asigna el rol administrador a un usuario existente. Se usa solo desde
+    scripts/promover_admin.py: ninguna ruta de la API permite elevar roles."""
+    user = await get_user_by_email(db, email)
+    if not user:
+        raise UsuarioNoEncontradoError()
+    user.role = ROL_ADMINISTRADOR
+    await db.flush()
+    logger.info("Usuario promovido a administrador: id=%s", user.id)
+    return user
