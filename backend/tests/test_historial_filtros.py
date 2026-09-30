@@ -192,3 +192,21 @@ class TestFiltroPorTexto:
     async def test_rechaza_textos_demasiado_largos(self, client, seed_user):
         r = await client.get("/api/analisis", params={"q": "x" * 101}, headers=_auth(seed_user))
         assert r.status_code == 422
+
+
+class TestBusquedaSinAcentos:
+    @pytest.mark.parametrize("consulta", ["politica", "POLÍTICA", "Politíca", "conservacion"])
+    async def test_no_distingue_acentos(self, client, db_session, seed_user, consulta):
+        await _con_texto(db_session, seed_user, "Política de conservación de datos", "encontrado")
+        await _con_texto(db_session, seed_user, "Términos de uso", "otro")
+
+        datos = await _historial(client, seed_user, q=consulta)
+
+        assert [i["comentario_breve"] for i in datos["items"]] == ["encontrado"]
+
+    async def test_tambien_en_el_comentario(self, client, db_session, seed_user):
+        await _con_texto(db_session, seed_user, "texto", "Se detectó información sensible")
+
+        datos = await _historial(client, seed_user, q="deteCTO informacion")
+
+        assert datos["total"] == 1

@@ -106,3 +106,22 @@ class TestFiltroPorTextoPg:
         assert await comentarios("tiktok") == ["Comentario común"]
         assert await comentarios("hallazgos") == ["Presenta HALLAZGOS graves"]
         assert await comentarios("100%") == []
+
+
+class TestBusquedaSinAcentosPg:
+    async def test_unaccent_en_el_texto_y_en_el_comentario(self, db_pg):
+        ana = await _usuario(db_pg, "ana@privapp.test")
+        db_pg.add_all([
+            _analisis(ana.id, "alto", "Uno", texto="Política de conservación"),
+            _analisis(ana.id, "bajo", "Se detectó información sensible", texto="Otra"),
+        ])
+        await db_pg.commit()
+        repo = RepositorioAnalisis(db_pg)
+
+        async def comentarios(texto):
+            registros = await repo.listar_completados_de_usuario(ana.id, 10, 0, FiltrosHistorial(texto=texto))
+            return sorted(r.resultado["resumen_general"]["comentario_breve"] for r in registros)
+
+        assert await comentarios("politica de conservacion") == ["Uno"]
+        assert await comentarios("POLÍTICA") == ["Uno"]
+        assert await comentarios("detecto informacion") == ["Se detectó información sensible"]

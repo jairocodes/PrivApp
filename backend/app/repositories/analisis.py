@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import AnalysisTemp
-from app.repositories.json_sql import json_texto
+from app.repositories.json_sql import json_texto, sin_acentos
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class FiltrosHistorial:
     nivel: str | None = None
     desde: datetime | None = None  # inclusive, con zona horaria
     hasta: datetime | None = None  # inclusive, con zona horaria
-    texto: str | None = None  # en el fragmento de la política o el comentario del resumen
+    texto: str | None = None  # en el fragmento de la política o el comentario; sin distinguir acentos
 
 
 def _patron_like(texto: str) -> str:
@@ -38,11 +38,12 @@ def _aplicar_filtros(consulta: Select, filtros: FiltrosHistorial | None) -> Sele
     if filtros.hasta:
         consulta = consulta.where(AnalysisTemp.created_at <= filtros.hasta)
     if filtros.texto:
-        patron = _patron_like(filtros.texto)
+        # Se quitan los acentos de ambos lados: "politica" encuentra "Política".
+        patron = sin_acentos(literal(_patron_like(filtros.texto)))
         comentario = json_texto(AnalysisTemp.resultado, "resumen_general", "comentario_breve")
         consulta = consulta.where(or_(
-            AnalysisTemp.texto_original.ilike(patron, escape="\\"),
-            comentario.ilike(patron, escape="\\"),
+            sin_acentos(AnalysisTemp.texto_original).ilike(patron, escape="\\"),
+            sin_acentos(comentario).ilike(patron, escape="\\"),
         ))
     return consulta
 
