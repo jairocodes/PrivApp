@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { AuthProvider } from './AuthContext'
 
 vi.mock('@/api/auth', () => ({
-  authApi: { login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn(), actualizarPerfil: vi.fn(), cambiarPassword: vi.fn() },
+  authApi: { login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn(), actualizarPerfil: vi.fn(), cambiarPassword: vi.fn(), eliminarCuenta: vi.fn() },
 }))
 
 const USUARIO = { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }
@@ -62,13 +62,14 @@ describe('AuthProvider', () => {
     const { result } = renderHook(() => useAuth(), { wrapper: envoltorio })
     await waitFor(() => expect(result.current.isLoading).toBe(false))
 
-    await act(() => result.current.register('Ana', 'ana@privapp.test', 'Segura123', true))
+    await act(() => result.current.register('Ana', 'ana@privapp.test', 'Segura123', true, true))
 
     expect(authApi.register).toHaveBeenCalledWith({
       nombre: 'Ana',
       email: 'ana@privapp.test',
       password: 'Segura123',
       acepta_aviso: true,
+      declara_edad: true,
     })
     expect(localStorage.getItem('access_token')).toBe('token-registro')
     expect(result.current.user).toEqual(USUARIO)
@@ -114,6 +115,31 @@ describe('AuthProvider', () => {
     expect(localStorage.getItem('access_token')).toBe('token-tras-cambio')
     expect(result.current.token).toBe('token-tras-cambio')
     await waitFor(() => expect(result.current.user).toEqual(USUARIO))
+  })
+
+  it('eliminarCuenta olvida la sesión si el servidor la elimina', async () => {
+    localStorage.setItem('access_token', 'token-guardado')
+    vi.mocked(authApi.eliminarCuenta).mockResolvedValue({} as never)
+    const { result } = renderHook(() => useAuth(), { wrapper: envoltorio })
+    await waitFor(() => expect(result.current.user).toEqual(USUARIO))
+
+    await act(() => result.current.eliminarCuenta('MiClave123'))
+
+    expect(authApi.eliminarCuenta).toHaveBeenCalledWith('MiClave123')
+    expect(localStorage.getItem('access_token')).toBeNull()
+    expect(result.current.user).toBeNull()
+  })
+
+  it('si la eliminación falla, la sesión sigue abierta', async () => {
+    localStorage.setItem('access_token', 'token-guardado')
+    vi.mocked(authApi.eliminarCuenta).mockRejectedValue({ response: { status: 400 } })
+    const { result } = renderHook(() => useAuth(), { wrapper: envoltorio })
+    await waitFor(() => expect(result.current.user).toEqual(USUARIO))
+
+    await expect(result.current.eliminarCuenta('Otra')).rejects.toBeTruthy()
+
+    expect(localStorage.getItem('access_token')).toBe('token-guardado')
+    expect(result.current.user).toEqual(USUARIO)
   })
 
   it('useAuth exige estar dentro del proveedor', () => {

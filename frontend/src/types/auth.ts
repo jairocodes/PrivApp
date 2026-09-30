@@ -21,6 +21,7 @@ export interface RegisterRequest {
   email: string
   password: string
   acepta_aviso: boolean
+  declara_edad: boolean
 }
 
 export interface CambioPasswordRequest {
@@ -39,7 +40,13 @@ export interface AuthContextValue {
   token: string | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (nombre: string, email: string, password: string, aceptaAviso: boolean) => Promise<void>
+  register: (
+    nombre: string,
+    email: string,
+    password: string,
+    aceptaAviso: boolean,
+    declaraEdad: boolean,
+  ) => Promise<void>
   logout: () => void
   actualizarPerfil: (nombre: string) => Promise<void>
   cambiarPassword: (datos: CambioPasswordRequest) => Promise<void>

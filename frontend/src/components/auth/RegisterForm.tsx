@@ -12,6 +12,7 @@ interface FormState {
   password: string
   confirmPassword: string
   aceptaAviso: boolean
+  declaraEdad: boolean
 }
 
 interface FormErrors {
@@ -20,6 +21,7 @@ interface FormErrors {
   password?: string
   confirmPassword?: string
   aceptaAviso?: string
+  declaraEdad?: string
   general?: string
 }
 
@@ -33,6 +35,7 @@ export default function RegisterForm() {
     password: '',
     confirmPassword: '',
     aceptaAviso: false,
+    declaraEdad: false,
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -52,6 +55,10 @@ export default function RegisterForm() {
     if (!form.aceptaAviso)
       newErrors.aceptaAviso = 'Debes aceptar el aviso de privacidad para registrarte.'
 
+    if (!form.declaraEdad)
+      newErrors.declaraEdad =
+        'Debes declarar que eres mayor de 18 años o que cuentas con el consentimiento de tu madre, padre o persona encargada.'
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -63,7 +70,7 @@ export default function RegisterForm() {
     setIsLoading(true)
     setErrors({})
     try {
-      await register(form.nombre.trim(), form.email, form.password, form.aceptaAviso)
+      await register(form.nombre.trim(), form.email, form.password, form.aceptaAviso, form.declaraEdad)
       navigate('/dashboard')
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
@@ -161,6 +168,26 @@ export default function RegisterForm() {
           </span>
         </label>
         {errors.aceptaAviso && <p className="text-sm text-red-600">{errors.aceptaAviso}</p>}
+      </div>
+
+      {/* El contrato de servicios de OpenAI exige el consentimiento de la madre,
+          el padre o la persona encargada para que menores usen sus servicios. */}
+      <div className="flex flex-col gap-1">
+        <label htmlFor="declaraEdad" className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            id="declaraEdad"
+            checked={form.declaraEdad}
+            onChange={(e) => setForm({ ...form, declaraEdad: e.target.checked })}
+            aria-invalid={Boolean(errors.declaraEdad)}
+            className="mt-0.5"
+          />
+          <span>
+            Soy mayor de 18 años o cuento con el consentimiento de mi madre, padre o persona
+            encargada para usar PrivApp
+          </span>
+        </label>
+        {errors.declaraEdad && <p className="text-sm text-red-600">{errors.declaraEdad}</p>}
       </div>
 
       <Button type="submit" isLoading={isLoading} className="w-full mt-2">
