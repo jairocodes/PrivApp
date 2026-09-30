@@ -898,10 +898,16 @@ class TestSegundaPasadaDeRespaldo:
         assert "[Hallazgo 2]" in prompt
 
     async def test_sin_pendientes_no_hay_segunda_llamada(self, db_session, seed_user):
-        recuperar = AsyncMock(return_value=FRAGMENTOS)
-        _, llm = await self._analizar(db_session, seed_user, [_respuesta_con_fragmentos([1])], recuperar)
+        from app.services.analisis_service import SYSTEM_PROMPT_RESPALDO
 
-        assert llm.generar_analisis.await_count == 1
+        recuperar = AsyncMock(return_value=FRAGMENTOS)
+        recomendaciones = json.dumps({"recomendaciones": ["Revisa qué datos compartes."]})
+        _, llm = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([1]), recomendaciones], recuperar,
+        )
+
+        sistemas = [llamada.args[0] for llamada in llm.generar_analisis.await_args_list]
+        assert SYSTEM_PROMPT_RESPALDO not in sistemas
         assert recuperar.await_count == 1
 
     @pytest.mark.parametrize("respuesta", [
@@ -929,3 +935,124 @@ class TestSegundaPasadaDeRespaldo:
 
         assert seccion["hallazgos"][0]["tipo"] == "riesgo"
         assert seccion["hallazgos"][0]["sin_respaldo"] is True
+
+
+# ---------------------------------------------------------------------------
+# Recomendaciones prácticas redactadas a partir de los riesgos encontrados
+# ---------------------------------------------------------------------------
+
+def _seccion_con(*hallazgos):
+    from app.schemas.analysis import Hallazgo, SeccionAnalizada
+
+    return SeccionAnalizada(
+        categoria_opp115="General", titulo="Sección", texto_original="texto",
+        hallazgos=[
+            Hallazgo(
+                tipo=tipo, descripcion=desc, nivel=nivel, fuentes_normativas=[],
+                tipo_tratamiento="Transferencia de datos a terceros", sin_respaldo=sin_respaldo,
+            )
+            for tipo, nivel, desc, sin_respaldo in hallazgos
+        ],
+    )
+
+
+class TestRecomendacionesPracticas:
+    async def _generar(self, secciones, respuesta):
+        from app.services.analisis_service import _generar_recomendaciones_practicas
+
+        llm = MagicMock()
+        llm.generar_analisis = AsyncMock(
+            side_effect=respuesta if isinstance(respuesta, Exception) else [respuesta]
+        )
+        return await _generar_recomendaciones_practicas(llm, secciones, 1), llm
+
+    async def test_devuelve_las_recomendaciones_del_modelo(self):
+        from app.services.analisis_service import SYSTEM_PROMPT_RECOMENDACIONES
+
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos con anunciantes.", False))]
+        respuesta = json.dumps({"recomendaciones": [
+            "Revisa la configuración de privacidad  y limita lo que compartes.",
+            "Pide a la plataforma que elimine los datos que ya no uses.",
+        ]})
+
+        recomendaciones, llm = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == [
+            "Revisa la configuración de privacidad y limita lo que compartes.",
+            "Pide a la plataforma que elimine los datos que ya no uses.",
+        ]
+        sistema, prompt, _ = llm.generar_analisis.await_args.args
+        assert sistema == SYSTEM_PROMPT_RECOMENDACIONES
+        assert "[alto] (Transferencia de datos a terceros) Comparten tus datos con anunciantes." in prompt
+
+    async def test_prioriza_los_altos_y_los_respaldados_y_omite_lo_demas(self):
+        from app.services.analisis_service import _hallazgos_para_recomendaciones
+
+        secciones = [_seccion_con(
+            ("riesgo", "medio", "medio-respaldado", False),
+            ("riesgo", "alto", "alto-sin-respaldo", True),
+            ("riesgo", "bajo", "bajo", False),
+            ("transparencia", "alto", "transparencia", False),
+            ("riesgo", "alto", "alto-respaldado", False),
+        )]
+
+        descripciones = [h.descripcion for h in _hallazgos_para_recomendaciones(secciones)]
+
+        assert descripciones == ["alto-respaldado", "alto-sin-respaldo", "medio-respaldado"]
+
+    async def test_sin_riesgos_altos_ni_medios_no_llama_al_modelo(self):
+        secciones = [_seccion_con(("riesgo", "bajo", "bajo", False))]
+
+        recomendaciones, llm = await self._generar(secciones, "{}")
+
+        assert llm.generar_analisis.await_count == 0
+        assert recomendaciones[0].startswith("Esta política parece razonablemente transparente.")
+
+    @pytest.mark.parametrize("respuesta", [
+        "esto no es json",
+        json.dumps({"recomendaciones": "una sola"}),
+        json.dumps({"recomendaciones": [3, "", "x" * 401]}),
+        json.dumps({"otra": []}),
+    ])
+    async def test_una_respuesta_invalida_usa_las_basicas(self, respuesta):
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos.", False))]
+
+        recomendaciones, _ = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == ["En 'Sección': Comparten tus datos."]
+
+    async def test_un_error_del_modelo_usa_las_basicas(self):
+        from app.core.exceptions import LLMError
+
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos.", False))]
+
+        recomendaciones, _ = await self._generar(secciones, LLMError("caído"))
+
+        assert recomendaciones == ["En 'Sección': Comparten tus datos."]
+
+    async def test_como_maximo_cinco_sin_repetir(self):
+        secciones = [_seccion_con(("riesgo", "alto", "Riesgo.", False))]
+        respuesta = json.dumps({"recomendaciones": ["Uno.", "Uno.", "Dos.", "Tres.", "Cuatro.", "Cinco.", "Seis."]})
+
+        recomendaciones, _ = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == ["Uno.", "Dos.", "Tres.", "Cuatro.", "Cinco."]
+
+    async def test_el_analisis_completo_guarda_las_recomendaciones_practicas(self, db_session, seed_user):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Terceros\n" + "Compartimos sus datos con socios comerciales. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        recomendaciones = json.dumps({"recomendaciones": ["Revisa con quién compartes tus datos."]})
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", AsyncMock(return_value=FRAGMENTOS)), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = AsyncMock(
+                side_effect=[_respuesta_con_fragmentos([1]), recomendaciones]
+            )
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+
+        assert registro.estado == "completado"
+        assert registro.resultado["recomendaciones"] == ["Revisa con quién compartes tus datos."]
+
