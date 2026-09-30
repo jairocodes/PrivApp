@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LogOut, Settings, ShieldCheck } from 'lucide-react'
+import { LogOut, Settings, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { esAdministrador } from '@/types/auth'
 
@@ -25,7 +25,14 @@ export default function Navbar() {
                 <span>Administración</span>
               </Link>
             )}
-            <span className="text-sm text-gray-600 hidden sm:block">{user.nombre}</span>
+            <Link
+              to="/perfil"
+              aria-label="Mi perfil"
+              className="flex items-center gap-1 text-sm text-gray-600 hover:text-blue-600 transition-colors"
+            >
+              <UserRound size={16} aria-hidden="true" />
+              <span className="hidden sm:block">{user.nombre}</span>
+            </Link>
             <button
               onClick={logout}
               aria-label="Cerrar sesión"

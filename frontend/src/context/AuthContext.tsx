@@ -47,6 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const actualizarPerfil = useCallback(async (nombre: string) => {
+    const res = await authApi.actualizarPerfil(nombre)
+    setUser(res.data)
+  }, [])
+
   const logout = useCallback(() => {
     authApi.logout().catch(() => {})
     localStorage.removeItem('access_token')
@@ -55,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, actualizarPerfil }}>
       {children}
     </AuthContext.Provider>
   )

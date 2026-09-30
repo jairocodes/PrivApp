@@ -27,6 +27,11 @@ describe('Navbar', () => {
     expect(auth.logout).toHaveBeenCalled()
   })
 
+  it('enlaza al perfil del usuario', () => {
+    renderNavbar(crearAuthValue({ user: usuarioComun, token: 't' }))
+    expect(screen.getByRole('link', { name: 'Mi perfil' })).toHaveAttribute('href', '/perfil')
+  })
+
   it('no muestra la administración a un usuario común', () => {
     renderNavbar(crearAuthValue({ user: usuarioComun, token: 't' }))
     expect(screen.queryByRole('link', { name: 'Administración' })).not.toBeInTheDocument()

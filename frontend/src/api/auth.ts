@@ -13,4 +13,7 @@ export const authApi = {
 
   me: () =>
     apiClient.get<User>('/api/auth/me'),
+
+  actualizarPerfil: (nombre: string) =>
+    apiClient.patch<User>('/api/auth/me', { nombre }),
 }

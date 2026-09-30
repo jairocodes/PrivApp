@@ -12,6 +12,7 @@ import Historial from '@/pages/Historial'
 import Admin from '@/pages/Admin'
 import AdminUsuarios from '@/pages/AdminUsuarios'
 import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
+import Perfil from '@/pages/Perfil'
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/analizar" element={<Ingesta />} />
             <Route path="/resultados/:id" element={<Resultados />} />
             <Route path="/historial" element={<Historial />} />
+            <Route path="/perfil" element={<Perfil />} />
           </Route>
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<Admin />} />
