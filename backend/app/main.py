@@ -1,6 +1,7 @@
 """Punto de entrada principal de la aplicación FastAPI."""
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Backend iniciado. Entorno: %s", settings.environment)
+    yield
+    logger.info("Backend detenido.")
+
+
 app = FastAPI(
     title="Sistema de Análisis de Políticas de Privacidad",
     description=(
@@ -28,6 +37,7 @@ app = FastAPI(
     version="0.4.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Rate limiting
@@ -61,13 +71,3 @@ async def healthcheck():
         "version": "0.4.0",
         "environment": settings.environment,
     }
-
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("Backend iniciado. Entorno: %s", settings.environment)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Backend detenido.")

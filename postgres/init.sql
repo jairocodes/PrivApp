@@ -4,7 +4,7 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Las tablas relacionales (users, sessions, analysis_temp) se crean
+-- Las tablas relacionales (users, analysis_temp) se crean
 -- mediante migraciones de Alembic. Este script solo activa las extensiones
 -- necesarias y crea la tabla vectorial del corpus, que no es gestionada
 -- por el ORM sino por el script de carga del corpus.
