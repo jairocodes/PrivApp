@@ -17,6 +17,18 @@ export function validarTextoPolítica(texto: string): string | null {
   return null
 }
 
+export const TAMANO_MAXIMO_ARCHIVO = 5 * 1024 * 1024
+const EXTENSIONES_ARCHIVO = ['.pdf', '.txt']
+
+export function validarArchivo(archivo: File): string | null {
+  const nombre = archivo.name.toLowerCase()
+  if (!EXTENSIONES_ARCHIVO.some((ext) => nombre.endsWith(ext)))
+    return 'Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt).'
+  if (archivo.size > TAMANO_MAXIMO_ARCHIVO) return 'El archivo supera el tamaño máximo de 5 MB.'
+  if (archivo.size === 0) return 'El archivo está vacío.'
+  return null
+}
+
 export function validarURL(url: string): string | null {
   try {
     const parsed = new URL(url)

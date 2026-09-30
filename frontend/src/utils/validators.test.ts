@@ -3,6 +3,7 @@ import {
   MAX_TEXTO,
   MIN_TEXTO,
   contarPalabras,
+  validarArchivo,
   validarPassword,
   validarTextoPolítica,
   validarURL,
@@ -72,5 +73,24 @@ describe('validarPassword', () => {
 
   it('acepta una contraseña que cumple las reglas', () => {
     expect(validarPassword('Segura123')).toBeNull()
+  })
+})
+
+describe('validarArchivo', () => {
+  const archivo = (nombre: string, bytes: number) => new File([new Uint8Array(bytes)], nombre)
+
+  it('acepta PDF y TXT sin importar mayúsculas', () => {
+    expect(validarArchivo(archivo('politica.pdf', 10))).toBeNull()
+    expect(validarArchivo(archivo('POLITICA.TXT', 10))).toBeNull()
+  })
+
+  it('rechaza otras extensiones', () => {
+    expect(validarArchivo(archivo('politica.docx', 10))).toMatch(/Solo se aceptan/)
+  })
+
+  it('rechaza archivos vacíos o de más de 5 MB', () => {
+    expect(validarArchivo(archivo('politica.pdf', 0))).toBe('El archivo está vacío.')
+    expect(validarArchivo(archivo('politica.pdf', 5 * 1024 * 1024))).toBeNull()
+    expect(validarArchivo(archivo('politica.pdf', 5 * 1024 * 1024 + 1))).toMatch(/5 MB/)
   })
 })

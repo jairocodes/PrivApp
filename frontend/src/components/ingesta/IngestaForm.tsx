@@ -4,9 +4,15 @@ import apiClient from '@/api/client'
 import { analisisApi } from '@/api/analisis'
 import Button from '@/components/common/Button'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
-import { MAX_TEXTO, MIN_TEXTO, validarTextoPolítica } from '@/utils/validators'
+import { MAX_TEXTO, MIN_TEXTO, validarArchivo, validarTextoPolítica } from '@/utils/validators'
 
-type Pestana = 'texto' | 'url'
+type Pestana = 'texto' | 'url' | 'archivo'
+
+const ETIQUETA_PESTANA: Record<Pestana, string> = {
+  texto: 'Pegar texto',
+  url: 'Desde URL',
+  archivo: 'Desde archivo',
+}
 
 const MIN_CHARS = MIN_TEXTO
 const MAX_CHARS = MAX_TEXTO
@@ -23,6 +29,7 @@ export default function IngestaForm() {
   const [pestana, setPestana] = useState<Pestana>('texto')
   const [texto, setTexto] = useState('')
   const [url, setUrl] = useState('')
+  const [archivo, setArchivo] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [fase, setFase] = useState<'ingesta' | 'analisis' | null>(null)
@@ -48,6 +55,13 @@ export default function IngestaForm() {
       setError('Por favor ingresa una URL válida.')
       return
     }
+    if (pestana === 'archivo') {
+      const errorArchivo = archivo ? validarArchivo(archivo) : 'Selecciona un archivo PDF o TXT.'
+      if (errorArchivo) {
+        setError(errorArchivo)
+        return
+      }
+    }
 
     setLoading(true)
     try {
@@ -57,8 +71,17 @@ export default function IngestaForm() {
       if (pestana === 'texto') {
         const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/texto', { texto })
         textoProcesado = data.texto_procesado
-      } else {
+      } else if (pestana === 'url') {
         const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/url', { url: url.trim() })
+        textoProcesado = data.texto_procesado
+      } else {
+        const formulario = new FormData()
+        formulario.append('archivo', archivo as File)
+        // Sin esta cabecera axios convertiría el FormData a JSON (el cliente usa
+        // application/json por defecto); el navegador completa el separador.
+        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/archivo', formulario, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
         textoProcesado = data.texto_procesado
       }
 
@@ -100,7 +123,7 @@ export default function IngestaForm() {
 
       {/* Pestañas */}
       <div className="flex border-b border-gray-200 mb-6" role="tablist">
-        {(['texto', 'url'] as Pestana[]).map((tab) => (
+        {(['texto', 'url', 'archivo'] as Pestana[]).map((tab) => (
           <button
             key={tab}
             role="tab"
@@ -112,7 +135,7 @@ export default function IngestaForm() {
                 : 'text-gray-500 hover:text-gray-700'
               }`}
           >
-            {tab === 'texto' ? 'Pegar texto' : 'Desde URL'}
+            {ETIQUETA_PESTANA[tab]}
           </button>
         ))}
       </div>
@@ -137,6 +160,26 @@ export default function IngestaForm() {
               {chars > 0 && chars < MIN_CHARS && (
                 <span className="ml-2">(mínimo {MIN_CHARS})</span>
               )}
+            </p>
+          </div>
+        ) : pestana === 'archivo' ? (
+          <div className="mb-4">
+            <label htmlFor="archivo-politica" className="block text-sm font-medium text-gray-700 mb-1">
+              Archivo de la política (PDF o TXT, máximo 5 MB)
+            </label>
+            <input
+              id="archivo-politica"
+              type="file"
+              accept=".pdf,.txt,application/pdf,text/plain"
+              onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); if (error) setError(null) }}
+              className="w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0
+                         file:bg-blue-50 file:px-4 file:py-2 file:text-blue-700 hover:file:bg-blue-100"
+              disabled={loading}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {archivo
+                ? `${archivo.name} · ${(archivo.size / 1024).toFixed(0)} KB`
+                : 'El sistema extraerá el texto y descartará el archivo; no se guarda.'}
             </p>
           </div>
         ) : (
