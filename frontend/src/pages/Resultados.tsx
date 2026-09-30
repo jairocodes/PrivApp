@@ -5,6 +5,7 @@ import Navbar from '@/components/common/Navbar'
 import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
 import ListaRecomendaciones from '@/components/analisis/ListaRecomendaciones'
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import VistaProgreso from '@/components/analisis/VistaProgreso'
 import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
@@ -119,6 +120,15 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
         </div>
 
         <IndicadorSemaforo nivel={resumen_general.nivel_riesgo_global} size="lg" mostrarTexto />
+
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1">
+            Nivel de riesgo <AyudaGlosario termino="Nivel de riesgo" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            Puntaje de riesgo <AyudaGlosario termino="Puntaje de riesgo" />
+          </span>
+        </p>
 
         <p className="text-sm text-gray-700 leading-relaxed">{resumen_general.comentario_breve}</p>
 

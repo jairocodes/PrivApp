@@ -51,4 +51,17 @@ describe('Glosario', () => {
 
     expect(screen.getByText('No se encontraron términos para «blockchain».')).toBeInTheDocument()
   })
+
+  it('baja hasta el término indicado en la dirección', () => {
+    const desplazar = vi.fn()
+    Element.prototype.scrollIntoView = desplazar
+    render(
+      <MemoryRouter initialEntries={['/glosario#jurisdiccion']}>
+        <Glosario />
+      </MemoryRouter>,
+    )
+
+    expect(desplazar).toHaveBeenCalledTimes(1)
+    expect(desplazar.mock.contexts[0]).toHaveAttribute('id', 'jurisdiccion')
+  })
 })

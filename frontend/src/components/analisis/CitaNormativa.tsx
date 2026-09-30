@@ -1,3 +1,4 @@
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import type { FuenteNormativa, Jurisdiccion } from '@/types/analisis'
 
 interface Props {
@@ -51,8 +52,9 @@ export default function CitaNormativa({ fuente, jurisdiccion }: Props) {
         </blockquote>
       )}
       {jur === 'internacional' && (
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-400 flex items-center gap-1">
           Referencia internacional — buena práctica, no ley vigente en Guatemala.
+          <AyudaGlosario termino="Referencia internacional" />
         </p>
       )}
     </div>

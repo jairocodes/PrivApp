@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import Navbar from '@/components/common/Navbar'
 import { buscarEnGlosario } from '@/data/glosario'
 
 export default function Glosario() {
   const [consulta, setConsulta] = useState('')
   const entradas = buscarEnGlosario(consulta)
+  const { hash } = useLocation()
+
+  // Al llegar desde la ayuda de los resultados (/glosario#termino), baja hasta ese término.
+  useEffect(() => {
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView()
+  }, [hash])
 
   return (
     <div className="min-h-screen bg-gray-50">

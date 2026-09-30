@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import CitaNormativa from './CitaNormativa'
 import IndicadorSemaforo from './IndicadorSemaforo'
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import type { NivelRiesgo, SeccionAnalizada } from '@/types/analisis'
 
 interface Props {
@@ -85,12 +86,15 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
                         <NivelChip nivel={hallazgo.nivel} />
                         <span className="text-xs text-gray-500 capitalize">{hallazgo.tipo}</span>
                         {hallazgo.tipo_tratamiento && (
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium"
-                            title="Tipo de tratamiento de datos"
-                          >
-                            <span className="sr-only">Tipo de tratamiento: </span>
-                            {hallazgo.tipo_tratamiento}
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium"
+                              title="Tipo de tratamiento de datos"
+                            >
+                              <span className="sr-only">Tipo de tratamiento: </span>
+                              {hallazgo.tipo_tratamiento}
+                            </span>
+                            <AyudaGlosario termino={hallazgo.tipo_tratamiento} />
                           </span>
                         )}
                       </div>

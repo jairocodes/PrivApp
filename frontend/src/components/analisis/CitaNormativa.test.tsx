@@ -39,4 +39,9 @@ describe('CitaNormativa', () => {
     render(<CitaNormativa fuente={fuente('RGPD')} jurisdiccion="guatemala" />)
     expect(screen.getByText('Guatemala')).toBeInTheDocument()
   })
+
+  it('explica qué es una referencia internacional', () => {
+    render(<CitaNormativa fuente={fuente('RGPD')} />)
+    expect(screen.getByRole('button', { name: 'Qué significa «Referencia internacional»' })).toBeInTheDocument()
+  })
 })
