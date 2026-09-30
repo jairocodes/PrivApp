@@ -2,14 +2,21 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import apiClient from '@/api/client'
 import { analisisApi } from '@/api/analisis'
+import { ingestaApi } from '@/api/ingesta'
 import IngestaForm from './IngestaForm'
 
-vi.mock('@/api/client', () => ({ default: { post: vi.fn() } }))
+vi.mock('@/api/ingesta', () => ({
+  ingestaApi: { enviarTexto: vi.fn(), enviarURL: vi.fn(), enviarArchivo: vi.fn() },
+}))
 vi.mock('@/api/analisis', () => ({ analisisApi: { iniciar: vi.fn() } }))
 
 const TEXTO_VALIDO = 'Política de privacidad de ejemplo. '.repeat(10)
+
+const ningunaViaLlamada = () =>
+  [ingestaApi.enviarTexto, ingestaApi.enviarURL, ingestaApi.enviarArchivo].every(
+    (via) => vi.mocked(via).mock.calls.length === 0,
+  )
 
 function renderIngesta() {
   render(
@@ -30,9 +37,12 @@ function escribirTexto(texto: string) {
 
 describe('IngestaForm', () => {
   beforeEach(() => {
-    vi.mocked(apiClient.post).mockResolvedValue({
-      data: { texto_procesado: 'texto normalizado', palabras: 50, fuente: 'texto_directo' },
-    })
+    const respuesta = {
+      data: { texto_procesado: 'texto normalizado', caracteres: 400, palabras: 50, fuente: 'texto_directo' },
+    } as Awaited<ReturnType<typeof ingestaApi.enviarTexto>>
+    vi.mocked(ingestaApi.enviarTexto).mockResolvedValue(respuesta)
+    vi.mocked(ingestaApi.enviarURL).mockResolvedValue(respuesta)
+    vi.mocked(ingestaApi.enviarArchivo).mockResolvedValue(respuesta)
     vi.mocked(analisisApi.iniciar).mockResolvedValue({
       data: { id_analisis: '5', estado: 'procesando' },
     } as Awaited<ReturnType<typeof analisisApi.iniciar>>)
@@ -52,7 +62,7 @@ describe('IngestaForm', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
-    expect(apiClient.post).toHaveBeenCalledWith('/api/ingesta/texto', { texto: TEXTO_VALIDO })
+    expect(ingestaApi.enviarTexto).toHaveBeenCalledWith(TEXTO_VALIDO)
     expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
     expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
   })
@@ -64,11 +74,11 @@ describe('IngestaForm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
     expect(screen.getByText('Por favor ingresa una URL válida.')).toBeInTheDocument()
-    expect(apiClient.post).not.toHaveBeenCalled()
+    expect(ningunaViaLlamada()).toBe(true)
   })
 
   it('muestra el detalle de error que devuelve el servidor', async () => {
-    vi.mocked(apiClient.post).mockRejectedValue({
+    vi.mocked(ingestaApi.enviarTexto).mockRejectedValue({
       response: { data: { detail: 'El texto es demasiado corto para analizarlo.' } },
     })
     renderIngesta()
@@ -81,7 +91,7 @@ describe('IngestaForm', () => {
   })
 
   it('explica el límite de intentos ante un 429', async () => {
-    vi.mocked(apiClient.post).mockRejectedValue({ response: { status: 429, data: { error: 'Rate limit exceeded' } } })
+    vi.mocked(ingestaApi.enviarTexto).mockRejectedValue({ response: { status: 429, data: { error: 'Rate limit exceeded' } } })
     renderIngesta()
     escribirTexto(TEXTO_VALIDO)
 
@@ -97,11 +107,11 @@ describe('IngestaForm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
     expect(screen.getByText('El texto debe tener al menos 200 caracteres y 40 palabras.')).toBeInTheDocument()
-    expect(apiClient.post).not.toHaveBeenCalled()
+    expect(ningunaViaLlamada()).toBe(true)
   })
 
   it('no falla si el servidor devuelve la lista de errores de validación', async () => {
-    vi.mocked(apiClient.post).mockRejectedValue({
+    vi.mocked(ingestaApi.enviarTexto).mockRejectedValue({
       response: { status: 422, data: { detail: [{ loc: ['body', 'texto'], msg: 'error' }] } },
     })
     renderIngesta()
@@ -130,11 +140,7 @@ describe('IngestaForm', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
-      const [ruta, cuerpo, config] = vi.mocked(apiClient.post).mock.calls[0]
-      expect(ruta).toBe('/api/ingesta/archivo')
-      expect(cuerpo).toBeInstanceOf(FormData)
-      expect((cuerpo as FormData).get('archivo')).toBe(archivo)
-      expect(config).toEqual({ headers: { 'Content-Type': 'multipart/form-data' } })
+      expect(ingestaApi.enviarArchivo).toHaveBeenCalledWith(archivo)
       expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
       expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
     })
@@ -144,7 +150,7 @@ describe('IngestaForm', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
       expect(screen.getByText('Selecciona un archivo PDF o TXT.')).toBeInTheDocument()
-      expect(apiClient.post).not.toHaveBeenCalled()
+      expect(ningunaViaLlamada()).toBe(true)
     })
 
     it('rechaza extensiones no permitidas sin enviarlas', async () => {
@@ -153,7 +159,7 @@ describe('IngestaForm', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
       expect(screen.getByText('Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt).')).toBeInTheDocument()
-      expect(apiClient.post).not.toHaveBeenCalled()
+      expect(ningunaViaLlamada()).toBe(true)
     })
 
     it('rechaza archivos de más de 5 MB sin enviarlos', async () => {
@@ -162,12 +168,12 @@ describe('IngestaForm', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
 
       expect(screen.getByText('El archivo supera el tamaño máximo de 5 MB.')).toBeInTheDocument()
-      expect(apiClient.post).not.toHaveBeenCalled()
+      expect(ningunaViaLlamada()).toBe(true)
     })
 
     it('muestra el error del servidor para un PDF sin texto', async () => {
       const detalle = 'No se encontró texto en el PDF. Si es un documento escaneado, el sistema no puede leerlo.'
-      vi.mocked(apiClient.post).mockRejectedValue({ response: { status: 422, data: { detail: detalle } } })
+      vi.mocked(ingestaApi.enviarArchivo).mockRejectedValue({ response: { status: 422, data: { detail: detalle } } })
       await abrirPestanaArchivo()
       seleccionar(new File(['%PDF-1.4'], 'escaneado.pdf', { type: 'application/pdf' }))
       await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))

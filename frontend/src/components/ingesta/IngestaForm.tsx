@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import apiClient from '@/api/client'
 import { analisisApi } from '@/api/analisis'
+import { ingestaApi } from '@/api/ingesta'
 import Button from '@/components/common/Button'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { MAX_TEXTO, MIN_TEXTO, validarArchivo, validarTextoPolítica } from '@/utils/validators'
@@ -16,13 +16,6 @@ const ETIQUETA_PESTANA: Record<Pestana, string> = {
 
 const MIN_CHARS = MIN_TEXTO
 const MAX_CHARS = MAX_TEXTO
-
-interface IngestaResponse {
-  texto_procesado: string
-  caracteres: number
-  palabras: number
-  fuente: string
-}
 
 export default function IngestaForm() {
   const navigate = useNavigate()
@@ -68,22 +61,13 @@ export default function IngestaForm() {
       // Paso 1: ingesta
       setFase('ingesta')
       let textoProcesado: string
-      if (pestana === 'texto') {
-        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/texto', { texto })
-        textoProcesado = data.texto_procesado
-      } else if (pestana === 'url') {
-        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/url', { url: url.trim() })
-        textoProcesado = data.texto_procesado
-      } else {
-        const formulario = new FormData()
-        formulario.append('archivo', archivo as File)
-        // Sin esta cabecera axios convertiría el FormData a JSON (el cliente usa
-        // application/json por defecto); el navegador completa el separador.
-        const { data } = await apiClient.post<IngestaResponse>('/api/ingesta/archivo', formulario, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        })
-        textoProcesado = data.texto_procesado
-      }
+      const { data } =
+        pestana === 'texto'
+          ? await ingestaApi.enviarTexto(texto)
+          : pestana === 'url'
+            ? await ingestaApi.enviarURL(url.trim())
+            : await ingestaApi.enviarArchivo(archivo as File)
+      textoProcesado = data.texto_procesado
 
       // Paso 2: inicia el análisis (se procesa en segundo plano)
       setFase('analisis')
