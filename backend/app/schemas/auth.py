@@ -1,6 +1,6 @@
 """Schemas Pydantic para autenticación."""
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 def validar_fortaleza_password(v: str) -> str:
@@ -38,6 +38,23 @@ class ActualizarPerfilRequest(BaseModel):
     model_config = {"str_strip_whitespace": True}
 
     nombre: str = Field(..., min_length=2, max_length=100)
+
+
+class CambioPasswordRequest(BaseModel):
+    password_actual: str = Field(..., min_length=1, max_length=100)
+    password_nueva: str = Field(..., min_length=8, max_length=100)
+    confirmar_password: str
+
+    @field_validator("password_nueva")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        return validar_fortaleza_password(v)
+
+    @model_validator(mode="after")
+    def validar_confirmacion(self) -> "CambioPasswordRequest":
+        if self.password_nueva != self.confirmar_password:
+            raise ValueError("La confirmación no coincide con la nueva contraseña.")
+        return self
 
 
 class LoginRequest(BaseModel):
