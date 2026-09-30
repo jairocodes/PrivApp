@@ -103,3 +103,49 @@ class TestCargaDeArchivoRechazada:
 def test_un_archivo_dentro_del_limite_se_procesa_en_memoria():
     # Starlette solo escribe en disco las partes que superan este umbral.
     assert MultiPartParser.max_file_size > TAMANO_MAXIMO_ARCHIVO
+
+
+class TestRechazoTemprano:
+    async def test_un_envio_mayor_al_limite_se_rechaza_por_su_content_length(self, client):
+        cuerpo = b"x" * (6 * 1024 * 1024 + 1)
+        r = await client.post(
+            "/api/ingesta/archivo",
+            content=cuerpo,
+            headers={**_auth(), "Content-Type": "multipart/form-data; boundary=limite"},
+        )
+
+        assert r.status_code == 413
+        assert r.json()["detail"] == "El archivo supera el tamaño máximo de 5 MB."
+
+    async def test_el_rechazo_temprano_no_exige_leer_el_cuerpo(self):
+        from app.core.limite_carga import LimiteCargaArchivoMiddleware
+
+        async def app_interna(scope, receive, send):
+            raise AssertionError("no debería llegar a la aplicación")
+
+        async def receive():
+            raise AssertionError("no debería leer el cuerpo")
+
+        enviados = []
+
+        async def send(mensaje):
+            enviados.append(mensaje)
+
+        middleware = LimiteCargaArchivoMiddleware(app_interna, max_bytes=10)
+        scope = {
+            "type": "http",
+            "path": "/api/ingesta/archivo",
+            "headers": [(b"content-length", b"11")],
+        }
+        await middleware(scope, receive, send)
+
+        assert enviados[0]["status"] == 413
+
+    async def test_no_afecta_a_otras_rutas(self, client):
+        r = await client.post(
+            "/api/ingesta/texto",
+            json={"texto": TEXTO_POLITICA + " " * (6 * 1024 * 1024)},
+            headers=_auth(),
+        )
+        assert r.status_code != 413
+

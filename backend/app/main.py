@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
+from app.core.limite_carga import LimiteCargaArchivoMiddleware
 from app.core.limiter import limiter
 
 logging.basicConfig(
@@ -44,6 +45,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Rechazo temprano de cargas grandes: el máximo del archivo más un margen
+# para el encabezado del formulario multipart.
+app.add_middleware(LimiteCargaArchivoMiddleware, max_bytes=6 * 1024 * 1024)
 
 # CORS
 app.add_middleware(
