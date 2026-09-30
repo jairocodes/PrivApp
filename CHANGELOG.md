@@ -5,6 +5,73 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
 ---
 
+## [Sin publicar] — Proyecto de Graduación II
+
+Versión completa del sistema para el Capítulo VI. Se publicará al integrar
+`develop` en `main` con el despliegue en Railway.
+
+### Added
+- **Cuentas y sesiones:** rol usuario/administrador validado con el rol vigente en la
+  base de datos; fecha de emisión e identificador (`jti`) en los tokens; cierre de
+  sesión con revocación en Redis; invalidación de todas las sesiones al cambiar la
+  contraseña o desactivar una cuenta (`sessions_valid_from`).
+- **Aviso de privacidad:** página pública, aceptación obligatoria al registrarse
+  (`privacy_accepted_at`) y declaración obligatoria de mayoría de edad o de
+  consentimiento de la madre, el padre o la persona encargada (`age_declaration_at`).
+- **Perfil:** edición del nombre, cambio de contraseña y eliminación definitiva de la
+  propia cuenta con todos sus análisis.
+- **Administración:** listado y búsqueda de usuarios (sin distinguir acentos),
+  activación y desactivación de cuentas; listado, carga (PDF/TXT) y activación o
+  desactivación de documentos del corpus normativo. Script `promover_admin.py`.
+- **Ingesta:** carga de archivos PDF o TXT de hasta 5 MB procesados en memoria,
+  regla única de longitud (200 caracteres y 40 palabras, máximo 200,000) y vista
+  previa obligatoria antes de analizar.
+- **Análisis:** progreso en segundo plano; clasificación de cada hallazgo en uno de
+  ocho tipos de tratamiento de datos; análisis de la política completa, con hasta
+  cuatro secciones en paralelo; citas normativas construidas con el texto real de los
+  fragmentos del corpus; normativa guatemalteca incluida en el contexto de cada
+  sección; segunda búsqueda de respaldo con la descripción de cada hallazgo;
+  hallazgos sin respaldo marcados, que no suman a la puntuación; recomendaciones
+  prácticas redactadas a partir de los riesgos encontrados.
+- **Resultados:** filtro de hallazgos por nivel y jurisdicción, ayuda contextual del
+  glosario y eliminación del análisis desde su detalle.
+- **Historial:** filtros por nivel, rango de fechas y texto (sin distinguir acentos) y
+  eliminación definitiva con confirmación.
+- **Panel estadístico** personal con gráfico de distribución por nivel (recharts,
+  cargado de forma diferida).
+- **Glosario** público de 22 términos con búsqueda sin acentos.
+- **Reportes:** tipo de tratamiento y hallazgos sin respaldo en el PDF; registro del
+  tiempo de generación y script `tiempos_reporte.py`.
+- **Pruebas:** Vitest con jsdom en el cliente; pruebas de integración contra
+  PostgreSQL con pgvector (`PRIVAPP_TEST_PG_URL`).
+- Migraciones 0005 a 0009.
+
+### Changed
+- OpenAI es el único proveedor del modelo de lenguaje (`LLM_PROVIDER=openai`).
+- Búsqueda exacta en el corpus normativo: se elimina el índice aproximado ivfflat.
+- "Puntaje de riesgo" pasa a llamarse "Puntuación de riesgo".
+- Arranque con `lifespan`; `--reload` solo en desarrollo; cabeceras de reenvío del
+  proxy de Railway.
+- Repositorios separados para usuarios, análisis y corpus.
+
+### Removed
+- Adaptador de Gemini.
+- Tope de ocho secciones por análisis.
+- La cita genérica "Principios generales de protección de datos".
+
+### Fixed
+- Jurisdicción del Decreto 57-2008 (Guatemala) y de ToS;DR (estándar técnico).
+- Mensaje claro al superar el límite de solicitudes.
+- Rechazo temprano de archivos demasiado grandes.
+- Carga del corpus solo desde las carpetas de jurisdicción.
+- Política de reintentos del adaptador de OpenAI.
+
+### Security
+- Los registros del servidor no guardan correos, direcciones IP, nombres de archivos
+  cargados ni direcciones web completas; producción arranca sin registro de acceso.
+
+---
+
 ## [1.0.0-prototipo] — 2026-05-18 — Release: Prototipo funcional completo
 
 ### Summary
