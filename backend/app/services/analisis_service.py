@@ -128,6 +128,9 @@ _K_FRAGMENTOS = 5
 # Fragmentos guatemaltecos que se agregan siempre, aunque no estén entre los 5
 # más cercanos: sin ellos el modelo casi nunca puede citar normativa nacional.
 _K_GUATEMALA = 2
+# Fragmentos que se buscan con la descripción de cada hallazgo que quedó sin
+# respaldo, en la segunda pasada (ver _respaldar_hallazgos).
+_K_FRAGMENTOS_RESPALDO = 3
 # Tamaño mínimo de sección para considerarla analizable (palabras)
 _MIN_PALABRAS_SECCION = 30
 # Se analiza la política completa: no hay tope de secciones. Las secciones que
@@ -567,7 +570,7 @@ async def _analizar_seccion(
         # Intento 1
         json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
         try:
-            return _parsear_seccion(json_str, chunks)
+            analizada = _parsear_seccion(json_str, chunks)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
             # Intento 2: se repite la instrucción completa (sección, contexto y
@@ -579,16 +582,80 @@ async def _analizar_seccion(
             )
             json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
             try:
-                return _parsear_seccion(json_str2, chunks)
+                analizada = _parsear_seccion(json_str2, chunks)
             except (json.JSONDecodeError, KeyError, ValueError) as e2:
                 logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
                 return _seccion_fallback(seccion, idx)
+        return await _respaldar_hallazgos(llm, db, candado_bd, idx, analizada)
     except LLMError as exc:
         logger.error("LLMError en sección %d: %s", idx, exc.detail)
         return _seccion_fallback(seccion, idx)
     except Exception as exc:
         logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
         return _seccion_fallback(seccion, idx)
+
+
+SYSTEM_PROMPT_RESPALDO = """Eres un asistente experto en protección de datos personales.
+Recibirás hallazgos sobre una política de privacidad y fragmentos numerados de
+normativa. Para cada hallazgo, indica los NÚMEROS de los fragmentos cuyo contenido
+lo respalda directamente. Si ningún fragmento lo respalda, devuelve una lista vacía.
+NUNCA inventes números de fragmento. Responde EXCLUSIVAMENTE en formato JSON válido."""
+
+
+def _construir_prompt_respaldo(hallazgos: list[Hallazgo], contexto_normativo: str) -> str:
+    lista = "\n".join(f"[Hallazgo {i}] {h.descripcion}" for i, h in enumerate(hallazgos, 1))
+    return (
+        f"HALLAZGOS:\n{lista}\n\n"
+        f"FRAGMENTOS NORMATIVOS DE REFERENCIA:\n{contexto_normativo}\n\n"
+        "Devuelve SOLO el siguiente JSON sin texto adicional:\n\n"
+        "{\n"
+        '  "respaldos": [\n'
+        '    {"hallazgo": <número del hallazgo>, "fragmentos": [<números de los fragmentos que lo respaldan>]}\n'
+        "  ]\n"
+        "}"
+    )
+
+
+async def _respaldar_hallazgos(
+    llm: LLMAdapter, db: AsyncSession, candado_bd: asyncio.Lock, idx: int, seccion: SeccionAnalizada
+) -> SeccionAnalizada:
+    """Segunda pasada para los hallazgos que quedaron sin respaldo: busca en el
+    corpus con la descripción de cada hallazgo (más precisa que la sección
+    completa) y pide al modelo que indique qué fragmentos lo respaldan. Si algo
+    falla, la sección se devuelve tal como estaba."""
+    pendientes = [h for h in seccion.hallazgos if h.sin_respaldo]
+    if not pendientes:
+        return seccion
+    try:
+        fragmentos = []
+        ids: set[int] = set()
+        async with candado_bd:
+            for hallazgo in pendientes:
+                for chunk in await recuperar_contexto(db, hallazgo.descripcion, k=_K_FRAGMENTOS_RESPALDO):
+                    if chunk.id not in ids:
+                        ids.add(chunk.id)
+                        fragmentos.append(chunk)
+        if not fragmentos:
+            return seccion
+
+        prompt = _construir_prompt_respaldo(pendientes, _construir_contexto_normativo(fragmentos))
+        datos = json.loads(_extraer_json(await llm.generar_analisis(SYSTEM_PROMPT_RESPALDO, prompt, "")))
+        for respaldo in datos.get("respaldos", []):
+            try:
+                numero_hallazgo = int(respaldo.get("hallazgo"))
+                numeros = _numeros_de_fragmento(respaldo.get("fragmentos"), len(fragmentos))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            if not 1 <= numero_hallazgo <= len(pendientes) or not numeros:
+                continue
+            hallazgo = pendientes[numero_hallazgo - 1]
+            hallazgo.fuentes_normativas = [_fuente_desde_fragmento(fragmentos[n - 1]) for n in numeros]
+            hallazgo.sin_respaldo = False
+    except LLMError as exc:
+        logger.warning("Sección %d: sin segunda pasada de respaldo (%s).", idx, exc.detail)
+    except Exception as exc:
+        logger.warning("Sección %d: segunda pasada de respaldo inválida (%s).", idx, exc)
+    return seccion
 
 
 def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:

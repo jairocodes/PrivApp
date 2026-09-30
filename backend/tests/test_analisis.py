@@ -840,8 +840,92 @@ class TestCitasDelCorpus:
             await ejecutar_analisis_background(registro.id, texto)
         await db_session.refresh(registro)
 
-        assert recuperar.await_args.kwargs["k_guatemala"] == _K_GUATEMALA
+        assert recuperar.await_args_list[0].kwargs["k_guatemala"] == _K_GUATEMALA
         respaldado, sin_respaldo = registro.resultado["secciones_analizadas"][0]["hallazgos"]
         assert respaldado["fuentes_normativas"][0]["jurisdiccion"] == "guatemala"
         assert respaldado["sin_respaldo"] is False
         assert sin_respaldo["sin_respaldo"] is True and sin_respaldo["fuentes_normativas"] == []
+
+
+# ---------------------------------------------------------------------------
+# Segunda pasada: respaldo buscado con la descripción de cada hallazgo
+# ---------------------------------------------------------------------------
+
+class TestSegundaPasadaDeRespaldo:
+    FRAGMENTOS_HALLAZGO = [
+        _fragmento(30, "Principios OEA 2021.pdf", "internacional",
+                   "Será necesario borrar los datos personales que ya no se necesiten."),
+        _fragmento(20, "Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala",
+                   "Artículo 9. Datos personales."),
+    ]
+
+    async def _analizar(self, db_session, seed_user, respuestas, recuperar):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Conservación\n" + "Conservamos sus datos mientras exista un interés legítimo. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", recuperar), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            llm = MockLLM.return_value
+            llm.generar_analisis = AsyncMock(side_effect=respuestas)
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+        return registro.resultado["secciones_analizadas"][0], llm
+
+    async def test_respalda_con_los_fragmentos_del_hallazgo(self, db_session, seed_user):
+        from app.services.analisis_service import _K_FRAGMENTOS_RESPALDO, SYSTEM_PROMPT_RESPALDO
+
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO, self.FRAGMENTOS_HALLAZGO[:1]])
+        respaldo = json.dumps({"respaldos": [{"hallazgo": 1, "fragmentos": [1]}, {"hallazgo": 2, "fragmentos": []}]})
+        seccion, llm = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([], []), respaldo], recuperar,
+        )
+
+        primero, segundo = seccion["hallazgos"]
+        assert primero["sin_respaldo"] is False
+        assert primero["fuentes_normativas"][0]["documento"] == "Principios OEA 2021"
+        assert segundo["sin_respaldo"] is True
+        # Una búsqueda por hallazgo pendiente, con la descripción y k reducido.
+        busquedas = recuperar.await_args_list[1:]
+        assert len(busquedas) == 2
+        assert busquedas[0].args[1] == seccion["hallazgos"][0]["descripcion"]
+        assert busquedas[0].kwargs["k"] == _K_FRAGMENTOS_RESPALDO
+        # Los fragmentos repetidos se numeran una sola vez.
+        sistema, prompt, _ = llm.generar_analisis.await_args_list[1].args
+        assert sistema == SYSTEM_PROMPT_RESPALDO
+        assert "[Fragmento 2]" in prompt and "[Fragmento 3]" not in prompt
+        assert "[Hallazgo 2]" in prompt
+
+    async def test_sin_pendientes_no_hay_segunda_llamada(self, db_session, seed_user):
+        recuperar = AsyncMock(return_value=FRAGMENTOS)
+        _, llm = await self._analizar(db_session, seed_user, [_respuesta_con_fragmentos([1])], recuperar)
+
+        assert llm.generar_analisis.await_count == 1
+        assert recuperar.await_count == 1
+
+    @pytest.mark.parametrize("respuesta", [
+        "esto no es json",
+        json.dumps({"respaldos": [{"hallazgo": 9, "fragmentos": [1]}, {"hallazgo": "x"}, "basura"]}),
+        json.dumps({"respaldos": [{"hallazgo": 1, "fragmentos": [99]}]}),
+    ])
+    async def test_una_respuesta_invalida_conserva_la_seccion(self, db_session, seed_user, respuesta):
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO])
+        seccion, _ = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([]), respuesta], recuperar,
+        )
+
+        [hallazgo] = seccion["hallazgos"]
+        assert hallazgo["sin_respaldo"] is True and hallazgo["fuentes_normativas"] == []
+        assert hallazgo["tipo"] == "riesgo"  # no se usó la sección de respaldo
+
+    async def test_un_error_del_modelo_conserva_la_seccion(self, db_session, seed_user):
+        from app.core.exceptions import LLMError
+
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO])
+        seccion, _ = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([]), LLMError("caído")], recuperar,
+        )
+
+        assert seccion["hallazgos"][0]["tipo"] == "riesgo"
+        assert seccion["hallazgos"][0]["sin_respaldo"] is True
