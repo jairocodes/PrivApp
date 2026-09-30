@@ -7,6 +7,8 @@ para evitar cargar el modelo de 450 MB en el entorno de CI.
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Chunking — función pura, sin dependencias externas
@@ -138,6 +140,41 @@ class TestMetadatosCorpus:
 # ---------------------------------------------------------------------------
 # Extractor de PDF — verifica manejo de archivos inexistentes
 # ---------------------------------------------------------------------------
+
+class TestArchivosDelCorpus:
+    def test_solo_incluye_archivos_de_las_carpetas_de_jurisdiccion(self, tmp_path):
+        from scripts.cargar_corpus import archivos_del_corpus
+
+        for ruta in [
+            "README.md",
+            "notas/borrador.md",
+            "guatemala/Constitucion.pdf",
+            "internacional/RGPD.pdf",
+            "estandares_tecnicos/tosdr_metodologia.md",
+            "estandares_tecnicos/README.md.bak",
+            "internacional/imagen.png",
+        ]:
+            archivo = tmp_path / ruta
+            archivo.parent.mkdir(parents=True, exist_ok=True)
+            archivo.write_text("contenido")
+
+        incluidos = [p.relative_to(tmp_path).as_posix() for p in archivos_del_corpus(tmp_path)]
+
+        assert incluidos == [
+            "estandares_tecnicos/tosdr_metodologia.md",
+            "guatemala/Constitucion.pdf",
+            "internacional/RGPD.pdf",
+        ]
+
+    def test_el_corpus_real_no_incluye_su_readme(self):
+        from scripts.cargar_corpus import CORPUS_DIR, archivos_del_corpus
+
+        if not CORPUS_DIR.exists() or not any(CORPUS_DIR.iterdir()):
+            pytest.skip("corpus_normativo no está montado en este entorno")
+        nombres = [p.name for p in archivos_del_corpus(CORPUS_DIR)]
+        assert "README.md" not in nombres
+        assert "tosdr_metodologia.md" in nombres
+
 
 class TestConsultaDeRecuperacion:
     """La consulta real se prueba contra PostgreSQL en tests/integracion."""

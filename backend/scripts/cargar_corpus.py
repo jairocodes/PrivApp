@@ -50,6 +50,22 @@ logger = logging.getLogger(__name__)
 # Funciones de inferencia de metadatos
 # ---------------------------------------------------------------------------
 
+EXTENSIONES_SOPORTADAS = {".pdf", ".md", ".txt"}
+
+
+def archivos_del_corpus(directorio: Path) -> list[Path]:
+    """Archivos que forman parte del corpus: solo los que están dentro de una
+    carpeta de jurisdicción (guatemala, internacional, estandares_tecnicos).
+    Así se excluyen el README y cualquier otra nota o documentación del
+    directorio que no sea normativa."""
+    return sorted(
+        f for f in directorio.rglob("*")
+        if f.is_file()
+        and f.suffix.lower() in EXTENSIONES_SOPORTADAS
+        and f.relative_to(directorio).parts[0].lower() in JURISDICCION_MAP
+    )
+
+
 def inferir_jurisdiccion(ruta: Path) -> str:
     partes = {p.lower() for p in ruta.parts}
     for clave, valor in JURISDICCION_MAP.items():
@@ -159,11 +175,7 @@ async def main(limpiar: bool = False) -> None:
             else:
                 logger.info("Limpieza cancelada.")
 
-        extensiones_soportadas = {".pdf", ".md", ".txt"}
-        archivos = sorted(
-            f for f in CORPUS_DIR.rglob("*")
-            if f.is_file() and f.suffix.lower() in extensiones_soportadas
-        )
+        archivos = archivos_del_corpus(CORPUS_DIR)
 
         if not archivos:
             logger.warning("No se encontraron archivos en %s.", CORPUS_DIR)
