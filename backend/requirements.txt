@@ -45,7 +45,7 @@ tenacity==9.0.0
 # Rate limiting
 slowapi==0.1.9
 
-# Lista de revocación de tokens JWT (TICKET-03)
+# Lista de revocación de tokens JWT
 redis==5.2.1
 
 # Linters / Formateo (solo desarrollo)

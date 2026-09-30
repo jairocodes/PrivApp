@@ -1,4 +1,4 @@
-"""Pruebas de los adaptadores LLM: política de reintentos (TICKET-01)."""
+"""Pruebas de los adaptadores LLM: política de reintentos."""
 
 from unittest.mock import AsyncMock, patch
 

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
 
-    # Redis (lista de revocación de tokens JWT, ver TICKET-03)
+    # Redis (lista de revocación de tokens JWT)
     redis_url: str
 
     # Proveedor LLM activo: "openai" | "gemini"
