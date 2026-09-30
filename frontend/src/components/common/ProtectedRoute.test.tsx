@@ -35,7 +35,7 @@ describe('ProtectedRoute', () => {
 
   it('muestra el contenido cuando hay usuario autenticado', () => {
     renderConAuth(
-      crearAuthValue({ user: { id: 1, nombre: 'Ana', email: 'ana@privapp.test' }, token: 't' }),
+      crearAuthValue({ user: { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }, token: 't' }),
     )
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument()
   })
