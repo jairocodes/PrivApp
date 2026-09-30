@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
+from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto, pdf_sin_texto
 from app.models.user import ROL_ADMINISTRADOR, User
 
 REPO = "app.services.corpus_service.RepositorioCorpusNormativo"
@@ -108,3 +109,82 @@ class TestCambioDeEstadoDelDocumento:
     async def test_exige_el_documento_y_el_estado(self, client: AsyncClient, token_admin: str):
         r = await client.patch("/api/admin/corpus/estado", json={"activo": True}, headers=_auth(token_admin))
         assert r.status_code == 422
+
+
+SERVICIO = "app.services.corpus_service"
+TEXTO_NORMA = " ".join(LINEAS_POLITICA * 3)
+
+
+async def _cargar(client, token, nombre="Norma nueva.pdf", contenido=None, tipo="application/pdf",
+                  jurisdiccion="internacional"):
+    return await client.post(
+        "/api/admin/corpus",
+        files={"archivo": (nombre, pdf_con_texto(LINEAS_POLITICA * 3) if contenido is None else contenido, tipo)},
+        data={"jurisdiccion": jurisdiccion},
+        headers=_auth(token),
+    )
+
+
+class TestCargaDeDocumentos:
+    async def test_usuario_comun_recibe_403(self, client: AsyncClient, seed_user: User):
+        r = await _cargar(client, create_access_token(str(seed_user.id)))
+        assert r.status_code == 403
+
+    async def test_carga_un_pdf_y_lo_deja_activo(self, client: AsyncClient, token_admin: str):
+        insertar = AsyncMock(return_value=(6, 0))
+        resumen = {**DOCUMENTOS[0], "documento_fuente": "Norma nueva.pdf", "fragmentos": 6}
+        with patch(f"{REPO}.obtener_documento", AsyncMock(side_effect=[None, resumen])), \
+             patch(f"{SERVICIO}.insertar_fragmentos", insertar):
+            r = await _cargar(client, token_admin)
+
+        assert r.status_code == 201
+        datos = r.json()
+        assert datos["documento_fuente"] == "Norma nueva.pdf"
+        assert datos["activo"] is True
+        assert datos["fragmentos_insertados"] == 6
+        _, nombre, texto, jurisdiccion, extra = insertar.await_args.args
+        assert (nombre, jurisdiccion) == ("Norma nueva.pdf", "internacional")
+        assert "Recopilamos su nombre" in texto
+        assert extra == {"origen": "carga_administrador"}
+
+    async def test_carga_un_txt(self, client: AsyncClient, token_admin: str):
+        resumen = {**DOCUMENTOS[0], "documento_fuente": "norma.txt"}
+        with patch(f"{REPO}.obtener_documento", AsyncMock(side_effect=[None, resumen])), \
+             patch(f"{SERVICIO}.insertar_fragmentos", AsyncMock(return_value=(3, 0))):
+            r = await _cargar(client, token_admin, "norma.txt", TEXTO_NORMA.encode(), "text/plain")
+        assert r.status_code == 201
+
+    async def test_rechaza_una_jurisdiccion_desconocida(self, client: AsyncClient, token_admin: str):
+        r = await _cargar(client, token_admin, jurisdiccion="mexico")
+        assert r.status_code == 422
+
+    async def test_rechaza_extensiones_no_permitidas(self, client: AsyncClient, token_admin: str):
+        r = await _cargar(client, token_admin, "norma.docx", b"x", "application/octet-stream")
+        assert r.status_code == 415
+
+    async def test_rechaza_archivos_de_mas_de_5_mb(self, client: AsyncClient, token_admin: str):
+        r = await _cargar(client, token_admin, "norma.txt", b"a " * (3 * 1024 * 1024), "text/plain")
+        assert r.status_code == 413
+
+    async def test_rechaza_un_pdf_sin_texto_suficiente(self, client: AsyncClient, token_admin: str):
+        r = await _cargar(client, token_admin, "escaneado.pdf", pdf_sin_texto())
+        assert r.status_code == 422
+        assert "mínimo 50 palabras" in r.json()["detail"]
+
+    async def test_rechaza_un_documento_con_nombre_existente(self, client: AsyncClient, token_admin: str):
+        insertar = AsyncMock()
+        with patch(f"{REPO}.obtener_documento", AsyncMock(return_value=DOCUMENTOS[0])), \
+             patch(f"{SERVICIO}.insertar_fragmentos", insertar):
+            r = await _cargar(client, token_admin, "RGPD.pdf")
+
+        assert r.status_code == 409
+        insertar.assert_not_awaited()
+
+    async def test_quita_la_ruta_del_nombre_del_archivo(self, client: AsyncClient, token_admin: str):
+        insertar = AsyncMock(return_value=(6, 0))
+        resumen = {**DOCUMENTOS[0], "documento_fuente": "norma.pdf"}
+        with patch(f"{REPO}.obtener_documento", AsyncMock(side_effect=[None, resumen])), \
+             patch(f"{SERVICIO}.insertar_fragmentos", insertar):
+            await _cargar(client, token_admin, "C:\\docs\\norma.pdf")
+
+        assert insertar.await_args.args[1] == "norma.pdf"

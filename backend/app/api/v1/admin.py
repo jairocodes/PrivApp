@@ -4,16 +4,26 @@ GET   /api/admin/usuarios              — lista paginada de usuarios, con búsq
 PATCH /api/admin/usuarios/{id}/estado  — activa o desactiva una cuenta
 GET   /api/admin/corpus                — documentos del corpus normativo
 PATCH /api/admin/corpus/estado         — activa o desactiva un documento completo
+POST  /api/admin/corpus                — incorpora un documento normativo nuevo
 """
 
-from fastapi import APIRouter, Depends, Query
+import re
+from typing import Literal
+
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.database import get_db
 from app.models.user import User
 from app.schemas.admin import CambioEstadoUsuarioRequest, ListadoUsuariosResponse, UsuarioAdminItem
-from app.schemas.corpus import CambioEstadoDocumentoRequest, DocumentoCorpus, ListadoCorpusResponse
+from app.schemas.corpus import (
+    CambioEstadoDocumentoRequest,
+    DocumentoCargadoResponse,
+    DocumentoCorpus,
+    ListadoCorpusResponse,
+)
+from app.services.ingesta_service import TAMANO_MAXIMO_ARCHIVO
 from app.services import corpus_service
 from app.services.admin_service import cambiar_estado_usuario, listar_usuarios
 
@@ -55,3 +65,19 @@ async def cambiar_estado_corpus(
 ) -> DocumentoCorpus:
     """Activa o desactiva todos los fragmentos de un documento fuente."""
     return await corpus_service.cambiar_estado_documento(db, body.documento_fuente, body.activo)
+
+
+@router.post("/corpus", response_model=DocumentoCargadoResponse, status_code=201)
+async def cargar_documento_corpus(
+    archivo: UploadFile = File(..., description="Documento normativo en PDF o TXT, máximo 5 MB"),
+    jurisdiccion: Literal["guatemala", "internacional", "estandar_tecnico"] = Form(...),
+    db: AsyncSession = Depends(get_db),
+) -> DocumentoCargadoResponse:
+    """Segmenta el documento, genera sus representaciones vectoriales y lo deja
+    disponible (activo) para la recuperación semántica."""
+    try:
+        contenido = await archivo.read(TAMANO_MAXIMO_ARCHIVO + 1)
+    finally:
+        await archivo.close()
+    nombre = re.split(r"[\\/]", archivo.filename or "")[-1]
+    return await corpus_service.cargar_documento(db, nombre, archivo.content_type, contenido, jurisdiccion)

@@ -11,7 +11,6 @@ Al final imprime estadísticas de la carga.
 
 import argparse
 import asyncio
-import hashlib
 import logging
 import sys
 import time
@@ -20,13 +19,16 @@ from pathlib import Path
 # Necesario para que Python encuentre el paquete `app` desde scripts/
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.models.corpus import CorpusChunk
-from app.utils.chunking import chunk_texto
-from app.utils.embeddings import encode_batch
+from app.services.corpus_service import (  # noqa: F401 (hash_chunk e inferir_categoria se reexportan)
+    MIN_PALABRAS_DOCUMENTO,
+    hash_chunk,
+    inferir_categoria,
+    insertar_fragmentos,
+)
 from app.utils.pdf_extractor import extraer_texto_pdf
 
 # ---------------------------------------------------------------------------
@@ -41,15 +43,6 @@ JURISDICCION_MAP: dict[str, str] = {
     "estandares_tecnicos": "estandar_tecnico",
 }
 
-CATEGORIA_KEYWORDS: list[tuple[list[str], str]] = [
-    (["constitucion", "constitution", "derechos_fundamentales"], "derechos_fundamentales"),
-    (["rgpd", "gdpr", "lopdp", "proteccion_datos", "datos_personales"], "proteccion_datos"),
-    (["laip", "acceso_informacion", "transparencia"], "acceso_informacion"),
-    (["opp", "taxonomia", "ontologia"], "taxonomia_privacidad"),
-    (["tosdr", "terminos_servicio", "tos"], "terminos_servicio"),
-    (["oea", "parlatino", "principios"], "principios_internacionales"),
-]
-
 logger = logging.getLogger(__name__)
 
 
@@ -63,19 +56,6 @@ def inferir_jurisdiccion(ruta: Path) -> str:
         if clave in partes:
             return valor
     return "desconocido"
-
-
-def inferir_categoria(nombre: str) -> str:
-    nombre_lower = nombre.lower().replace(" ", "_").replace("-", "_")
-    for palabras_clave, categoria in CATEGORIA_KEYWORDS:
-        if any(kw in nombre_lower for kw in palabras_clave):
-            return categoria
-    return "general"
-
-
-def hash_chunk(documento: str, texto: str) -> str:
-    contenido = f"{documento}::{texto}"
-    return hashlib.md5(contenido.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -97,70 +77,34 @@ async def cargar_archivo(
     stats: dict,
 ) -> None:
     texto = extraer_texto(archivo)
-    if not texto or len(texto.split()) < 50:
+    if not texto or len(texto.split()) < MIN_PALABRAS_DOCUMENTO:
         logger.warning("Texto insuficiente o vacío en '%s'. Saltando.", archivo.name)
         stats["saltados"] += 1
         return
 
-    chunks = chunk_texto(texto)
-    if not chunks:
+    jurisdiccion = inferir_jurisdiccion(archivo)
+    insertados, duplicados = await insertar_fragmentos(
+        session,
+        archivo.name,
+        texto,
+        jurisdiccion,
+        {"ruta_relativa": str(archivo.relative_to(CORPUS_DIR))},
+    )
+
+    if insertados == 0 and duplicados == 0:
         logger.warning("Sin chunks en '%s'. Saltando.", archivo.name)
         stats["saltados"] += 1
         return
-
-    jurisdiccion = inferir_jurisdiccion(archivo)
-    categoria = inferir_categoria(archivo.stem)
-    referencia = archivo.stem.replace("_", " ").replace("-", " ").title()
-
-    # Verificar qué hashes ya existen (deduplicación eficiente)
-    hashes_nuevos = {hash_chunk(archivo.name, c): c for c in chunks}
-
-    existentes = set()
-    if hashes_nuevos:
-        # Consulta de hashes existentes en lotes para evitar grandes cláusulas IN
-        for h in list(hashes_nuevos.keys()):
-            fila = await session.execute(
-                select(CorpusChunk.id).where(
-                    CorpusChunk.metadatos["hash"].astext == h
-                )
-            )
-            if fila.scalar_one_or_none() is not None:
-                existentes.add(h)
-
-    chunks_nuevos = [(h, t) for h, t in hashes_nuevos.items() if h not in existentes]
-
-    if not chunks_nuevos:
-        logger.info("'%s': todos los chunks ya existen (%d dup).", archivo.name, len(hashes_nuevos))
-        stats["duplicados"] += len(hashes_nuevos)
+    if insertados == 0:
+        logger.info("'%s': todos los chunks ya existen (%d dup).", archivo.name, duplicados)
+        stats["duplicados"] += duplicados
         return
 
-    textos_nuevos = [t for _, t in chunks_nuevos]
-    embeddings = encode_batch(textos_nuevos, show_progress=False)
-
-    for (chunk_hash, chunk_text), embedding in zip(chunks_nuevos, embeddings):
-        registro = CorpusChunk(
-            documento_fuente=archivo.name,
-            jurisdiccion=jurisdiccion,
-            referencia=referencia,
-            categoria_tematica=categoria,
-            texto_original=chunk_text,
-            embedding=embedding,
-            metadatos={
-                "hash": chunk_hash,
-                "ruta_relativa": str(archivo.relative_to(CORPUS_DIR)),
-            },
-        )
-        session.add(registro)
-
-    await session.flush()
-
-    insertados = len(chunks_nuevos)
-    duplicados = len(hashes_nuevos) - insertados
     stats["chunks_insertados"] += insertados
     stats["duplicados"] += duplicados
     logger.info(
         "'%s': %d chunks insertados, %d duplicados. [jur=%s, cat=%s]",
-        archivo.name, insertados, duplicados, jurisdiccion, categoria,
+        archivo.name, insertados, duplicados, jurisdiccion, inferir_categoria(archivo.stem),
     )
 
 

@@ -139,3 +139,50 @@ class TestCambioDeEstadoDeDocumentos:
     async def test_documento_inexistente_no_cambia_nada(self, db_pg):
         await _insertar(db_pg, "RGPD.pdf", 1, 0.9)
         assert await RepositorioCorpusNormativo(db_pg).cambiar_estado_documento("otro.pdf", False) == 0
+
+
+def _embeddings_falsos(textos):
+    """Evita cargar el modelo real: vectores distintos y deterministas."""
+    return [_vector(0.5 + (hash(t) % 400) / 1000) for t in textos]
+
+
+TEXTO_NORMA = " ".join(
+    f"Artículo {i}. El responsable del tratamiento deberá informar al titular sobre la finalidad "
+    f"de la recopilación de sus datos personales y los derechos que le asisten."
+    for i in range(40)
+)
+
+
+class TestCargaDeDocumentos:
+    async def test_insertar_fragmentos_y_deduplicar_por_hash(self, db_pg):
+        from unittest.mock import patch
+
+        from app.services.corpus_service import insertar_fragmentos
+
+        with patch("app.services.corpus_service.encode_batch", _embeddings_falsos):
+            insertados, duplicados = await insertar_fragmentos(db_pg, "Norma.pdf", TEXTO_NORMA, "guatemala")
+            await db_pg.commit()
+            otra_vez = await insertar_fragmentos(db_pg, "Norma.pdf", TEXTO_NORMA, "guatemala")
+
+        assert insertados > 1 and duplicados == 0
+        assert otra_vez == (0, insertados)
+        fila = (await db_pg.execute(text(
+            "SELECT jurisdiccion, referencia, active, metadatos->>'hash' FROM corpus_chunks LIMIT 1"
+        ))).one()
+        assert fila[0] == "guatemala" and fila[1] == "Norma" and fila[2] is True and fila[3]
+
+    async def test_un_documento_cargado_participa_en_la_recuperacion(self, db_pg):
+        from unittest.mock import patch
+
+        from app.services.corpus_service import cargar_documento
+
+        with patch("app.services.corpus_service.encode_batch", _embeddings_falsos):
+            respuesta = await cargar_documento(
+                db_pg, "Norma cargada.txt", "text/plain", TEXTO_NORMA.encode(), "guatemala"
+            )
+            await db_pg.commit()
+
+        assert respuesta.activo is True
+        assert respuesta.fragmentos == respuesta.fragmentos_insertados > 1
+        filas = await RepositorioCorpusNormativo(db_pg).buscar_similares(CONSULTA, k=3)
+        assert {f["documento_fuente"] for f in filas} == {"Norma cargada.txt"}

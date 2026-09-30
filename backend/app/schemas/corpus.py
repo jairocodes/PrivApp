@@ -13,6 +13,11 @@ class DocumentoCorpus(BaseModel):
     activo: bool
 
 
+class DocumentoCargadoResponse(DocumentoCorpus):
+    fragmentos_insertados: int
+    fragmentos_duplicados: int
+
+
 class CambioEstadoDocumentoRequest(BaseModel):
     documento_fuente: str = Field(..., min_length=1, max_length=255)
     activo: bool

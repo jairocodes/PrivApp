@@ -104,6 +104,19 @@ class RepositorioCorpusNormativo:
         )
         return result.rowcount
 
+    async def hashes_existentes(self, hashes: list[str]) -> set[str]:
+        """Hashes (metadatos.hash) que ya están en el corpus, para no duplicar fragmentos."""
+        if not hashes:
+            return set()
+        result = await self.db.execute(
+            text("SELECT metadatos->>'hash' FROM corpus_chunks WHERE metadatos->>'hash' = ANY(:hashes)"),
+            {"hashes": hashes},
+        )
+        return set(result.scalars().all())
+
+    def agregar(self, fragmento) -> None:
+        self.db.add(fragmento)
+
     async def contar(self) -> int:
         result = await self.db.execute(text("SELECT COUNT(*) FROM corpus_chunks"))
         return result.scalar_one()
