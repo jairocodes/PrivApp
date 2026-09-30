@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 
 interface FormState {
   email: string
@@ -44,6 +45,8 @@ export default function LoginForm() {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401) {
         setErrors({ general: 'Correo o contraseña incorrectos.' })
+      } else if (esLimiteDeSolicitudes(err)) {
+        setErrors({ general: MENSAJE_LIMITE_SOLICITUDES })
       } else {
         setErrors({ general: 'Ocurrió un error. Intenta nuevamente.' })
       }

@@ -69,4 +69,15 @@ describe('LoginForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Ocurrió un error. Intenta nuevamente.')
   })
+
+  it('explica el límite de intentos ante un 429', async () => {
+    const auth = crearAuthValue({
+      login: vi.fn().mockRejectedValue({ response: { status: 429 } }),
+    })
+    renderLogin(auth)
+
+    await completar('ana@privapp.test', 'Segura123')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')
+  })
 })

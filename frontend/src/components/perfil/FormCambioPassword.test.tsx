@@ -106,4 +106,17 @@ describe('FormCambioPassword', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No fue posible cambiar tu contraseña.')
   })
+
+  it('explica el límite de intentos ante un 429', async () => {
+    const auth = crearAuthValue({
+      user: usuarioComun,
+      token: 't',
+      cambiarPassword: vi.fn().mockRejectedValue({ response: { status: 429 } }),
+    })
+    renderForm(auth)
+
+    await completar('Actual123', 'Nueva4567')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')
+  })
 })

@@ -105,4 +105,15 @@ describe('RegisterForm', () => {
 
     expect(await screen.findByText('Este correo ya está registrado.')).toBeInTheDocument()
   })
+
+  it('explica el límite de intentos ante un 429', async () => {
+    const auth = crearAuthValue({
+      register: vi.fn().mockRejectedValue({ response: { status: 429 } }),
+    })
+    renderRegistro(auth)
+
+    await completar(VALIDOS)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')
+  })
 })

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import apiClient from '@/api/client'
 import { analisisApi } from '@/api/analisis'
 import Button from '@/components/common/Button'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 
 type Pestana = 'texto' | 'url'
 
@@ -69,9 +70,10 @@ export default function IngestaForm() {
       // Navegar a la vista de progreso / resultados
       navigate(`/resultados/${iniciado.id_analisis}`)
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
-        'Ocurrió un error. Intenta de nuevo.'
+      const msg = esLimiteDeSolicitudes(err)
+        ? MENSAJE_LIMITE_SOLICITUDES
+        : (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
+          'Ocurrió un error. Intenta de nuevo.'
       setError(msg)
     } finally {
       setLoading(false)

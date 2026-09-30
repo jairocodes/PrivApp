@@ -10,6 +10,7 @@ import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisApi } from '@/api/analisis'
 import type { AnalisisResult, NivelRiesgo } from '@/types/analisis'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 
 export default function Resultados() {
   const { id } = useParams<{ id: string }>()
@@ -88,8 +89,12 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
       enlace.click()
       enlace.remove()
       window.URL.revokeObjectURL(url)
-    } catch {
-      setErrorDescarga('No fue posible descargar el PDF. Intenta nuevamente.')
+    } catch (err: unknown) {
+      setErrorDescarga(
+        esLimiteDeSolicitudes(err)
+          ? MENSAJE_LIMITE_SOLICITUDES
+          : 'No fue posible descargar el PDF. Intenta nuevamente.',
+      )
     } finally {
       setDescargando(false)
     }
