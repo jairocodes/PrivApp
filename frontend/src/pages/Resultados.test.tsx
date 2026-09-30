@@ -136,4 +136,78 @@ describe('Resultados', () => {
       expect(await screen.findByText('Análisis no encontrado.')).toBeInTheDocument()
     })
   })
+
+  describe('filtro de hallazgos', () => {
+    const analisisConVarios = {
+      ...analisisEjemplo,
+      secciones_analizadas: [
+        analisisEjemplo.secciones_analizadas[0],
+        {
+          categoria_opp115: 'Data Retention',
+          titulo: 'Conservación',
+          texto_original: '',
+          hallazgos: [{
+            tipo: 'riesgo' as const,
+            descripcion: 'Conserva los datos sin plazo.',
+            nivel: 'medio' as const,
+            fuentes_normativas: [{ documento: 'Decreto 57-2008.pdf', referencia: 'Art. 9', fragmento_relevante: 'x' }],
+          }],
+        },
+      ],
+    }
+
+    beforeEach(() => {
+      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 2, seccionesTotal: 2 })
+      vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisConVarios, isLoading: false, error: null, obtener })
+    })
+
+    it('por nivel reduce la lista de hallazgos', async () => {
+      renderResultados()
+      expect(screen.getByText('Mostrando 3 de 3 hallazgos')).toBeInTheDocument()
+
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'medio')
+
+      expect(screen.getByText('Mostrando 1 de 3 hallazgos')).toBeInTheDocument()
+      expect(screen.getByText('Conserva los datos sin plazo.')).toBeInTheDocument()
+      expect(screen.queryByText('Compartición con terceros')).not.toBeInTheDocument()
+    })
+
+    it('por jurisdicción reduce la lista de hallazgos', async () => {
+      renderResultados()
+
+      await userEvent.selectOptions(screen.getByLabelText('Jurisdicción de la cita'), 'internacional')
+
+      expect(screen.getByText('Mostrando 1 de 3 hallazgos')).toBeInTheDocument()
+      expect(screen.getByText('Tus datos pueden llegar a empresas que no conoces.')).toBeInTheDocument()
+      expect(screen.queryByText('Conservación')).not.toBeInTheDocument()
+    })
+
+    it('limpiar muestra todos los hallazgos de nuevo', async () => {
+      renderResultados()
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'medio')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+
+      expect(screen.getByText('Mostrando 3 de 3 hallazgos')).toBeInTheDocument()
+      expect(screen.getByLabelText('Nivel de riesgo')).toHaveValue('')
+      expect(screen.getByText('Compartición con terceros')).toBeInTheDocument()
+    })
+
+    it('avisa cuando ningún hallazgo coincide', async () => {
+      renderResultados()
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'bajo')
+      await userEvent.selectOptions(screen.getByLabelText('Jurisdicción de la cita'), 'guatemala')
+
+      expect(screen.getByText('Ningún hallazgo coincide con los filtros.')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Mostrar todos los hallazgos' }))
+      expect(screen.getByText('Mostrando 3 de 3 hallazgos')).toBeInTheDocument()
+    })
+
+    it('el resumen general no cambia al filtrar', async () => {
+      renderResultados()
+      await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'medio')
+
+      expect(screen.getByRole('img', { name: 'Puntaje de riesgo: 90 de 100, Riesgo Alto' })).toBeInTheDocument()
+    })
+  })
 })

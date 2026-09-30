@@ -5,6 +5,7 @@ import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Navbar from '@/components/common/Navbar'
 import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
+import FiltroHallazgos from '@/components/analisis/FiltroHallazgos'
 import ListaRecomendaciones from '@/components/analisis/ListaRecomendaciones'
 import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 import VistaProgreso from '@/components/analisis/VistaProgreso'
@@ -12,6 +13,13 @@ import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisApi } from '@/api/analisis'
 import type { AnalisisResult, NivelRiesgo } from '@/types/analisis'
+import {
+  SIN_FILTRO,
+  contarHallazgos,
+  filtrarSecciones,
+  hayFiltroActivo,
+  type FiltroHallazgos as Filtro,
+} from '@/utils/filtrosHallazgos'
 import {
   MENSAJE_ELIMINAR_ANALISIS,
   MENSAJE_LIMITE_SOLICITUDES,
@@ -81,6 +89,9 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
   })
 
   const [descargando, setDescargando] = useState(false)
+  const [filtro, setFiltro] = useState<Filtro>(SIN_FILTRO)
+  const seccionesVisibles = filtrarSecciones(secciones_analizadas, filtro)
+  const filtroActivo = hayFiltroActivo(filtro)
   const [errorDescarga, setErrorDescarga] = useState<string | null>(null)
   const navigate = useNavigate()
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
@@ -171,16 +182,38 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
         <h2 className="text-base font-semibold text-gray-700 mb-3 px-1">
           Secciones analizadas
         </h2>
-        <div className="space-y-3">
-          {secciones_analizadas.map((sec, i) => (
-            <TarjetaSeccion
-              key={i}
-              seccion={sec}
-              indice={i + 1}
-              inicialmenteExpandida={i === 0}
-            />
-          ))}
+        <div className="mb-3">
+          <FiltroHallazgos
+            filtro={filtro}
+            onCambiar={setFiltro}
+            visibles={contarHallazgos(seccionesVisibles.map((s) => s.seccion))}
+            total={contarHallazgos(secciones_analizadas)}
+          />
         </div>
+        {seccionesVisibles.length === 0 ? (
+          <div className="card text-center py-8 space-y-2">
+            <p className="text-sm text-gray-500">Ningún hallazgo coincide con los filtros.</p>
+            <button
+              type="button"
+              onClick={() => setFiltro(SIN_FILTRO)}
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
+              Mostrar todos los hallazgos
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {seccionesVisibles.map(({ seccion, indice }, posicion) => (
+              <TarjetaSeccion
+                // La clave cambia con el filtro para que las secciones se abran al filtrar.
+                key={`${indice}-${filtro.nivel}-${filtro.jurisdiccion}`}
+                seccion={seccion}
+                indice={indice}
+                inicialmenteExpandida={filtroActivo || posicion === 0}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Recomendaciones ───────────────────────────────────────────── */}
