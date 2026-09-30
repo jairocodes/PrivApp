@@ -37,6 +37,11 @@ describe('Perfil', () => {
     expect(screen.queryByRole('textbox', { name: /correo/i })).not.toBeInTheDocument()
   })
 
+  it('ofrece eliminar la cuenta', () => {
+    renderPerfil(crearAuthValue({ user: usuarioComun, token: 't' }))
+    expect(screen.getByRole('heading', { name: 'Eliminar mi cuenta' })).toBeInTheDocument()
+  })
+
   it('guarda el nombre sin espacios en los extremos y confirma el cambio', async () => {
     const auth = crearAuthValue({ user: usuarioComun, token: 't' })
     renderPerfil(auth)

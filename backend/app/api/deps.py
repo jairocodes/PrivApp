@@ -47,14 +47,15 @@ async def get_current_user(
     user_id: int = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    from app.services.auth_service import get_user_by_id
+    from app.repositories.usuarios import RepositorioUsuarios
 
     jti = payload.get("jti")
     if jti is not None and await token_esta_revocado(jti):
         raise TokenInvalidoError()
 
-    user = await get_user_by_id(db, user_id)
-    if not user.is_active:
+    # Un token de una cuenta eliminada ya no autentica a nadie: 401, no 404.
+    user = await RepositorioUsuarios(db).obtener_por_id(user_id)
+    if user is None or not user.is_active:
         raise TokenInvalidoError()
     if _emitido_antes_de_invalidacion(payload, user.sessions_valid_from):
         raise TokenInvalidoError()

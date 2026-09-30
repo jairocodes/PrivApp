@@ -3,6 +3,7 @@ import Navbar from '@/components/common/Navbar'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import FormCambioPassword from '@/components/perfil/FormCambioPassword'
+import FormEliminarCuenta from '@/components/perfil/FormEliminarCuenta'
 import { useAuth } from '@/hooks/useAuth'
 
 const NOMBRE_MIN = 2
@@ -86,6 +87,8 @@ export default function Perfil() {
         </form>
 
         <FormCambioPassword />
+
+        <FormEliminarCuenta />
       </main>
     </div>
   )

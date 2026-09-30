@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Integer, Select, cast, func, literal, or_, select
+from sqlalchemy import Integer, Select, cast, delete, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import AnalysisTemp
@@ -98,6 +98,20 @@ class RepositorioAnalisis:
         """Eliminación definitiva (no hay borrado lógico ni papelera)."""
         await self.db.delete(registro)
         await self.db.flush()
+
+    async def tiene_analisis_en_proceso(self, user_id: int) -> bool:
+        result = await self.db.execute(
+            select(func.count()).select_from(AnalysisTemp)
+            .where(AnalysisTemp.user_id == user_id, AnalysisTemp.estado == "procesando")
+        )
+        return result.scalar_one() > 0
+
+    async def eliminar_de_usuario(self, user_id: int) -> int:
+        """Elimina todos los análisis del usuario; devuelve cuántos eran. No se
+        depende del ON DELETE CASCADE para que funcione igual en cualquier motor."""
+        result = await self.db.execute(delete(AnalysisTemp).where(AnalysisTemp.user_id == user_id))
+        await self.db.flush()
+        return result.rowcount
 
     async def contar_completados_de_usuario(
         self, user_id: int, filtros: FiltrosHistorial | None = None

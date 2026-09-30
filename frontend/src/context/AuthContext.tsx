@@ -59,6 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(res.data.access_token)
   }, [])
 
+  // La cuenta ya no existe: basta con olvidar la sesión en este navegador.
+  const eliminarCuenta = useCallback(async (password: string) => {
+    await authApi.eliminarCuenta(password)
+    localStorage.removeItem('access_token')
+    setToken(null)
+    setUser(null)
+  }, [])
+
   const logout = useCallback(() => {
     authApi.logout().catch(() => {})
     localStorage.removeItem('access_token')
@@ -67,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, actualizarPerfil, cambiarPassword }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, actualizarPerfil, cambiarPassword, eliminarCuenta }}>
       {children}
     </AuthContext.Provider>
   )

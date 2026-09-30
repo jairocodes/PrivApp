@@ -19,4 +19,7 @@ export const authApi = {
 
   cambiarPassword: (datos: CambioPasswordRequest) =>
     apiClient.post<TokenResponse>('/api/auth/change-password', datos),
+
+  eliminarCuenta: (password: string) =>
+    apiClient.delete('/api/auth/me', { data: { password } }),
 }

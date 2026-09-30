@@ -77,6 +77,30 @@ class AutodesactivacionError(HTTPException):
         )
 
 
+class PasswordIncorrectaError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña es incorrecta.",
+        )
+
+
+class UltimoAdministradorError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes eliminar tu cuenta porque eres el único administrador activo.",
+        )
+
+
+class CuentaConAnalisisEnCursoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Espera a que termine el análisis en curso antes de eliminar tu cuenta.",
+        )
+
+
 class TextoDemasiadoCortoError(HTTPException):
     def __init__(self):
         super().__init__(
