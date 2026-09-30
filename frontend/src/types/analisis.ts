@@ -6,6 +6,8 @@ export interface FuenteNormativa {
   documento: string
   referencia: string
   fragmento_relevante: string
+  // La completa el servidor con el fragmento del corpus; ausente en análisis antiguos.
+  jurisdiccion?: Jurisdiccion | null
 }
 
 export interface Hallazgo {
@@ -15,6 +17,8 @@ export interface Hallazgo {
   fuentes_normativas: FuenteNormativa[]
   // Ausente en los análisis realizados antes de incorporar la clasificación.
   tipo_tratamiento?: string | null
+  // Ningún fragmento del corpus respalda el hallazgo: no suma al puntaje.
+  sin_respaldo?: boolean
 }
 
 export interface SeccionAnalizada {

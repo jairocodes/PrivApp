@@ -102,6 +102,14 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
                     </div>
                   </div>
 
+                  {hallazgo.sin_respaldo && (
+                    <p className="text-xs text-gray-500 pl-7 flex items-center gap-1">
+                      Sin respaldo en el corpus normativo: no se cita ninguna norma y no suma al
+                      puntaje de riesgo.
+                      <AyudaGlosario termino="Sin respaldo en el corpus normativo" />
+                    </p>
+                  )}
+
                   {/* Fuentes normativas */}
                   {hallazgo.fuentes_normativas.length > 0 && (
                     <div className="space-y-2 mt-2 pl-7">

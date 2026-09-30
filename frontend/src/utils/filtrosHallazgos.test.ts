@@ -63,6 +63,15 @@ describe('filtro de hallazgos', () => {
     expect(hallazgoCoincide(hallazgo('medio', []), { nivel: '', jurisdiccion: 'internacional' })).toBe(false)
   })
 
+  it('usa la jurisdicción guardada con la cita', () => {
+    const conJurisdiccion: Hallazgo = {
+      ...hallazgo('alto', []),
+      fuentes_normativas: [{ ...cita('Documento nuevo'), jurisdiccion: 'guatemala' }],
+    }
+    expect(hallazgoCoincide(conJurisdiccion, { nivel: '', jurisdiccion: 'guatemala' })).toBe(true)
+    expect(hallazgoCoincide(conJurisdiccion, { nivel: '', jurisdiccion: 'internacional' })).toBe(false)
+  })
+
   it('no modifica las secciones originales', () => {
     filtrarSecciones(SECCIONES, { nivel: 'alto', jurisdiccion: '' })
     expect(contarHallazgos(SECCIONES)).toBe(4)

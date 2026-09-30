@@ -65,4 +65,23 @@ describe('TarjetaSeccion', () => {
       '/glosario#transferencia-de-datos-a-terceros',
     )
   })
+
+  it('marca los hallazgos sin respaldo en el corpus normativo', () => {
+    const [primero, ...resto] = seccionEjemplo.hallazgos
+    const seccion = {
+      ...seccionEjemplo,
+      hallazgos: [{ ...primero, fuentes_normativas: [], sin_respaldo: true }, ...resto],
+    }
+    render(<TarjetaSeccion seccion={seccion} indice={1} inicialmenteExpandida />)
+
+    expect(screen.getAllByText(/Sin respaldo en el corpus normativo/)).toHaveLength(1)
+    expect(
+      screen.getByRole('button', { name: 'Qué significa «Sin respaldo en el corpus normativo»' }),
+    ).toBeInTheDocument()
+  })
+
+  it('los hallazgos respaldados no llevan la marca', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+    expect(screen.queryByText(/Sin respaldo en el corpus normativo/)).not.toBeInTheDocument()
+  })
 })

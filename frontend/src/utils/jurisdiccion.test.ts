@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inferirJurisdiccion } from './jurisdiccion'
+import { inferirJurisdiccion, jurisdiccionDeFuente } from './jurisdiccion'
 
 describe('inferirJurisdiccion', () => {
   it.each([
@@ -15,5 +15,18 @@ describe('inferirJurisdiccion', () => {
     ['Principios generales de protección de datos', 'internacional'],
   ])('%s → %s', (documento, esperada) => {
     expect(inferirJurisdiccion(documento)).toBe(esperada)
+  })
+})
+
+describe('jurisdiccionDeFuente', () => {
+  const fuente = { documento: 'RGPD', referencia: '', fragmento_relevante: '' }
+
+  it('prefiere la jurisdicción guardada con la cita', () => {
+    expect(jurisdiccionDeFuente({ ...fuente, jurisdiccion: 'guatemala' })).toBe('guatemala')
+  })
+
+  it('en los análisis antiguos la deduce del documento', () => {
+    expect(jurisdiccionDeFuente(fuente)).toBe('internacional')
+    expect(jurisdiccionDeFuente({ ...fuente, jurisdiccion: null })).toBe('internacional')
   })
 })
