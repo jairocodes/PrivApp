@@ -26,6 +26,14 @@ class RegisterRequest(BaseModel):
         return v
 
 
+class ActualizarPerfilRequest(BaseModel):
+    """Solo el nombre es editable; el correo no se modifica."""
+
+    model_config = {"str_strip_whitespace": True}
+
+    nombre: str = Field(..., min_length=2, max_length=100)
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

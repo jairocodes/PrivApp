@@ -89,3 +89,10 @@ async def promover_a_administrador(db: AsyncSession, email: str) -> User:
     await db.flush()
     logger.info("Usuario promovido a administrador: id=%s", user.id)
     return user
+
+
+async def actualizar_perfil(db: AsyncSession, user: User, nombre: str) -> User:
+    """Actualiza el nombre del usuario autenticado."""
+    await RepositorioUsuarios(db).actualizar_perfil(user, nombre)
+    logger.info("Perfil actualizado: id=%s", user.id)
+    return user

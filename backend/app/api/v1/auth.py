@@ -1,4 +1,4 @@
-"""Router de autenticación — registro, login, logout y perfil del usuario."""
+"""Router de autenticación — registro, login, logout, consulta y edición del perfil."""
 
 import time
 
@@ -10,8 +10,14 @@ from app.core.limiter import limiter
 from app.core.token_revocation import revocar_token
 from app.database import get_db
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
-from app.services.auth_service import authenticate_user, register_user
+from app.schemas.auth import (
+    ActualizarPerfilRequest,
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
+from app.services.auth_service import actualizar_perfil, authenticate_user, register_user
 
 router = APIRouter()
 
@@ -57,3 +63,13 @@ async def logout(
 async def me(current_user: User = Depends(get_current_user)):
     """Devuelve la información del usuario autenticado actualmente."""
     return current_user
+
+
+@router.patch("/me", response_model=UserResponse)
+async def editar_perfil(
+    body: ActualizarPerfilRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Actualiza el nombre del usuario autenticado; el correo no es editable."""
+    return await actualizar_perfil(db, current_user, body.nombre)
