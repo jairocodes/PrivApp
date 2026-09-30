@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core.security import create_access_token, decode_access_token
 from app.models.user import User
+from app.repositories.usuarios import RepositorioUsuarios
 
 
 def _auth(token: str) -> dict:
@@ -104,3 +105,26 @@ class TestInvalidacionDeSesiones:
 
         r = await client.get("/api/auth/me", headers=_auth(token))
         assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# RepositorioUsuarios.invalidar_sesiones
+# ---------------------------------------------------------------------------
+
+class TestRepositorioInvalidarSesiones:
+    async def test_fija_la_fecha_de_invalidacion(self, db_session: AsyncSession, seed_user: User):
+        antes = datetime.now(timezone.utc)
+        await RepositorioUsuarios(db_session).invalidar_sesiones(seed_user)
+
+        assert seed_user.sessions_valid_from is not None
+        assert seed_user.sessions_valid_from >= antes
+
+    async def test_rechaza_las_sesiones_previas_y_acepta_las_nuevas(
+        self, client: AsyncClient, db_session: AsyncSession, seed_user: User
+    ):
+        token_anterior = create_access_token(str(seed_user.id))
+        await RepositorioUsuarios(db_session).invalidar_sesiones(seed_user)
+        token_nuevo = create_access_token(str(seed_user.id))
+
+        assert (await client.get("/api/auth/me", headers=_auth(token_anterior))).status_code == 401
+        assert (await client.get("/api/auth/me", headers=_auth(token_nuevo))).status_code == 200

@@ -1,5 +1,7 @@
 """Repositorio de acceso a datos para los usuarios (User)."""
 
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,3 +22,9 @@ class RepositorioUsuarios:
 
     def agregar(self, user: User) -> None:
         self.db.add(user)
+
+    async def invalidar_sesiones(self, user: User) -> None:
+        """Invalida todas las sesiones del usuario: a partir de ahora solo se
+        aceptan tokens emitidos después de este momento."""
+        user.sessions_valid_from = datetime.now(timezone.utc)
+        await self.db.flush()
