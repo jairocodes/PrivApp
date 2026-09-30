@@ -36,4 +36,20 @@ describe('TarjetaSeccion', () => {
     )
     expect(screen.getByText('No se identificaron hallazgos en esta sección.')).toBeInTheDocument()
   })
+
+  it('muestra el tipo de tratamiento de cada hallazgo', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    const etiqueta = screen.getByText('Transferencia de datos a terceros')
+    expect(etiqueta).toHaveAttribute('title', 'Tipo de tratamiento de datos')
+    expect(etiqueta).toHaveTextContent('Tipo de tratamiento: Transferencia de datos a terceros')
+  })
+
+  it('los hallazgos de análisis antiguos se muestran sin etiqueta y sin errores', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    // El segundo hallazgo del ejemplo no tiene tipo de tratamiento (análisis antiguo).
+    expect(screen.getByText('Se identifica al responsable del tratamiento.')).toBeInTheDocument()
+    expect(screen.getAllByTitle('Tipo de tratamiento de datos')).toHaveLength(1)
+  })
 })
