@@ -64,3 +64,25 @@ class TestRetryOpenAIAdapter:
                 )
 
         assert mock_create.call_count == 1
+
+
+class TestFabricaAdaptador:
+    """_crear_adaptador_llm elige la implementación según LLM_PROVIDER."""
+
+    def test_proveedor_openai_crea_adaptador_openai(self, monkeypatch):
+        from app.config import settings
+        from app.services.analisis_service import _crear_adaptador_llm
+
+        monkeypatch.setattr(settings, "llm_provider", "openai")
+        monkeypatch.setattr(settings, "openai_api_key", "fake-key")
+
+        assert isinstance(_crear_adaptador_llm(), OpenAIAdapter)
+
+    def test_proveedor_no_soportado_lanza_error(self, monkeypatch):
+        from app.config import settings
+        from app.services.analisis_service import _crear_adaptador_llm
+
+        monkeypatch.setattr(settings, "llm_provider", "desconocido")
+
+        with pytest.raises(ValueError, match="no soportado"):
+            _crear_adaptador_llm()

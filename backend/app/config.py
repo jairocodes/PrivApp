@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     # Redis (lista de revocación de tokens JWT)
     redis_url: str
 
-    # OpenAI (proveedor del modelo de lenguaje)
+    # Proveedor activo del modelo de lenguaje (hoy solo "openai")
+    llm_provider: str = "openai"
+
+    # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
