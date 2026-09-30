@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { analisisApi } from '@/api/analisis'
 import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisEjemplo } from '@/test/fixtures'
@@ -9,6 +11,7 @@ import Resultados from './Resultados'
 vi.mock('@/components/common/Navbar', () => ({ default: () => null }))
 vi.mock('@/hooks/useAnalisis', () => ({ useAnalisis: vi.fn() }))
 vi.mock('@/hooks/useProgresoAnalisis', () => ({ useProgresoAnalisis: vi.fn() }))
+vi.mock('@/api/analisis', () => ({ analisisApi: { descargarPDF: vi.fn() } }))
 
 const obtener = vi.fn()
 
@@ -61,5 +64,16 @@ describe('Resultados', () => {
     expect(screen.getByText('Compartición con terceros')).toBeInTheDocument()
     expect(screen.getByText('Revisa con quién se comparten tus datos.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeInTheDocument()
+  })
+
+  it('explica el límite de descargas del PDF ante un 429', async () => {
+    vi.mocked(analisisApi.descargarPDF).mockRejectedValue({ response: { status: 429 } })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+    vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
+    renderResultados()
+
+    await userEvent.click(screen.getByRole('button', { name: /Descargar PDF/ }))
+
+    expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
   })
 })

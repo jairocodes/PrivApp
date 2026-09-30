@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import { useAuth } from '@/hooks/useAuth'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
 
 interface Campos {
@@ -56,7 +57,9 @@ export default function FormCambioPassword() {
     } catch (err: unknown) {
       const respuesta = (err as { response?: { status?: number; data?: { detail?: unknown } } }).response
       const detalle = respuesta?.data?.detail
-      if (respuesta?.status === 400 && typeof detalle === 'string') {
+      if (esLimiteDeSolicitudes(err)) {
+        setErrores({ general: MENSAJE_LIMITE_SOLICITUDES })
+      } else if (respuesta?.status === 400 && typeof detalle === 'string') {
         setErrores(detalle.includes('actual es incorrecta') ? { actual: detalle } : { nueva: detalle })
       } else {
         setErrores({ general: 'No fue posible cambiar tu contraseña. Intenta nuevamente.' })

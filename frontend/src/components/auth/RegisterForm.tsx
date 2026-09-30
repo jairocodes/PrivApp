@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
 
 interface FormState {
@@ -68,6 +69,8 @@ export default function RegisterForm() {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 409) {
         setErrors({ email: 'Este correo ya está registrado.' })
+      } else if (esLimiteDeSolicitudes(err)) {
+        setErrors({ general: MENSAJE_LIMITE_SOLICITUDES })
       } else {
         setErrors({ general: 'Ocurrió un error. Intenta nuevamente.' })
       }

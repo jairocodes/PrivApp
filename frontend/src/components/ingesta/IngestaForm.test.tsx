@@ -79,4 +79,14 @@ describe('IngestaForm', () => {
     expect(await screen.findByText('El texto es demasiado corto para analizarlo.')).toBeInTheDocument()
     expect(analisisApi.iniciar).not.toHaveBeenCalled()
   })
+
+  it('explica el límite de intentos ante un 429', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue({ response: { status: 429, data: { error: 'Rate limit exceeded' } } })
+    renderIngesta()
+    escribirTexto(TEXTO_VALIDO)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Analizar política' }))
+
+    expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
+  })
 })
