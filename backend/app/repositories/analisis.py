@@ -7,7 +7,7 @@ from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import AnalysisTemp
-from app.repositories.json_sql import json_texto, sin_acentos
+from app.repositories.json_sql import json_texto, patron_contiene, sin_acentos
 
 
 @dataclass(frozen=True)
@@ -19,12 +19,6 @@ class FiltrosHistorial:
     desde: datetime | None = None  # inclusive, con zona horaria
     hasta: datetime | None = None  # inclusive, con zona horaria
     texto: str | None = None  # en el fragmento de la política o el comentario; sin distinguir acentos
-
-
-def _patron_like(texto: str) -> str:
-    """Patrón para buscar el texto literal: escapa los comodines de LIKE."""
-    escapado = texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escapado}%"
 
 
 def _aplicar_filtros(consulta: Select, filtros: FiltrosHistorial | None) -> Select:
@@ -39,7 +33,7 @@ def _aplicar_filtros(consulta: Select, filtros: FiltrosHistorial | None) -> Sele
         consulta = consulta.where(AnalysisTemp.created_at <= filtros.hasta)
     if filtros.texto:
         # Se quitan los acentos de ambos lados: "politica" encuentra "Política".
-        patron = sin_acentos(literal(_patron_like(filtros.texto)))
+        patron = sin_acentos(literal(patron_contiene(filtros.texto)))
         comentario = json_texto(AnalysisTemp.resultado, "resumen_general", "comentario_breve")
         consulta = consulta.where(or_(
             sin_acentos(AnalysisTemp.texto_original).ilike(patron, escape="\\"),

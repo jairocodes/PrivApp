@@ -2,10 +2,11 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.repositories.json_sql import patron_contiene, sin_acentos
 
 
 class RepositorioUsuarios:
@@ -23,8 +24,12 @@ class RepositorioUsuarios:
     @staticmethod
     def _filtrar(consulta: Select, busqueda: str | None) -> Select:
         if busqueda:
-            patron = f"%{busqueda}%"
-            consulta = consulta.where(or_(User.nombre.ilike(patron), User.email.ilike(patron)))
+            # Sin distinguir acentos ni mayúsculas: "perez" encuentra "Pérez".
+            patron = sin_acentos(literal(patron_contiene(busqueda)))
+            consulta = consulta.where(or_(
+                sin_acentos(User.nombre).ilike(patron, escape="\\"),
+                sin_acentos(User.email).ilike(patron, escape="\\"),
+            ))
         return consulta
 
     async def contar(self, busqueda: str | None = None) -> int:
