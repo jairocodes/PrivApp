@@ -23,4 +23,16 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
   })
+
+  it.each(['/login', '/registro', '/aviso-privacidad'])(
+    'el pie de página con el enlace al aviso aparece en %s',
+    async (ruta) => {
+      window.history.pushState({}, '', ruta)
+      render(<App />)
+
+      const enlace = await screen.findByRole('link', { name: 'Aviso de privacidad' })
+      expect(enlace.closest('footer')).not.toBeNull()
+      expect(enlace).toHaveAttribute('href', '/aviso-privacidad')
+    },
+  )
 })

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/components/common/ProtectedRoute'
 import AdminRoute from '@/components/common/AdminRoute'
+import Footer from '@/components/common/Footer'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
@@ -30,6 +31,7 @@ export default function App() {
           </Route>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        <Footer />
       </AuthProvider>
     </BrowserRouter>
   )
