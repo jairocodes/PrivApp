@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LogOut, Settings, ShieldCheck, UserRound } from 'lucide-react'
+import { BookOpen, LogOut, Settings, ShieldCheck, UserRound } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { esAdministrador } from '@/types/auth'
 
@@ -14,8 +14,17 @@ export default function Navbar() {
           PrivApp
         </Link>
 
-        {user && (
-          <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/glosario"
+            aria-label="Glosario"
+            className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+          >
+            <BookOpen size={16} aria-hidden="true" />
+            <span className="hidden sm:block">Glosario</span>
+          </Link>
+          {user && (
+            <div className="flex items-center gap-4">
             {esAdministrador(user) && (
               <Link
                 to="/admin"
@@ -41,8 +50,9 @@ export default function Navbar() {
               <LogOut size={16} />
               <span className="hidden sm:block">Salir</span>
             </button>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   )

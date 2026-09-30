@@ -76,4 +76,13 @@ describe('Resultados', () => {
 
     expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
   })
+
+  it('ofrece ayuda del glosario para el nivel y el puntaje de riesgo', () => {
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+    vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
+    renderResultados()
+
+    expect(screen.getByRole('button', { name: 'Qué significa «Nivel de riesgo»' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Qué significa «Puntaje de riesgo»' })).toBeInTheDocument()
+  })
 })

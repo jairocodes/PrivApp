@@ -52,4 +52,17 @@ describe('TarjetaSeccion', () => {
     expect(screen.getByText('Se identifica al responsable del tratamiento.')).toBeInTheDocument()
     expect(screen.getAllByTitle('Tipo de tratamiento de datos')).toHaveLength(1)
   })
+
+  it('ofrece la definición del tipo de tratamiento desde el glosario', async () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Qué significa «Transferencia de datos a terceros»' }),
+    )
+
+    expect(screen.getByRole('link', { name: 'Ver en el glosario' })).toHaveAttribute(
+      'href',
+      '/glosario#transferencia-de-datos-a-terceros',
+    )
+  })
 })

@@ -47,4 +47,9 @@ describe('Navbar', () => {
     expect(screen.getByRole('link', { name: 'PrivApp' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cerrar sesión' })).not.toBeInTheDocument()
   })
+
+  it('enlaza al glosario con o sin sesión', () => {
+    renderNavbar(crearAuthValue())
+    expect(screen.getByRole('link', { name: 'Glosario' })).toHaveAttribute('href', '/glosario')
+  })
 })
