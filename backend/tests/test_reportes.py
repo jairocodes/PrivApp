@@ -259,6 +259,7 @@ class TestEndpointPDF:
             pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
         )
         assert "42/100" in texto
+        assert "Puntuación de riesgo: 42/100" in " ".join(texto.split())
         assert "Compartición con terceros" in texto
         assert "fragmento normativo verificable" in texto
         # La Constitución de Guatemala debe etiquetarse como jurisdicción "Guatemala"

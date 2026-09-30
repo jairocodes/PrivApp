@@ -85,7 +85,7 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
     label_nivel = _LABEL_NIVEL.get(resumen.nivel_riesgo_global, resumen.nivel_riesgo_global)
     story.append(Paragraph("Resumen ejecutivo", estilos["h2"]))
     story.append(Paragraph(
-        f'<font color="{hex_nivel}"><b>{label_nivel}</b></font> — Puntaje: {resumen.puntaje}/100',
+        f'<font color="{hex_nivel}"><b>{label_nivel}</b></font> — Puntuación de riesgo: {resumen.puntaje}/100',
         estilos["normal"],
     ))
     story.append(Paragraph(_esc(resumen.comentario_breve), estilos["normal"]))
@@ -121,7 +121,7 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
             if hallazgo.sin_respaldo:
                 story.append(Paragraph(
                     "<i>Sin respaldo en el corpus normativo: no se cita ninguna norma y "
-                    "no suma al puntaje de riesgo.</i>",
+                    "no suma a la puntuación de riesgo.</i>",
                     estilos["cita"],
                 ))
             for fuente in hallazgo.fuentes_normativas:

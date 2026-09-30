@@ -35,7 +35,7 @@ export default function PanelEstadistico() {
           <div className="grid grid-cols-2 gap-3">
             <Indicador etiqueta="Análisis realizados" valor={datos.total.toLocaleString('es-GT')} />
             <Indicador
-              etiqueta="Puntaje promedio"
+              etiqueta="Puntuación promedio"
               valor={`${datos.puntaje_promedio.toLocaleString('es-GT', { maximumFractionDigits: 1 })}/100`}
             />
           </div>

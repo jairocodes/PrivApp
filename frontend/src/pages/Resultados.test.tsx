@@ -52,13 +52,13 @@ describe('Resultados', () => {
     expect(obtener).toHaveBeenCalledWith('7')
   })
 
-  it('presenta el panel con puntaje accesible, secciones y recomendaciones', () => {
+  it('presenta el panel con puntuación accesible, secciones y recomendaciones', () => {
     vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
     vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     renderResultados()
 
     expect(
-      screen.getByRole('img', { name: 'Puntaje de riesgo: 90 de 100, Riesgo Alto' }),
+      screen.getByRole('img', { name: 'Puntuación de riesgo: 90 de 100, Riesgo Alto' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Esta política presenta 1 hallazgo(s) de riesgo alto.')).toBeInTheDocument()
     expect(screen.getByText('Compartición con terceros')).toBeInTheDocument()
@@ -77,13 +77,14 @@ describe('Resultados', () => {
     expect(await screen.findByText('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')).toBeInTheDocument()
   })
 
-  it('ofrece ayuda del glosario para el nivel y el puntaje de riesgo', () => {
+  it('ofrece ayuda del glosario para el nivel, la puntuación y las recomendaciones', () => {
     vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
     vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     renderResultados()
 
     expect(screen.getByRole('button', { name: 'Qué significa «Nivel de riesgo»' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Qué significa «Puntaje de riesgo»' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Qué significa «Puntuación de riesgo»' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Qué significa «Recomendación»' })).toBeInTheDocument()
   })
 
   describe('eliminación desde el detalle', () => {
@@ -207,7 +208,7 @@ describe('Resultados', () => {
       renderResultados()
       await userEvent.selectOptions(screen.getByLabelText('Nivel de riesgo'), 'medio')
 
-      expect(screen.getByRole('img', { name: 'Puntaje de riesgo: 90 de 100, Riesgo Alto' })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'Puntuación de riesgo: 90 de 100, Riesgo Alto' })).toBeInTheDocument()
     })
   })
 })

@@ -23,7 +23,7 @@ describe('AyudaGlosario', () => {
     expect(boton).toHaveAttribute('aria-expanded', 'true')
     const nota = screen.getByRole('note')
     expect(nota).toHaveTextContent('Nivel de riesgo')
-    expect(nota).toHaveTextContent('PENDIENTE_CONTENIDO')
+    expect(nota).toHaveTextContent('Calificación general de la política: bajo, medio o alto.')
     expect(screen.getByRole('link', { name: 'Ver en el glosario' })).toHaveAttribute(
       'href',
       '/glosario#nivel-de-riesgo',

@@ -159,7 +159,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
             Nivel de riesgo <AyudaGlosario termino="Nivel de riesgo" />
           </span>
           <span className="inline-flex items-center gap-1">
-            Puntaje de riesgo <AyudaGlosario termino="Puntaje de riesgo" />
+            Puntuación de riesgo <AyudaGlosario termino="Puntuación de riesgo" />
           </span>
         </p>
 
@@ -292,7 +292,7 @@ function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: NivelRies
   return (
     <div
       role="img"
-      aria-label={`Puntaje de riesgo: ${puntaje} de 100, ${CONFIG_RIESGO[nivel].label}`}
+      aria-label={`Puntuación de riesgo: ${puntaje} de 100, ${CONFIG_RIESGO[nivel].label}`}
       className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4
                     border-gray-100 bg-white shadow-sm shrink-0"
     >
