@@ -4,14 +4,16 @@ import apiClient from '@/api/client'
 import { analisisApi } from '@/api/analisis'
 import Button from '@/components/common/Button'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
+import { MAX_TEXTO, MIN_TEXTO, validarTextoPolítica } from '@/utils/validators'
 
 type Pestana = 'texto' | 'url'
 
-const MIN_CHARS = 200
-const MAX_CHARS = 200_000
+const MIN_CHARS = MIN_TEXTO
+const MAX_CHARS = MAX_TEXTO
 
 interface IngestaResponse {
   texto_procesado: string
+  caracteres: number
   palabras: number
   fuente: string
 }
@@ -37,12 +39,9 @@ export default function IngestaForm() {
     e.preventDefault()
     setError(null)
 
-    if (pestana === 'texto' && chars < MIN_CHARS) {
-      setError(`El texto debe tener al menos ${MIN_CHARS} caracteres.`)
-      return
-    }
-    if (pestana === 'texto' && chars > MAX_CHARS) {
-      setError(`El texto no puede superar ${MAX_CHARS.toLocaleString()} caracteres.`)
+    const errorTexto = pestana === 'texto' ? validarTextoPolítica(texto) : null
+    if (errorTexto) {
+      setError(errorTexto)
       return
     }
     if (pestana === 'url' && !url.trim()) {
@@ -70,11 +69,16 @@ export default function IngestaForm() {
       // Navegar a la vista de progreso / resultados
       navigate(`/resultados/${iniciado.id_analisis}`)
     } catch (err: unknown) {
-      const msg = esLimiteDeSolicitudes(err)
-        ? MENSAJE_LIMITE_SOLICITUDES
-        : (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
-          'Ocurrió un error. Intenta de nuevo.'
-      setError(msg)
+      // detail puede ser un texto (errores del servicio) o una lista (validación
+      // del esquema); solo el texto se muestra tal cual.
+      const detalle = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+      setError(
+        esLimiteDeSolicitudes(err)
+          ? MENSAJE_LIMITE_SOLICITUDES
+          : typeof detalle === 'string'
+            ? detalle
+            : 'Ocurrió un error. Intenta de nuevo.',
+      )
     } finally {
       setLoading(false)
       setFase(null)

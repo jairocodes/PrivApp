@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.utils.validacion_texto import MAX_CARACTERES_ENTRADA
+
 
 class FuenteNormativa(BaseModel):
     documento: str
@@ -67,7 +69,8 @@ class AnalisisEstadoResponse(BaseModel):
 
 
 class IngestaTextoRequest(BaseModel):
-    texto: str = Field(..., min_length=200, max_length=200_000)
+    # La longitud real (RN-01) se valida en el servicio, tras la limpieza.
+    texto: str = Field(..., min_length=1, max_length=MAX_CARACTERES_ENTRADA)
 
 
 class IngestaURLRequest(BaseModel):

@@ -1,11 +1,19 @@
+// Misma regla que el servidor (RN-01); el servidor la aplica sobre el texto limpio.
 export const MIN_TEXTO = 200
+export const MIN_PALABRAS = 40
 export const MAX_TEXTO = 200000
 
+export function contarPalabras(texto: string): number {
+  const limpio = texto.trim()
+  return limpio ? limpio.split(/\s+/).length : 0
+}
+
 export function validarTextoPolítica(texto: string): string | null {
-  if (texto.trim().length < MIN_TEXTO)
-    return `El texto debe tener al menos ${MIN_TEXTO} caracteres.`
-  if (texto.length > MAX_TEXTO)
+  const limpio = texto.trim()
+  if (limpio.length > MAX_TEXTO)
     return `El texto no puede superar los ${MAX_TEXTO.toLocaleString()} caracteres.`
+  if (limpio.length < MIN_TEXTO || contarPalabras(limpio) < MIN_PALABRAS)
+    return `El texto debe tener al menos ${MIN_TEXTO} caracteres y ${MIN_PALABRAS} palabras.`
   return null
 }
 

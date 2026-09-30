@@ -31,6 +31,7 @@ async def ingestar_texto(
     logger.info("Usuario %d ingresó texto directo [%d palabras].", current_user.id, len(texto_limpio.split()))
     return IngestaResponse(
         texto_procesado=texto_limpio,
+        caracteres=len(texto_limpio),
         palabras=len(texto_limpio.split()),
         fuente="texto_directo",
     )
@@ -48,6 +49,7 @@ async def ingestar_url(
     logger.info("Usuario %d ingresó URL '%s' [%d palabras].", current_user.id, payload.url, len(texto_limpio.split()))
     return IngestaResponse(
         texto_procesado=texto_limpio,
+        caracteres=len(texto_limpio),
         palabras=len(texto_limpio.split()),
         fuente=str(payload.url),
     )
