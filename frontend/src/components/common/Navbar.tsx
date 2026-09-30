@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
-import { ShieldCheck, LogOut } from 'lucide-react'
+import { LogOut, Settings, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { esAdministrador } from '@/types/auth'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
@@ -15,6 +16,15 @@ export default function Navbar() {
 
         {user && (
           <div className="flex items-center gap-4">
+            {esAdministrador(user) && (
+              <Link
+                to="/admin"
+                className="flex items-center gap-1 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+              >
+                <Settings size={16} aria-hidden="true" />
+                <span>Administración</span>
+              </Link>
+            )}
             <span className="text-sm text-gray-600 hidden sm:block">{user.nombre}</span>
             <button
               onClick={logout}

@@ -9,7 +9,7 @@ vi.mock('@/api/auth', () => ({
   authApi: { login: vi.fn(), register: vi.fn(), logout: vi.fn(), me: vi.fn() },
 }))
 
-const USUARIO = { id: 1, nombre: 'Ana', email: 'ana@privapp.test' }
+const USUARIO = { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }
 
 const envoltorio = ({ children }: { children: ReactNode }) => <AuthProvider>{children}</AuthProvider>
 

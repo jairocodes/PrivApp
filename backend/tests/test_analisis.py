@@ -9,6 +9,7 @@
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -383,6 +384,7 @@ class TestEstadoYProgreso:
         otro_usuario = User(
             nombre="Otro Usuario", email="otro-estado@privapp.test",
             hashed_password=hash_password("OtraPass123"), is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()

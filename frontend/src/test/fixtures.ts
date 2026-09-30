@@ -1,5 +1,5 @@
 import type { AnalisisResult, SeccionAnalizada } from '@/types/analisis'
-import type { AuthContextValue } from '@/types/auth'
+import type { AuthContextValue, User } from '@/types/auth'
 import { vi } from 'vitest'
 
 export const seccionEjemplo: SeccionAnalizada = {
@@ -50,4 +50,13 @@ export function crearAuthValue(parcial: Partial<AuthContextValue> = {}): AuthCon
     logout: vi.fn(),
     ...parcial,
   }
+}
+
+export const usuarioComun: User = { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }
+
+export const administrador: User = {
+  id: 2,
+  nombre: 'Admin',
+  email: 'admin@privapp.test',
+  role: 'administrador',
 }

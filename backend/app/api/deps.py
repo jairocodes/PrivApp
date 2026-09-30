@@ -4,11 +4,11 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import TokenInvalidoError
+from app.core.exceptions import AccesoDenegadoError, TokenInvalidoError
 from app.core.security import decode_access_token
 from app.core.token_revocation import token_esta_revocado
 from app.database import get_db
-from app.models.user import User
+from app.models.user import ROL_ADMINISTRADOR, User
 
 security = HTTPBearer()
 
@@ -42,3 +42,11 @@ async def get_current_user(
     if not user.is_active:
         raise TokenInvalidoError()
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Restringe la ruta al rol administrador. Usa el rol vigente en la base de
+    datos (no el del token), para que un cambio de rol tenga efecto inmediato."""
+    if current_user.role != ROL_ADMINISTRADOR:
+        raise AccesoDenegadoError()
+    return current_user

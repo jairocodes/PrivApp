@@ -1,5 +1,7 @@
 """Configuración global de pytest con base de datos SQLite en memoria para tests."""
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -53,6 +55,7 @@ async def seed_user(db_session: AsyncSession) -> User:
         email="test@privapp.test",
         hashed_password=hash_password("TestPass123"),
         is_active=True,
+        privacy_accepted_at=datetime.now(timezone.utc),
     )
     db_session.add(user)
     await db_session.flush()

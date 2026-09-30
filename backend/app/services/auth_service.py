@@ -1,6 +1,7 @@
 """Servicio de autenticación y gestión de usuarios."""
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +11,7 @@ from app.core.exceptions import (
     UsuarioYaExisteError,
 )
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.user import User
+from app.models.user import ROL_ADMINISTRADOR, ROL_USUARIO, User
 from app.repositories.usuarios import RepositorioUsuarios
 
 logger = logging.getLogger(__name__)
@@ -41,11 +42,16 @@ async def register_user(
         nombre=nombre,
         email=email,
         hashed_password=hash_password(password),
+        # El registro público nunca asigna otro rol.
+        role=ROL_USUARIO,
+        # Provisional: la aceptación explícita del aviso (casilla validada en
+        # el servidor) se incorpora al registro junto con la página del aviso.
+        privacy_accepted_at=datetime.now(timezone.utc),
     )
     RepositorioUsuarios(db).agregar(user)
     await db.flush()
 
-    token = create_access_token(str(user.id))
+    token = create_access_token(str(user.id), user.role)
     logger.info("Usuario registrado: id=%s email=%s", user.id, user.email)
     return user, token
 
@@ -63,6 +69,18 @@ async def authenticate_user(
     if not user.is_active:
         raise CredencialesInvalidasError()
 
-    token = create_access_token(str(user.id))
+    token = create_access_token(str(user.id), user.role)
     logger.info("Login exitoso: id=%s", user.id)
     return user, token
+
+
+async def promover_a_administrador(db: AsyncSession, email: str) -> User:
+    """Asigna el rol administrador a un usuario existente. Se usa solo desde
+    scripts/promover_admin.py: ninguna ruta de la API permite elevar roles."""
+    user = await get_user_by_email(db, email)
+    if not user:
+        raise UsuarioNoEncontradoError()
+    user.role = ROL_ADMINISTRADOR
+    await db.flush()
+    logger.info("Usuario promovido a administrador: id=%s", user.id)
+    return user

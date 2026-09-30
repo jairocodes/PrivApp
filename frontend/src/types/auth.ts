@@ -1,7 +1,14 @@
+export type Rol = 'usuario' | 'administrador'
+
 export interface User {
   id: number
   nombre: string
   email: string
+  role: Rol
+}
+
+export function esAdministrador(user: User | null): boolean {
+  return user?.role === 'administrador'
 }
 
 export interface LoginRequest {
