@@ -27,6 +27,7 @@ from app.services.analisis_service import (
     obtener_estado_analisis,
 )
 from app.services.reportes_service import generar_pdf_analisis
+from app.utils.validacion_texto import validar_longitud_politica
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,6 +46,8 @@ async def iniciar(
     El cliente debe sondear GET /{id}/estado hasta que el análisis esté
     'completado', y luego consultar GET /{id} para el resultado completo.
     """
+    # Misma regla que la ingesta, para que no pueda saltarse llamando a la API.
+    validar_longitud_politica(payload.texto)
     logger.info(
         "Usuario %d solicitó análisis [%d palabras].",
         current_user.id,

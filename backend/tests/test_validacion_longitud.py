@@ -128,3 +128,24 @@ class TestConteoEnLaRespuesta:
         datos = r.json()
         assert datos["caracteres"] == 239
         assert datos["palabras"] == 40
+
+
+class TestLongitudAlIniciarAnalisis:
+    async def test_iniciar_aplica_la_misma_regla_que_la_ingesta(self, client):
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/analisis/iniciar",
+            json={"texto": PALABRAS_39},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 422
+        assert r.json()["detail"] == "El texto debe tener al menos 200 caracteres y 40 palabras."
+
+    async def test_iniciar_rechaza_mas_de_200000_caracteres(self, client):
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/analisis/iniciar",
+            json={"texto": CARACTERES_200001},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 422
