@@ -1,6 +1,7 @@
 """Endpoints de administración (solo rol administrador).
 
-GET /api/admin/usuarios — lista paginada de usuarios, con búsqueda
+GET   /api/admin/usuarios              — lista paginada de usuarios, con búsqueda
+PATCH /api/admin/usuarios/{id}/estado  — activa o desactiva una cuenta
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -8,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin
 from app.database import get_db
-from app.schemas.admin import ListadoUsuariosResponse
-from app.services.admin_service import listar_usuarios
+from app.models.user import User
+from app.schemas.admin import CambioEstadoUsuarioRequest, ListadoUsuariosResponse, UsuarioAdminItem
+from app.services.admin_service import cambiar_estado_usuario, listar_usuarios
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -23,3 +25,14 @@ async def listar(
 ) -> ListadoUsuariosResponse:
     """Lista las cuentas de usuario, ordenadas por id."""
     return await listar_usuarios(db, page, page_size, q)
+
+
+@router.patch("/usuarios/{user_id}/estado", response_model=UsuarioAdminItem)
+async def cambiar_estado(
+    user_id: int,
+    body: CambioEstadoUsuarioRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UsuarioAdminItem:
+    """Activa o desactiva una cuenta; un administrador no puede desactivarse a sí mismo."""
+    return await cambiar_estado_usuario(db, admin, user_id, body.activo)

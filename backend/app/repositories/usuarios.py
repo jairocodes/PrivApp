@@ -41,6 +41,10 @@ class RepositorioUsuarios:
     def agregar(self, user: User) -> None:
         self.db.add(user)
 
+    async def cambiar_estado(self, user: User, activo: bool) -> None:
+        user.is_active = activo
+        await self.db.flush()
+
     async def invalidar_sesiones(self, user: User) -> None:
         """Invalida todas las sesiones del usuario: a partir de ahora solo se
         aceptan tokens emitidos después de este momento."""

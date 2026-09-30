@@ -20,6 +20,10 @@ class UsuarioAdminItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CambioEstadoUsuarioRequest(BaseModel):
+    activo: bool
+
+
 class ListadoUsuariosResponse(BaseModel):
     items: list[UsuarioAdminItem]
     total: int
