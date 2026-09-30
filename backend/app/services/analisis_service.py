@@ -338,8 +338,10 @@ def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 def _crear_adaptador_llm() -> LLMAdapter:
-    """Crea el adaptador del proveedor del modelo de lenguaje (OpenAI)."""
-    return OpenAIAdapter(api_key=settings.openai_api_key, model=settings.openai_model)
+    """Selecciona el adaptador del modelo de lenguaje según LLM_PROVIDER en el .env."""
+    if settings.llm_provider == "openai":
+        return OpenAIAdapter(api_key=settings.openai_api_key, model=settings.openai_model)
+    raise ValueError(f"Proveedor de modelo de lenguaje no soportado: {settings.llm_provider}")
 
 
 async def crear_analisis(
