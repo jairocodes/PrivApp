@@ -70,6 +70,19 @@ class RepositorioAnalisis:
         registro.resultado = {**(registro.resultado or {}), "metadatos_reporte": metadatos}
         await self.db.flush()
 
+    async def listar_con_metadatos_reporte(self) -> list[AnalysisTemp]:
+        """Análisis completados de todos los usuarios que ya generaron algún reporte.
+        Solo para estadísticas internas (script fuera de la API)."""
+        result = await self.db.execute(
+            select(AnalysisTemp)
+            .where(AnalysisTemp.estado == "completado")
+            .order_by(AnalysisTemp.id)
+        )
+        return [
+            r for r in result.scalars().all()
+            if r.resultado and r.resultado.get("metadatos_reporte")
+        ]
+
     async def eliminar(self, registro: AnalysisTemp) -> None:
         """Eliminación definitiva (no hay borrado lógico ni papelera)."""
         await self.db.delete(registro)

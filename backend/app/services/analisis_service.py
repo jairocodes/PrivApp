@@ -635,3 +635,29 @@ async def registrar_generacion_reporte(
         "generaciones": generaciones,
     })
     logger.info("Reporte PDF del análisis %s generado en %.4f s.", analisis_id, segundos)
+
+
+async def estadisticas_tiempos_reporte(db: AsyncSession) -> dict:
+    """Resumen de los tiempos de generación registrados en todos los análisis
+    (las últimas MAX_GENERACIONES_REGISTRADAS mediciones de cada uno)."""
+    from app.services.reportes_service import resumir_tiempos
+
+    registros = await RepositorioAnalisis(db).listar_con_metadatos_reporte()
+    por_analisis = []
+    todas: list[float] = []
+    for registro in registros:
+        metadatos = registro.resultado["metadatos_reporte"]
+        tiempos = [g["segundos"] for g in metadatos.get("generaciones", [])]
+        todas.extend(tiempos)
+        por_analisis.append({
+            "id": registro.id,
+            "total_generaciones": metadatos.get("total_generaciones", len(tiempos)),
+            "ultima_generacion_segundos": metadatos.get("ultima_generacion_segundos"),
+            **resumir_tiempos(tiempos),
+        })
+    return {
+        "analisis_con_reporte": len(registros),
+        "total_generaciones": sum(a["total_generaciones"] for a in por_analisis),
+        "resumen": resumir_tiempos(todas),
+        "por_analisis": por_analisis,
+    }
