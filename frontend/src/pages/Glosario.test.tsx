@@ -22,7 +22,10 @@ describe('Glosario', () => {
     expect(screen.getByRole('heading', { name: 'Glosario' })).toBeInTheDocument()
     expect(screen.getByText(`${GLOSARIO.length} términos`)).toBeInTheDocument()
     expect(screen.getByText('Transferencia de datos a terceros')).toBeInTheDocument()
-    expect(screen.getAllByText('PENDIENTE_CONTENIDO')).toHaveLength(GLOSARIO.length)
+    expect(screen.queryByText('PENDIENTE_CONTENIDO')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Categoría para los hallazgos que no corresponden a ninguno de los demás tipos de tratamiento de datos.'),
+    ).toBeInTheDocument()
   })
 
   it('cada término tiene un ancla para enlazarlo desde los resultados', () => {

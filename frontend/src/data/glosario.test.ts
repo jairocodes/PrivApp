@@ -18,6 +18,34 @@ describe('glosario', () => {
     for (const tipo of TIPOS_TRATAMIENTO) expect(terminos).toContain(tipo)
   })
 
+  it('tiene las 22 entradas aprobadas, todas con definición en texto plano', () => {
+    expect(GLOSARIO).toHaveLength(22)
+    for (const entrada of GLOSARIO) {
+      expect(entrada.definicion.length).toBeGreaterThan(40)
+      expect(entrada.definicion).not.toContain('PENDIENTE_CONTENIDO')
+      expect(entrada.definicion).not.toMatch(/[<>*_#]|https?:/)
+    }
+  })
+
+  it('usa «Puntuación de riesgo» e incluye «Cláusula» y «Recomendación»', () => {
+    const terminos = GLOSARIO.map((e) => e.termino)
+    expect(terminos).toEqual(expect.arrayContaining(['Puntuación de riesgo', 'Cláusula', 'Recomendación']))
+    expect(terminos).not.toContain('Puntaje de riesgo')
+  })
+
+  it('los términos con ayuda contextual en los resultados tienen su entrada', () => {
+    for (const termino of [
+      'Nivel de riesgo',
+      'Puntuación de riesgo',
+      'Referencia internacional',
+      'Sin respaldo en el corpus normativo',
+      'Recomendación',
+      ...TIPOS_TRATAMIENTO,
+    ]) {
+      expect(entradaPorTermino(termino), termino).toBeDefined()
+    }
+  })
+
   it('los identificadores son únicos', () => {
     const ids = GLOSARIO.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)

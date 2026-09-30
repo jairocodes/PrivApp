@@ -1,4 +1,5 @@
 import { Lightbulb } from 'lucide-react'
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 
 interface Props {
   recomendaciones: string[]
@@ -12,6 +13,7 @@ export default function ListaRecomendaciones({ recomendaciones }: Props) {
       <div className="flex items-center gap-2 mb-4">
         <Lightbulb size={20} className="text-yellow-500" />
         <h2 className="text-lg font-semibold text-gray-800">Recomendaciones</h2>
+        <AyudaGlosario termino="Recomendación" />
       </div>
       <ul className="space-y-3">
         {recomendaciones.map((rec, i) => (
