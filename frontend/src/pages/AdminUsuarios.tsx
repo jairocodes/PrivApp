@@ -1,13 +1,41 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { adminApi } from '@/api/admin'
+import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Navbar from '@/components/common/Navbar'
+import { useAuth } from '@/hooks/useAuth'
 import { useUsuariosAdmin } from '@/hooks/useUsuariosAdmin'
 import type { UsuarioAdmin } from '@/types/admin'
 
 export default function AdminUsuarios() {
-  const { items, total, page, pageSize, isLoading, error, cargar } = useUsuariosAdmin()
+  const { user } = useAuth()
+  const { items, total, page, pageSize, isLoading, error, cargar, reemplazar } = useUsuariosAdmin()
   const [texto, setTexto] = useState('')
+  const [pendiente, setPendiente] = useState<UsuarioAdmin | null>(null)
+  const [procesando, setProcesando] = useState(false)
+  const [errorCambio, setErrorCambio] = useState<string | null>(null)
+
+  const abrirConfirmacion = (usuario: UsuarioAdmin) => {
+    setErrorCambio(null)
+    setPendiente(usuario)
+  }
+
+  const confirmarCambio = async () => {
+    if (!pendiente) return
+    setProcesando(true)
+    setErrorCambio(null)
+    try {
+      const { data } = await adminApi.cambiarEstadoUsuario(pendiente.id, !pendiente.is_active)
+      reemplazar(data)
+      setPendiente(null)
+    } catch (err: unknown) {
+      const detalle = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+      setErrorCambio(detalle ?? 'No fue posible cambiar el estado de la cuenta.')
+    } finally {
+      setProcesando(false)
+    }
+  }
 
   useEffect(() => {
     cargar(1, '')
@@ -68,7 +96,12 @@ export default function AdminUsuarios() {
           <>
             <ul className="space-y-3">
               {items.map((usuario) => (
-                <FilaUsuario key={usuario.id} usuario={usuario} />
+                <FilaUsuario
+                  key={usuario.id}
+                  usuario={usuario}
+                  esCuentaPropia={usuario.id === user?.id}
+                  onCambiarEstado={() => abrirConfirmacion(usuario)}
+                />
               ))}
             </ul>
 
@@ -96,11 +129,38 @@ export default function AdminUsuarios() {
           </>
         )}
       </main>
+
+      <DialogoConfirmacion
+        abierto={pendiente !== null}
+        titulo={
+          pendiente?.is_active
+            ? `¿Desactivar la cuenta de ${pendiente.nombre}?`
+            : `¿Activar la cuenta de ${pendiente?.nombre ?? ''}?`
+        }
+        mensaje={
+          pendiente?.is_active
+            ? 'La persona no podrá iniciar sesión y se cerrarán todas sus sesiones activas.'
+            : 'La persona podrá volver a iniciar sesión.'
+        }
+        textoConfirmar={pendiente?.is_active ? 'Desactivar' : 'Activar'}
+        procesando={procesando}
+        error={errorCambio}
+        onConfirmar={confirmarCambio}
+        onCancelar={() => setPendiente(null)}
+      />
     </div>
   )
 }
 
-function FilaUsuario({ usuario }: { usuario: UsuarioAdmin }) {
+function FilaUsuario({
+  usuario,
+  esCuentaPropia,
+  onCambiarEstado,
+}: {
+  usuario: UsuarioAdmin
+  esCuentaPropia: boolean
+  onCambiarEstado: () => void
+}) {
   const fecha = new Date(usuario.created_at).toLocaleDateString('es-GT', {
     day: '2-digit', month: 'short', year: 'numeric',
   })
@@ -114,13 +174,27 @@ function FilaUsuario({ usuario }: { usuario: UsuarioAdmin }) {
           {usuario.role === 'administrador' ? 'Administrador' : 'Usuario'} · Registrado el {fecha}
         </p>
       </div>
-      <span
-        className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-semibold ${
-          usuario.is_active ? 'bg-riesgo-bajo/15 text-riesgo-bajo' : 'bg-gray-100 text-gray-600'
-        }`}
-      >
-        {usuario.is_active ? 'Activa' : 'Desactivada'}
-      </span>
+      <div className="flex flex-col items-end gap-2 shrink-0">
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+            usuario.is_active ? 'bg-riesgo-bajo/15 text-riesgo-bajo' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {usuario.is_active ? 'Activa' : 'Desactivada'}
+        </span>
+        {esCuentaPropia ? (
+          <span className="text-xs text-gray-400">Tu cuenta</span>
+        ) : (
+          <button
+            type="button"
+            onClick={onCambiarEstado}
+            aria-label={`${usuario.is_active ? 'Desactivar' : 'Activar'} la cuenta de ${usuario.nombre}`}
+            className="text-xs font-medium text-blue-600 hover:underline"
+          >
+            {usuario.is_active ? 'Desactivar' : 'Activar'}
+          </button>
+        )}
+      </div>
     </li>
   )
 }
