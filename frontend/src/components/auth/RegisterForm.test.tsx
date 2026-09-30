@@ -20,11 +20,20 @@ function renderRegistro(auth: AuthContextValue) {
   )
 }
 
-async function completar(datos: { nombre: string; email: string; password: string; confirmacion: string }) {
+async function completar(datos: {
+  nombre: string
+  email: string
+  password: string
+  confirmacion: string
+  aceptaAviso?: boolean
+}) {
   await userEvent.type(screen.getByLabelText('Nombre completo'), datos.nombre)
   await userEvent.type(screen.getByLabelText('Correo electrónico'), datos.email)
   await userEvent.type(screen.getByLabelText('Contraseña'), datos.password)
   await userEvent.type(screen.getByLabelText('Confirmar contraseña'), datos.confirmacion)
+  if (datos.aceptaAviso ?? true) {
+    await userEvent.click(screen.getByRole('checkbox', { name: /acepto el aviso de privacidad/ }))
+  }
   await userEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }))
 }
 
@@ -63,8 +72,27 @@ describe('RegisterForm', () => {
 
     await completar({ ...VALIDOS, nombre: '  Ana López  ' })
 
-    expect(auth.register).toHaveBeenCalledWith('Ana López', 'ana@privapp.test', 'Segura123')
+    expect(auth.register).toHaveBeenCalledWith('Ana López', 'ana@privapp.test', 'Segura123', true)
     expect(await screen.findByText('Panel principal')).toBeInTheDocument()
+  })
+
+  it('exige aceptar el aviso de privacidad', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ ...VALIDOS, aceptaAviso: false })
+
+    expect(screen.getByText('Debes aceptar el aviso de privacidad para registrarte.')).toBeInTheDocument()
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('enlaza al aviso de privacidad desde la casilla', () => {
+    renderRegistro(crearAuthValue())
+
+    expect(screen.getByRole('link', { name: 'aviso de privacidad' })).toHaveAttribute(
+      'href',
+      '/aviso-privacidad',
+    )
   })
 
   it('avisa si el correo ya está registrado (409)', async () => {
