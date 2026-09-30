@@ -262,3 +262,43 @@ class TestEndpointPDF:
         assert "fragmento normativo verificable" in texto
         # La Constitución de Guatemala debe etiquetarse como jurisdicción "Guatemala"
         assert "Guatemala" in texto
+
+    async def test_pdf_incluye_el_tipo_de_tratamiento_de_cada_hallazgo(self, client, db_session, seed_user):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        resultado = _resultado_completo()
+        resultado["secciones_analizadas"][0]["hallazgos"][0]["tipo_tratamiento"] = (
+            "Transferencia de datos a terceros"
+        )
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=resultado)
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        texto = "".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        )
+        assert "Tipo de tratamiento: Transferencia de datos a terceros" in " ".join(texto.split())
+
+    async def test_pdf_de_un_analisis_antiguo_no_muestra_la_etiqueta(self, client, db_session, seed_user):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=_resultado_completo())
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert response.status_code == 200
+        texto = "".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        )
+        assert "Tipo de tratamiento" not in texto
+

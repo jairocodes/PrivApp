@@ -101,9 +101,15 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
         for hallazgo in seccion.hallazgos:
             hex_h = _HEX_NIVEL.get(hallazgo.nivel, "#000000")
             label_h = _LABEL_NIVEL.get(hallazgo.nivel, hallazgo.nivel)
+            # Los análisis anteriores a la clasificación no tienen tipo de tratamiento.
+            tratamiento = (
+                f" · <i>Tipo de tratamiento: {_esc(hallazgo.tipo_tratamiento)}</i>"
+                if hallazgo.tipo_tratamiento
+                else ""
+            )
             story.append(Paragraph(
                 f'<font color="{hex_h}"><b>{label_h}</b></font> '
-                f"({_esc(hallazgo.tipo)}) — {_esc(hallazgo.descripcion)}",
+                f"({_esc(hallazgo.tipo)}){tratamiento} — {_esc(hallazgo.descripcion)}",
                 estilos["normal"],
             ))
             for fuente in hallazgo.fuentes_normativas:
