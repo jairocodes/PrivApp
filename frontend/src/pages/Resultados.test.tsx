@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -11,7 +11,7 @@ import Resultados from './Resultados'
 vi.mock('@/components/common/Navbar', () => ({ default: () => null }))
 vi.mock('@/hooks/useAnalisis', () => ({ useAnalisis: vi.fn() }))
 vi.mock('@/hooks/useProgresoAnalisis', () => ({ useProgresoAnalisis: vi.fn() }))
-vi.mock('@/api/analisis', () => ({ analisisApi: { descargarPDF: vi.fn() } }))
+vi.mock('@/api/analisis', () => ({ analisisApi: { descargarPDF: vi.fn(), eliminar: vi.fn() } }))
 
 const obtener = vi.fn()
 
@@ -84,5 +84,56 @@ describe('Resultados', () => {
 
     expect(screen.getByRole('button', { name: 'Qué significa «Nivel de riesgo»' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Qué significa «Puntaje de riesgo»' })).toBeInTheDocument()
+  })
+
+  describe('eliminación desde el detalle', () => {
+    function renderConHistorial() {
+      render(
+        <MemoryRouter initialEntries={['/resultados/7']}>
+          <Routes>
+            <Route path="/resultados/:id" element={<Resultados />} />
+            <Route path="/historial" element={<p>Pantalla de historial</p>} />
+          </Routes>
+        </MemoryRouter>,
+      )
+    }
+
+    beforeEach(() => {
+      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+      vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
+    })
+
+    it('elimina tras confirmar y vuelve al historial', async () => {
+      vi.mocked(analisisApi.eliminar).mockResolvedValue({} as Awaited<ReturnType<typeof analisisApi.eliminar>>)
+      renderConHistorial()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar análisis' }))
+      const dialogo = screen.getByRole('alertdialog', { name: '¿Eliminar este análisis?' })
+      expect(dialogo).toHaveTextContent('no se puede deshacer')
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Eliminar' }))
+
+      expect(analisisApi.eliminar).toHaveBeenCalledWith('7')
+      expect(await screen.findByText('Pantalla de historial')).toBeInTheDocument()
+    })
+
+    it('cancelar no elimina', async () => {
+      renderConHistorial()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar análisis' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+      expect(analisisApi.eliminar).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Eliminar análisis' })).toBeInTheDocument()
+    })
+
+    it('muestra el error si no se puede eliminar', async () => {
+      vi.mocked(analisisApi.eliminar).mockRejectedValue({ response: { status: 404, data: { detail: 'Análisis no encontrado.' } } })
+      renderConHistorial()
+
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar análisis' }))
+      await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Eliminar' }))
+
+      expect(await screen.findByText('Análisis no encontrado.')).toBeInTheDocument()
+    })
   })
 })

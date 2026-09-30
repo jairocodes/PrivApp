@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Download, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Download, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Navbar from '@/components/common/Navbar'
 import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
@@ -11,7 +12,12 @@ import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisApi } from '@/api/analisis'
 import type { AnalisisResult, NivelRiesgo } from '@/types/analisis'
-import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
+import {
+  MENSAJE_ELIMINAR_ANALISIS,
+  MENSAJE_LIMITE_SOLICITUDES,
+  detalleDeError,
+  esLimiteDeSolicitudes,
+} from '@/utils/errores'
 
 export default function Resultados() {
   const { id } = useParams<{ id: string }>()
@@ -76,6 +82,22 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
 
   const [descargando, setDescargando] = useState(false)
   const [errorDescarga, setErrorDescarga] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+
+  const eliminar = async () => {
+    setEliminando(true)
+    setErrorEliminar(null)
+    try {
+      await analisisApi.eliminar(id_analisis)
+      navigate('/historial', { replace: true, state: { mensaje: 'El análisis se eliminó.' } })
+    } catch (err: unknown) {
+      setErrorEliminar(detalleDeError(err, 'No fue posible eliminar el análisis. Intenta nuevamente.'))
+      setEliminando(false)
+    }
+  }
 
   const descargarPDF = async () => {
     setDescargando(true)
@@ -194,9 +216,31 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
             <ShieldCheck size={16} />
             Analizar otra política
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setErrorEliminar(null)
+              setConfirmandoEliminar(true)
+            }}
+            className="inline-flex items-center gap-2 btn-secondary text-sm text-red-700"
+          >
+            <Trash2 size={16} aria-hidden="true" />
+            Eliminar análisis
+          </button>
         </div>
         {errorDescarga && <p className="text-xs text-red-600">{errorDescarga}</p>}
       </div>
+
+      <DialogoConfirmacion
+        abierto={confirmandoEliminar}
+        titulo="¿Eliminar este análisis?"
+        mensaje={MENSAJE_ELIMINAR_ANALISIS}
+        textoConfirmar="Eliminar"
+        procesando={eliminando}
+        error={errorEliminar}
+        onConfirmar={eliminar}
+        onCancelar={() => setConfirmandoEliminar(false)}
+      />
 
     </div>
   )

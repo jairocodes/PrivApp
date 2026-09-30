@@ -215,4 +215,15 @@ describe('Historial', () => {
       expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     })
   })
+
+  it('muestra el aviso que deja otra pantalla al volver', async () => {
+    responderListado({})
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/historial', state: { mensaje: 'El análisis se eliminó.' } }]}>
+        <Historial />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('status')).toHaveTextContent('El análisis se eliminó.')
+  })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, FileSearch, ShieldAlert, Trash2 } from 'lucide-react'
 import { analisisApi } from '@/api/analisis'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
@@ -21,6 +21,8 @@ export default function Historial() {
   }, [])
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize))
+  // Aviso que deja otra pantalla al volver (p. ej. tras eliminar desde el detalle).
+  const mensaje = (useLocation().state as { mensaje?: string } | null)?.mensaje
 
   const [porEliminar, setPorEliminar] = useState<AnalisisHistorialItem | null>(null)
   const [eliminando, setEliminando] = useState(false)
@@ -48,6 +50,12 @@ export default function Historial() {
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
         <h1 className="text-xl font-bold text-gray-900 mb-6">Mis análisis</h1>
+
+        {mensaje && (
+          <p role="status" className="mb-4 text-sm text-riesgo-bajo bg-riesgo-bajo/10 rounded-lg px-3 py-2">
+            {mensaje}
+          </p>
+        )}
 
         <div className="mb-5">
           <FormFiltrosHistorial onAplicar={(nuevos) => cargar(1, nuevos)} deshabilitado={isLoading} />
