@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Integer, Select, cast, delete, func, literal, or_, select
+from sqlalchemy import Integer, Select, cast, delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.analysis import AnalysisTemp
@@ -98,6 +98,13 @@ class RepositorioAnalisis:
         """Eliminación definitiva (no hay borrado lógico ni papelera)."""
         await self.db.delete(registro)
         await self.db.flush()
+
+    async def marcar_interrumpidos(self) -> int:
+        """Pasa a «error» todos los análisis que siguen «procesando»."""
+        result = await self.db.execute(
+            update(AnalysisTemp).where(AnalysisTemp.estado == "procesando").values(estado="error")
+        )
+        return result.rowcount
 
     async def tiene_analisis_en_proceso(self, user_id: int) -> bool:
         result = await self.db.execute(

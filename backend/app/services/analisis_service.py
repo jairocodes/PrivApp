@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.database as database
 from app.config import settings
-from app.core.exceptions import AnalisisEnCursoError, AnalisisNoEncontradoError, LLMError
+from app.core.exceptions import (
+    AnalisisEnCursoError,
+    AnalisisEnProcesoError,
+    AnalisisFallidoError,
+    AnalisisNoEncontradoError,
+    LLMError,
+)
 from app.models.analysis import AnalysisTemp
 from app.repositories.analisis import FiltrosHistorial, RepositorioAnalisis
 from app.schemas.analysis import (
@@ -374,7 +380,8 @@ _PESO_NIVEL = {"bajo": 1, "medio": 2, "alto": 3}
 def _calcular_resumen(secciones: list[SeccionAnalizada]) -> ResumenGeneral:
     # Los hallazgos sin respaldo en el corpus se muestran, pero no se presentan
     # como fundamentados: no cuentan para el nivel global ni para el puntaje.
-    todos_hallazgos = [h for s in secciones for h in s.hallazgos if not h.sin_respaldo]
+    # Tampoco cuentan las secciones que no pudieron analizarse.
+    todos_hallazgos = [h for s in secciones if s.analizada for h in s.hallazgos if not h.sin_respaldo]
 
     if not todos_hallazgos:
         return ResumenGeneral(
@@ -745,6 +752,7 @@ def _seccion_fallback(texto_seccion: str, idx: int) -> SeccionAnalizada:
     return SeccionAnalizada(
         categoria_opp115="General",
         titulo=f"Sección {idx}",
+        analizada=False,
         texto_original=texto_seccion[:500],
         hallazgos=[
             Hallazgo(
@@ -770,10 +778,27 @@ async def obtener_analisis(
     """Recupera un análisis completado por su ID, verificando que pertenezca al usuario."""
     registro = await RepositorioAnalisis(db).obtener_por_id_y_usuario(analisis_id, user_id)
 
-    if registro is None or registro.estado != "completado" or registro.resultado is None:
+    if registro is None:
         raise AnalisisNoEncontradoError()
+    if registro.estado == "procesando":
+        raise AnalisisEnProcesoError()
+    if registro.estado != "completado" or registro.resultado is None:
+        raise AnalisisFallidoError()
 
     return AnalisisResponse(**registro.resultado)
+
+
+async def marcar_analisis_interrumpidos() -> int:
+    """Al arrancar el servidor, ningún análisis puede seguir en curso: la tarea de
+    fondo que lo procesaba terminó con el proceso anterior. Se marcan como error
+    para que no queden «procesando» para siempre (y no bloqueen, por ejemplo, la
+    eliminación de la cuenta)."""
+    async with database.AsyncSessionLocal() as db:
+        cantidad = await RepositorioAnalisis(db).marcar_interrumpidos()
+        await db.commit()
+    if cantidad:
+        logger.warning("%d análisis interrumpidos por un reinicio quedaron marcados como error.", cantidad)
+    return cantidad
 
 
 async def obtener_estado_analisis(

@@ -206,6 +206,22 @@ class AnalisisEnCursoError(HTTPException):
         )
 
 
+class AnalisisEnProcesoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El análisis todavía se está procesando.",
+        )
+
+
+class AnalisisFallidoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El análisis no pudo completarse. Intenta analizar la política de nuevo.",
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(
