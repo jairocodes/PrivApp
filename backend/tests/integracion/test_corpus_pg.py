@@ -103,3 +103,39 @@ class TestListadoDeDocumentos:
         resumen = {d["documento_fuente"]: (d["fragmentos"], d["activo"]) for d in documentos}
         assert resumen == {"LOPDP.pdf": (2, False), "RGPD.pdf": (4, True)}
         assert all(d["jurisdiccion"] == "internacional" and d["fecha_carga"] for d in documentos)
+
+
+class TestCambioDeEstadoDeDocumentos:
+    async def test_desactivar_y_reactivar_un_documento_completo(self, db_pg):
+        await _insertar(db_pg, "RGPD.pdf", 3, 0.95)
+        await _insertar(db_pg, "LOPDP.pdf", 3, 0.5)
+        repo = RepositorioCorpusNormativo(db_pg)
+
+        assert await repo.cambiar_estado_documento("RGPD.pdf", False) == 3
+        await db_pg.commit()
+        filas = await repo.buscar_similares(CONSULTA, k=6)
+        assert {f["documento_fuente"] for f in filas} == {"LOPDP.pdf"}
+        assert (await repo.obtener_documento("RGPD.pdf"))["activo"] is False
+
+        assert await repo.cambiar_estado_documento("RGPD.pdf", True) == 3
+        await db_pg.commit()
+        filas = await repo.buscar_similares(CONSULTA, k=6)
+        assert [f["documento_fuente"] for f in filas][:3] == ["RGPD.pdf"] * 3
+
+    async def test_el_cambio_no_toca_el_texto_ni_los_vectores(self, db_pg):
+        await _insertar(db_pg, "RGPD.pdf", 2, 0.9)
+        antes = (await db_pg.execute(text(
+            "SELECT id, texto_original, embedding::text FROM corpus_chunks ORDER BY id"
+        ))).all()
+
+        await RepositorioCorpusNormativo(db_pg).cambiar_estado_documento("RGPD.pdf", False)
+        await db_pg.commit()
+
+        despues = (await db_pg.execute(text(
+            "SELECT id, texto_original, embedding::text FROM corpus_chunks ORDER BY id"
+        ))).all()
+        assert despues == antes
+
+    async def test_documento_inexistente_no_cambia_nada(self, db_pg):
+        await _insertar(db_pg, "RGPD.pdf", 1, 0.9)
+        assert await RepositorioCorpusNormativo(db_pg).cambiar_estado_documento("otro.pdf", False) == 0

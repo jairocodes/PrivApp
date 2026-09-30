@@ -73,19 +73,36 @@ class RepositorioCorpusNormativo:
             await punto.rollback()
             logger.warning("pgvector sin búsqueda iterativa; se usa la búsqueda estándar.")
 
+    _RESUMEN_DOCUMENTO = """
+        SELECT documento_fuente,
+               MIN(jurisdiccion)  AS jurisdiccion,
+               COUNT(*)           AS fragmentos,
+               MIN(fecha_carga)   AS fecha_carga,
+               BOOL_AND(active)   AS activo
+        FROM   corpus_chunks
+    """
+
     async def listar_documentos(self) -> Sequence[Mapping]:
         """Un registro por documento fuente, con su número de fragmentos."""
-        result = await self.db.execute(text("""
-            SELECT documento_fuente,
-                   MIN(jurisdiccion)  AS jurisdiccion,
-                   COUNT(*)           AS fragmentos,
-                   MIN(fecha_carga)   AS fecha_carga,
-                   BOOL_AND(active)   AS activo
-            FROM   corpus_chunks
-            GROUP  BY documento_fuente
-            ORDER  BY documento_fuente
-        """))
+        result = await self.db.execute(text(
+            self._RESUMEN_DOCUMENTO + " GROUP BY documento_fuente ORDER BY documento_fuente"
+        ))
         return result.mappings().all()
+
+    async def obtener_documento(self, documento_fuente: str) -> Mapping | None:
+        result = await self.db.execute(
+            text(self._RESUMEN_DOCUMENTO + " WHERE documento_fuente = :doc GROUP BY documento_fuente"),
+            {"doc": documento_fuente},
+        )
+        return result.mappings().one_or_none()
+
+    async def cambiar_estado_documento(self, documento_fuente: str, activo: bool) -> int:
+        """Activa o desactiva todos los fragmentos del documento; devuelve cuántos cambió."""
+        result = await self.db.execute(
+            text("UPDATE corpus_chunks SET active = :activo WHERE documento_fuente = :doc"),
+            {"activo": activo, "doc": documento_fuente},
+        )
+        return result.rowcount
 
     async def contar(self) -> int:
         result = await self.db.execute(text("SELECT COUNT(*) FROM corpus_chunks"))

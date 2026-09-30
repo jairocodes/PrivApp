@@ -3,6 +3,7 @@
 GET   /api/admin/usuarios              — lista paginada de usuarios, con búsqueda
 PATCH /api/admin/usuarios/{id}/estado  — activa o desactiva una cuenta
 GET   /api/admin/corpus                — documentos del corpus normativo
+PATCH /api/admin/corpus/estado         — activa o desactiva un documento completo
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -12,7 +13,7 @@ from app.api.deps import require_admin
 from app.database import get_db
 from app.models.user import User
 from app.schemas.admin import CambioEstadoUsuarioRequest, ListadoUsuariosResponse, UsuarioAdminItem
-from app.schemas.corpus import ListadoCorpusResponse
+from app.schemas.corpus import CambioEstadoDocumentoRequest, DocumentoCorpus, ListadoCorpusResponse
 from app.services import corpus_service
 from app.services.admin_service import cambiar_estado_usuario, listar_usuarios
 
@@ -45,3 +46,12 @@ async def cambiar_estado(
 async def listar_corpus(db: AsyncSession = Depends(get_db)) -> ListadoCorpusResponse:
     """Documentos fuente del corpus, con jurisdicción, fragmentos, fecha y estado."""
     return await corpus_service.listar_documentos(db)
+
+
+@router.patch("/corpus/estado", response_model=DocumentoCorpus)
+async def cambiar_estado_corpus(
+    body: CambioEstadoDocumentoRequest,
+    db: AsyncSession = Depends(get_db),
+) -> DocumentoCorpus:
+    """Activa o desactiva todos los fragmentos de un documento fuente."""
+    return await corpus_service.cambiar_estado_documento(db, body.documento_fuente, body.activo)

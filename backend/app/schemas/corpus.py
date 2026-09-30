@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DocumentoCorpus(BaseModel):
@@ -10,6 +10,11 @@ class DocumentoCorpus(BaseModel):
     jurisdiccion: str
     fragmentos: int
     fecha_carga: datetime | None
+    activo: bool
+
+
+class CambioEstadoDocumentoRequest(BaseModel):
+    documento_fuente: str = Field(..., min_length=1, max_length=255)
     activo: bool
 
 

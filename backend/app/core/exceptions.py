@@ -128,6 +128,14 @@ class PdfSinTextoError(HTTPException):
         )
 
 
+class DocumentoCorpusNoEncontradoError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento no encontrado en el corpus normativo.",
+        )
+
+
 class LLMError(HTTPException):
     def __init__(self, detalle: str = "Error al comunicarse con el modelo de lenguaje."):
         super().__init__(

@@ -70,3 +70,41 @@ class TestListadoDelCorpus:
         with patch(f"{REPO}.listar_documentos", AsyncMock(return_value=[])):
             r = await client.get("/api/admin/corpus", headers=_auth(token_admin))
         assert r.json() == {"documentos": []}
+
+
+class TestCambioDeEstadoDelDocumento:
+    async def test_usuario_comun_recibe_403(self, client: AsyncClient, seed_user: User):
+        r = await client.patch(
+            "/api/admin/corpus/estado",
+            json={"documento_fuente": "RGPD.pdf", "activo": False},
+            headers=_auth(create_access_token(str(seed_user.id))),
+        )
+        assert r.status_code == 403
+
+    async def test_desactiva_el_documento_completo(self, client: AsyncClient, token_admin: str):
+        cambiar = AsyncMock(return_value=120)
+        desactivado = {**DOCUMENTOS[0], "activo": False}
+        with patch(f"{REPO}.cambiar_estado_documento", cambiar), \
+             patch(f"{REPO}.obtener_documento", AsyncMock(return_value=desactivado)):
+            r = await client.patch(
+                "/api/admin/corpus/estado",
+                json={"documento_fuente": "RGPD.pdf", "activo": False},
+                headers=_auth(token_admin),
+            )
+
+        assert r.status_code == 200
+        assert r.json()["activo"] is False
+        cambiar.assert_awaited_once_with("RGPD.pdf", False)
+
+    async def test_documento_inexistente_devuelve_404(self, client: AsyncClient, token_admin: str):
+        with patch(f"{REPO}.cambiar_estado_documento", AsyncMock(return_value=0)):
+            r = await client.patch(
+                "/api/admin/corpus/estado",
+                json={"documento_fuente": "no-existe.pdf", "activo": True},
+                headers=_auth(token_admin),
+            )
+        assert r.status_code == 404
+
+    async def test_exige_el_documento_y_el_estado(self, client: AsyncClient, token_admin: str):
+        r = await client.patch("/api/admin/corpus/estado", json={"activo": True}, headers=_auth(token_admin))
+        assert r.status_code == 422
