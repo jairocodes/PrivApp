@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS corpus_chunks (
     texto_original      TEXT            NOT NULL,
     embedding           vector(768)     NOT NULL,
     metadatos           JSONB,
-    fecha_carga         TIMESTAMP       DEFAULT NOW()
+    fecha_carga         TIMESTAMPTZ     DEFAULT NOW(),
+    -- Igual que la migración 0006: si es false, el fragmento no se recupera.
+    active              BOOLEAN         NOT NULL DEFAULT TRUE
 );
 
 -- Sin índice vectorial: la búsqueda exacta es rápida con el tamaño actual del
@@ -29,3 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_corpus_jurisdiccion
 
 CREATE INDEX IF NOT EXISTS idx_corpus_categoria
     ON corpus_chunks(categoria_tematica);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_documento_fuente
+    ON corpus_chunks(documento_fuente);
