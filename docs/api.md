@@ -1,4 +1,4 @@
-# Documentación de la API — PrivApp v1.0
+# Documentación de la API — PrivApp v2.0
 
 La documentación interactiva completa (Swagger UI) está disponible con el sistema en ejecución:
 
@@ -34,7 +34,8 @@ Authorization: Bearer <token_jwt>
 
 ## Límites de solicitudes
 
-Los límites se aplican por dirección IP y por minuto. Al excederlos, la API responde **HTTP 429**.
+Los límites se aplican por dirección IP y por minuto. Al excederlos, la API responde **HTTP 429**
+con `{"detail": "Demasiadas solicitudes. Espera un minuto antes de volver a intentarlo."}`.
 Las rutas sin límite se indican con "—".
 
 | Ruta | Límite |
@@ -48,6 +49,7 @@ Las rutas sin límite se indican con "—".
 | `POST /api/ingesta/archivo` | 10/min |
 | `POST /api/analisis/iniciar` | 5/min |
 | `GET /api/analisis/{id}/pdf` | 10/min |
+| `POST /api/admin/corpus` | 5/min |
 
 ---
 
@@ -64,7 +66,7 @@ Las rutas sin límite se indican con "—".
 {
   "status": "ok",
   "service": "privapp-backend",
-  "version": "0.4.0",
+  "version": "2.0.0",
   "environment": "development"
 }
 ```
@@ -97,7 +99,8 @@ Las rutas sin límite se indican con "—".
 ```
 
 - `nombre`: de 2 a 100 caracteres.
-- `email`: correo electrónico válido.
+- `email`: correo electrónico válido. Se guarda en minúsculas: "Ana@Ejemplo.com" y
+  "ana@ejemplo.com" son la misma cuenta.
 - `password`: de 8 a 100 caracteres, al menos una mayúscula y un número.
 - `acepta_aviso`: debe ser `true` (aceptación del aviso de privacidad).
 - `declara_edad`: debe ser `true` (declaración de ser mayor de 18 años o de contar con el
@@ -140,6 +143,8 @@ Para obtener los datos de la cuenta se consulta `GET /api/auth/me`.
 ```
 
 **Respuesta:** igual a la del registro.
+
+El correo no distingue mayúsculas: se busca en minúsculas, igual que se guarda en el registro.
 
 **Errores:**
 
@@ -272,6 +277,16 @@ El texto crudo admite hasta 400,000 caracteres antes de la limpieza.
 La URL debe tener al menos 10 caracteres y devolver HTML; se extrae el contenido principal de la
 página (sin scripts, menús, encabezados ni pies de página).
 
+Para que el servidor no pueda usarse para consultar servicios internos, solo se descargan sitios
+web públicos:
+
+- esquema `http` o `https`;
+- puerto estándar (80, 443 o sin puerto explícito);
+- sin usuario ni contraseña en la URL;
+- el nombre del sitio debe resolver únicamente a direcciones IP públicas.
+
+Las redirecciones se siguen una a una (máximo 5) y cada destino se valida con las mismas reglas.
+
 **Body `POST /archivo`:** `multipart/form-data` con el campo `archivo`.
 
 - Formatos: `.pdf` (`application/pdf`) o `.txt` (`text/plain`); la extensión y el tipo deben
@@ -301,8 +316,11 @@ página (sin scripts, menús, encabezados ni pies de página).
 | 422 | todas | "El texto debe tener al menos 200 caracteres y 40 palabras." |
 | 422 | todas | "El texto no puede exceder los 200,000 caracteres." |
 | 422 | archivo | "No se encontró texto en el PDF. Si es un documento escaneado, el sistema no puede leerlo: copia el texto de la política y pégalo directamente." |
+| 422 | url | "La dirección debe comenzar con http:// o https://." |
+| 422 | url | "La dirección indicada no es un sitio web público." (puerto no estándar, credenciales en la URL o IP no pública) |
+| 422 | url | "La URL redirige demasiadas veces." (más de 5 redirecciones) |
 | 422 | url | "La URL tardó demasiado en responder." |
-| 422 | url | "No se pudo conectar a la URL proporcionada." |
+| 422 | url | "No se pudo conectar a la URL proporcionada." (también si el nombre del sitio no se puede resolver) |
 | 422 | url | "La URL devolvió el estado HTTP {código}." |
 | 422 | url | "Error al acceder a la URL." |
 | 422 | url | "La URL no devolvió contenido HTML. Tipo recibido: {tipo}" |
@@ -329,6 +347,9 @@ página (sin scripts, menús, encabezados ni pies de página).
 
 Cada usuario solo puede consultar, descargar o eliminar sus propios análisis. Un análisis ajeno se
 responde igual que uno inexistente (HTTP 404).
+
+Si el servidor se reinicia mientras un análisis se procesa, ese análisis no puede continuar: al
+arrancar, el servidor marca como `error` todos los que quedaron en `procesando`.
 
 #### `POST /api/analisis/iniciar` — HTTP 202
 
@@ -380,8 +401,13 @@ solicitudes.
 
 Devuelve el resultado completo (ver [Estructura del resultado](#estructura-del-resultado-del-análisis)).
 
-**Errores:** 404 "Análisis no encontrado." (también si el análisis existe pero todavía se está
-procesando o terminó con error).
+**Errores:**
+
+| HTTP | Mensaje |
+|---|---|
+| 404 | "Análisis no encontrado." (inexistente o ajeno) |
+| 409 | "El análisis todavía se está procesando." |
+| 409 | "El análisis no pudo completarse. Intenta analizar la política de nuevo." (terminó con error) |
 
 #### `GET /api/analisis` — HTTP 200
 
@@ -449,8 +475,8 @@ Sin análisis, todos los valores son 0.
 Genera el reporte del análisis y lo devuelve como `application/pdf`, con el header
 `Content-Disposition: attachment; filename="privapp-analisis-{id}.pdf"`.
 
-**Errores:** 404 "Análisis no encontrado." (inexistente, ajeno o no completado); 429 por límite de
-solicitudes.
+**Errores:** los mismos que `GET /api/analisis/{id}` (404 si es inexistente o ajeno; 409 si todavía
+se está procesando o terminó con error); 429 por límite de solicitudes.
 
 #### `DELETE /api/analisis/{id}` — HTTP 204
 
@@ -499,7 +525,8 @@ Respuesta de `GET /api/analisis/{id}`:
             }
           ]
         }
-      ]
+      ],
+      "analizada": true
     }
   ],
   "recomendaciones": [
@@ -525,6 +552,7 @@ Respuesta de `GET /api/analisis/{id}`:
 | `titulo` | texto | Título de la sección |
 | `texto_original` | texto | Fragmento de la política analizado |
 | `hallazgos` | lista | Hallazgos de la sección |
+| `analizada` | booleano | `false` si la sección no pudo analizarse (respuesta inválida o error del modelo): muestra el aviso "No fue posible analizar esta sección automáticamente." y no cuenta para el nivel global ni para el puntaje. Los análisis anteriores no traen el campo y se toman como `true` |
 
 **Hallazgo (`hallazgos[]`)**
 
@@ -576,7 +604,7 @@ Todas las rutas requieren rol **Administrador**. Una cuenta sin ese rol recibe H
 | GET | `/api/admin/usuarios` | Lista paginada de usuarios, con búsqueda | Administrador | — |
 | PATCH | `/api/admin/usuarios/{id}/estado` | Activa o desactiva una cuenta | Administrador | — |
 | GET | `/api/admin/corpus` | Documentos del corpus normativo | Administrador | — |
-| POST | `/api/admin/corpus` | Incorpora un documento normativo nuevo | Administrador | — |
+| POST | `/api/admin/corpus` | Incorpora un documento normativo nuevo | Administrador | 5/min |
 | PATCH | `/api/admin/corpus/estado` | Activa o desactiva un documento completo | Administrador | — |
 
 #### `GET /api/admin/usuarios` — HTTP 200
@@ -650,7 +678,9 @@ Solo los documentos activos se usan en la recuperación de fragmentos durante el
 - `jurisdiccion`: `guatemala`, `internacional` o `estandar_tecnico`.
 
 El documento se divide en fragmentos, se generan sus representaciones vectoriales y queda activo.
-El archivo original se descarta.
+El archivo original se descarta. Como cada carga genera representaciones vectoriales, se admiten
+como máximo 5 cargas por minuto. Un envío cuyo `Content-Length` supere 6 MB (5 MB del archivo más
+margen para el formulario) se rechaza con 413 antes de leerlo, igual que en la ingesta de archivos.
 
 **Respuesta:**
 ```json
@@ -674,6 +704,7 @@ El archivo original se descarta.
 | 415 | "Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt)." |
 | 422 | "El documento no contiene texto suficiente para incorporarlo al corpus (mínimo 50 palabras)." |
 | 422 | `jurisdiccion` fuera de la lista o campos faltantes |
+| 429 | Límite de solicitudes excedido |
 
 #### `PATCH /api/admin/corpus/estado` — HTTP 200
 
@@ -703,7 +734,7 @@ Errores comunes a todas las rutas protegidas:
 | 403 | "Not authenticated" | Sin token en el header Authorization |
 | 403 | "No tienes permisos para acceder a este recurso." | Ruta de administración con una cuenta sin ese rol |
 | 422 | (lista de errores de validación) | Cuerpo o parámetros que no cumplen el esquema |
-| 429 | "Rate limit exceeded: …" | Límite de solicitudes excedido |
+| 429 | "Demasiadas solicitudes. Espera un minuto antes de volver a intentarlo." | Límite de solicitudes excedido |
 
 Resumen por código:
 
@@ -713,7 +744,7 @@ Resumen por código:
 | 401 | Credenciales o token inválidos |
 | 403 | Sin token o sin rol de administrador |
 | 404 | Análisis, usuario o documento del corpus no encontrado (o ajeno) |
-| 409 | Correo ya registrado, documento del corpus repetido o análisis en curso |
+| 409 | Correo ya registrado, documento del corpus repetido, análisis en curso o análisis que terminó con error |
 | 413 | Archivo mayor de 5 MB |
 | 415 | Archivo que no es PDF ni TXT |
 | 422 | Datos de entrada inválidos (texto demasiado corto o largo, URL inaccesible, PDF sin texto, fechas invertidas, etc.) |
@@ -721,7 +752,8 @@ Resumen por código:
 
 Los fallos del modelo de lenguaje (OpenAI) durante el análisis no se devuelven como error HTTP: la
 sección afectada se resuelve con una sección de respaldo y, si falla el proceso completo, el
-análisis queda con `estado: "error"` en `GET /api/analisis/{id}/estado`.
+análisis queda con `estado: "error"` en `GET /api/analisis/{id}/estado` (y `GET /api/analisis/{id}`
+responde 409).
 
 ### Formato de error
 
@@ -733,24 +765,25 @@ Los errores de la aplicación usan:
 ```
 
 Los errores de validación del esquema (HTTP 422 generados por FastAPI) devuelven `detail` como una
-lista; el mensaje está en `msg` (en las reglas propias aparece precedido de "Value error, "):
+lista con el mismo formato de FastAPI; el mensaje está en `msg` (en las reglas propias, sin el
+prefijo "Value error, " que agrega Pydantic):
 ```json
 {
   "detail": [
     {
       "type": "value_error",
       "loc": ["body", "password"],
-      "msg": "Value error, Debe contener al menos un número.",
+      "msg": "Debe contener al menos un número.",
       "input": "MiClaveSegura"
     }
   ]
 }
 ```
 
-El error de límite de solicitudes (HTTP 429) usa otro formato:
+El error de límite de solicitudes (HTTP 429) usa el mismo formato:
 ```json
 {
-  "error": "Rate limit exceeded: 5 per 1 minute"
+  "detail": "Demasiadas solicitudes. Espera un minuto antes de volver a intentarlo."
 }
 ```
 

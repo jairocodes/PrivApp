@@ -57,9 +57,8 @@ El flujo completo es:
    `corpus_normativo/internacional/` y `corpus_normativo/estandares_tecnicos/`
    (ver `corpus_normativo/README.md`).
 
-> En local, Docker Compose levanta su propio Redis. Si el `.env` define `REDIS_URL`, debe
-> apuntar a ese servicio (`redis://redis:6379/0`); de lo contrario, deje la variable vacía o
-> elimínela para usar el valor por defecto.
+> En local, Docker Compose levanta su propio Redis. El `REDIS_URL` de `.env.example`
+> (`redis://redis:6379/0`) ya apunta a ese servicio, así que funciona sin cambios.
 
 ---
 
@@ -92,7 +91,7 @@ La carga del corpus es idempotente: si se repite, no duplica fragmentos.
 | URL | Resultado esperado |
 |---|---|
 | http://localhost:5173 | Pantalla de inicio de sesión de PrivApp |
-| http://localhost:8000/health | `{"status": "ok", "service": "privapp-backend", "version": "0.4.0", ...}` |
+| http://localhost:8000/health | `{"status": "ok", "service": "privapp-backend", "version": "2.0.0", ...}` |
 | http://localhost:8000/docs | Swagger UI con todos los endpoints |
 
 ### Paso 4 (opcional): Crear un administrador
@@ -124,14 +123,15 @@ La persona debe **cerrar sesión y volver a iniciarla** para que aparezca la opc
 5. Hacer clic en **Crear cuenta**.
 6. **Resultado esperado:** el sistema inicia sesión automáticamente y muestra la pantalla
    principal con el saludo **Bienvenido, <nombre>**. Un correo ya registrado muestra
-   *"Este correo ya está registrado."*
+   *"Este correo ya está registrado."*, también si solo cambian las mayúsculas (el correo se
+   guarda en minúsculas: *Ana@Ejemplo.com* y *ana@ejemplo.com* son la misma cuenta).
 
 ### CP-02: Inicio y cierre de sesión
 
 1. Hacer clic en **Salir** en la barra de navegación.
 2. Iniciar sesión con las credenciales registradas y el botón **Iniciar sesión**.
-3. **Resultado esperado:** acceso a la pantalla principal. Credenciales incorrectas muestran
-   *"Correo o contraseña incorrectos."*
+3. **Resultado esperado:** acceso a la pantalla principal, aunque el correo se escriba con
+   otras mayúsculas. Credenciales incorrectas muestran *"Correo o contraseña incorrectos."*
 
 ### CP-03: Rutas protegidas
 
@@ -162,6 +162,13 @@ La persona debe **cerrar sesión y volver a iniciarla** para que aparezca la opc
    texto extraído; al confirmar, se produce el análisis.
 4. **Si la URL falla** (por ejemplo, un sitio que carga el contenido con JavaScript), se
    muestra un mensaje de error claro y el usuario puede usar otra pestaña.
+5. **Solo sitios web públicos:** ingresar una dirección interna, por ejemplo
+   `http://localhost:8000/health` o `http://192.168.1.1`. **Resultado esperado:**
+   *"La dirección indicada no es un sitio web público."* Lo mismo ocurre con un puerto
+   distinto de 80 o 443 o con usuario y contraseña dentro de la URL. Una dirección que no
+   empieza con `http://` o `https://` (por ejemplo, `ftp://ejemplo.com`) muestra
+   *"La dirección debe comenzar con http:// o https://."*, y una que redirige más de cinco
+   veces, *"La URL redirige demasiadas veces."*
 
 ### CP-06: Análisis de política por archivo
 
@@ -189,7 +196,8 @@ En la pantalla de resultados, verificar:
    *"Referencia internacional — buena práctica, no ley vigente en Guatemala."*
 4. **Hallazgos sin respaldo:** si ningún fragmento del corpus respalda un hallazgo, este se
    marca como **Sin respaldo en el corpus normativo**, no muestra citas y no cuenta para el
-   nivel global ni para la puntuación.
+   nivel global ni para la puntuación. Tampoco cuentan las secciones que no pudieron
+   analizarse (*"No fue posible analizar esta sección automáticamente."*).
 5. **Filtros:** en el recuadro de filtros, elegir **Nivel de riesgo** y **Jurisdicción de la
    cita**. Se muestra *"Mostrando X de Y hallazgos"*, las secciones sin coincidencias se
    ocultan (las demás conservan su número) y el resumen ejecutivo no cambia. **Limpiar
@@ -283,7 +291,8 @@ Requiere una cuenta promovida a administrador (Paso 4).
    fecha de carga y estado (**Activo** o **Desactivado**).
 3. En **Cargar documento normativo**, elegir un PDF o TXT (máximo 5 MB), seleccionar la
    **Jurisdicción** y hacer clic en **Cargar documento**. El nombre del archivo identifica
-   al documento; un documento con un nombre ya cargado es rechazado.
+   al documento; un documento con un nombre ya cargado es rechazado. Se admiten como máximo
+   cinco cargas por minuto.
 4. Hacer clic en **Desactivar** en un documento y confirmar. Resultado esperado: sus
    fragmentos dejan de usarse en los análisis nuevos; los análisis ya realizados no cambian.
 
@@ -349,6 +358,12 @@ ni para la puntuación.
 El sistema vuelve a solicitar la respuesta una vez, indicando el motivo del rechazo. Si aun
 así una sección no se puede analizar, se muestra *"No fue posible analizar esta sección
 automáticamente."*, el análisis continúa con las demás y el resultado siempre se entrega.
+Esa sección no cuenta para el nivel global ni para la puntuación.
+
+**¿Qué pasa si el servidor se reinicia durante un análisis?**
+El análisis en curso no puede continuar. Al arrancar, el servidor marca como error los
+análisis que quedaron en proceso, y al abrirlos se muestra *"Ocurrió un error durante el
+análisis. Intenta nuevamente."*; basta con analizar la política de nuevo.
 
 **¿Cuánto tarda un análisis?**  
 Depende de la extensión de la política. En pruebas con políticas reales de 14 a 21

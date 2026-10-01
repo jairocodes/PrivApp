@@ -98,3 +98,17 @@ class TestIpDelLimitador:
         import app.main  # noqa: F401  (configura el registro al importarse)
 
         assert any(isinstance(f, OcultarIpLimitador) for f in logging.getLogger("slowapi").filters)
+
+
+class TestConsultasSql:
+    def test_no_se_registran_por_defecto(self, monkeypatch):
+        from app.config import Settings
+
+        monkeypatch.delenv("SQL_ECHO", raising=False)
+        assert Settings().sql_echo is False
+
+    def test_el_motor_no_escribe_las_consultas(self):
+        from app.database import engine
+
+        assert engine.echo is False
+

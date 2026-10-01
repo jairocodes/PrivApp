@@ -11,8 +11,8 @@ _PREFIJO_PYDANTIC = "Value error, "
 
 
 async def manejar_limite_superado(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    """Como el manejador de SlowAPI (incluye Retry-After y las cabeceras del
-    límite), pero con un mensaje en español en «detail»."""
+    """Como el manejador de SlowAPI (agrega las cabeceras del límite si el
+    limitador las tiene activadas), pero con un mensaje en español en «detail»."""
     respuesta = JSONResponse({"detail": MENSAJE_LIMITE_SUPERADO}, status_code=429)
     return request.app.state.limiter._inject_headers(respuesta, request.state.view_rate_limit)
 

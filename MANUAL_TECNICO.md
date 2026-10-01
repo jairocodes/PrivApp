@@ -4,7 +4,7 @@
 **Proyecto de Graduación — Universidad Mariano Gálvez, Campus Jutiapa**
 **Autor:** Jairo Ardani Castillo Girón — Carné 0905-22-12005
 **Fecha:** Septiembre 2026 (primera versión: mayo 2026)
-**Versión del sistema:** versión completa de Proyecto de Graduación II (API `0.4.0`)
+**Versión del sistema:** versión completa de Proyecto de Graduación II (API `2.0.0`)
 
 ---
 
@@ -177,7 +177,7 @@ PrivApp/
 │   ├── alembic.ini
 │   │
 │   ├── app/
-│   │   ├── main.py               ← FastAPI, middlewares, routers, /health
+│   │   ├── main.py               ← FastAPI (VERSION_API), lifespan, middlewares, routers, /health
 │   │   ├── config.py             ← Settings (pydantic-settings)
 │   │   ├── database.py           ← Engine async + get_db
 │   │   │
@@ -195,6 +195,7 @@ PrivApp/
 │   │   │   ├── exceptions.py     ← HTTPException personalizadas
 │   │   │   ├── limiter.py        ← Instancia global de SlowAPI (clave: IP)
 │   │   │   ├── limite_carga.py   ← Rechazo temprano de archivos por Content-Length
+│   │   │   ├── manejadores.py    ← Respuestas 429 y 422 con formato {"detail": ...}
 │   │   │   └── registro.py       ← Registros sin datos personales
 │   │   │
 │   │   ├── models/               ← user.py, analysis.py, corpus.py
@@ -205,7 +206,7 @@ PrivApp/
 │   │   │   ├── auth_service.py   ← registro, login, perfil, contraseña, eliminar cuenta
 │   │   │   ├── admin_service.py  ← listado y estado de usuarios
 │   │   │   ├── corpus_service.py ← listado, estado y carga de documentos del corpus
-│   │   │   ├── ingesta_service.py← texto, URL y archivo
+│   │   │   ├── ingesta_service.py← texto, URL (solo sitios públicos) y archivo
 │   │   │   ├── analisis_service.py ← MOTOR PRINCIPAL (ver sección 7)
 │   │   │   ├── rag_service.py    ← recuperar_contexto
 │   │   │   ├── reportes_service.py ← PDF y tiempos de generación
@@ -219,7 +220,7 @@ PrivApp/
 │   │       ├── pdf_extractor.py  ← PDF desde disco o desde memoria
 │   │       └── validacion_texto.py ← Regla única de longitud (RN-01)
 │   │
-│   ├── migrations/versions/      ← 0001 … 0009 (ver sección 5)
+│   ├── migrations/versions/      ← 0001 … 0010 (ver sección 5)
 │   │
 │   ├── scripts/
 │   │   ├── cargar_corpus.py      ← Carga del corpus normativo
@@ -254,14 +255,15 @@ PrivApp/
 │       └── test/                 ← setup.ts, fixtures.ts
 │
 ├── postgres/
-│   └── init.sql                  ← Extensiones vector y uuid-ossp + tabla corpus_chunks
+│   └── init.sql                  ← Extensiones vector y uuid-ossp + tabla corpus_chunks (igual que las migraciones)
 │
 ├── docs/                         ← api.md, arquitectura.md, instalacion.md, guia_evaluador.md
 │
 └── corpus_normativo/             ← Documentos fuente del corpus RAG
     ├── guatemala/
     ├── internacional/
-    └── estandares_tecnicos/
+    ├── estandares_tecnicos/
+    └── originales/               ← Documentos fuente que no se cargan
 ```
 
 ---
@@ -274,12 +276,12 @@ PrivApp/
 
 ### Tablas
 
-#### `users` (migraciones 0001, 0005 y 0009)
+#### `users` (migraciones 0001, 0005, 0009 y 0010)
 ```sql
 CREATE TABLE users (
     id                   SERIAL PRIMARY KEY,
     nombre               VARCHAR(100) NOT NULL,
-    email                VARCHAR(255) UNIQUE NOT NULL,
+    email                VARCHAR(255) UNIQUE NOT NULL,              -- en minúsculas (0010)
     hashed_password      VARCHAR(255) NOT NULL,
     is_active            BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
@@ -291,6 +293,7 @@ CREATE TABLE users (
 );
 ```
 
+- `email`: se guarda y se busca en minúsculas (`auth_service.normalizar_email`), así que "Ana@Ejemplo.com" y "ana@ejemplo.com" son la misma cuenta. La migración 0010 normalizó los correos existentes.
 - `role`: `usuario` o `administrador`. El registro público siempre asigna `usuario`.
 - `privacy_accepted_at`: fecha de aceptación del aviso de privacidad (obligatoria).
 - `sessions_valid_from`: solo se aceptan tokens emitidos después de esta fecha (ver sección 11).
@@ -307,10 +310,11 @@ CREATE TABLE corpus_chunks (
     texto_original      TEXT         NOT NULL,
     embedding           vector(768)  NOT NULL,  -- paraphrase-multilingual-mpnet-base-v2
     metadatos           JSONB,                  -- incluye "hash" (deduplicación)
-    fecha_carga         TIMESTAMP    DEFAULT NOW(),
+    fecha_carga         TIMESTAMPTZ  DEFAULT NOW(),
     active              BOOLEAN      NOT NULL DEFAULT TRUE   -- 0006
 );
--- Índices: jurisdiccion, categoria_tematica y documento_fuente (0006).
+-- Índices: jurisdiccion, categoria_tematica y documento_fuente (idx_corpus_documento_fuente, 0006).
+-- postgres/init.sql crea la tabla con las mismas columnas e índices que las migraciones.
 -- Sin índice vectorial aproximado: la migración 0008 elimina el ivfflat (ver sección 8).
 ```
 
@@ -343,8 +347,11 @@ CREATE TABLE analysis_temp (
 | 0007 | Extensión `unaccent` (búsquedas sin distinguir acentos). **Requiere un usuario de base de datos con permiso para `CREATE EXTENSION`** |
 | 0008 | Elimina el índice ivfflat de `corpus_chunks.embedding` (búsqueda exacta) |
 | 0009 | `users.age_declaration_at` |
+| 0010 | Pasa a minúsculas los correos de `users` (la migración inversa no restaura las mayúsculas) |
 
 > **Advertencia sobre 0005:** `privacy_accepted_at` es obligatoria y no tiene valor por defecto; si la tabla `users` ya tuviera filas, la migración falla en lugar de inventar una aceptación que no ocurrió.
+
+> **Advertencia sobre 0010:** si dos cuentas solo se distinguen por mayúsculas en el correo, la migración se detiene y las lista; hay que resolverlas a mano (no se fusionan cuentas automáticamente) y volver a ejecutarla.
 
 ```bash
 # Aplicar migraciones pendientes (no se ejecutan solas al arrancar)
@@ -365,7 +372,7 @@ Documentación interactiva generada por FastAPI en `/docs` (Swagger) y `/redoc`.
 
 ### Límites de solicitudes
 
-SlowAPI, por dirección IP, con contador en memoria del proceso. Al superarlos la API responde **429** y el cliente muestra: *"Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo."* (`frontend/src/utils/errores.ts`).
+SlowAPI, por dirección IP, con contador en memoria del proceso. Al superarlos la API responde **429** con `{"detail": "Demasiadas solicitudes. Espera un minuto antes de volver a intentarlo."}` (`app/core/manejadores.py`) y el cliente muestra: *"Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo."* (`frontend/src/utils/errores.ts`).
 
 | Ruta | Límite |
 |---|---|
@@ -378,6 +385,7 @@ SlowAPI, por dirección IP, con contador en memoria del proceso. Al superarlos l
 | `POST /api/ingesta/archivo` | 10/min |
 | `POST /api/analisis/iniciar` | 5/min |
 | `GET /api/analisis/{id}/pdf` | 10/min |
+| `POST /api/admin/corpus` | 5/min |
 
 ### Autenticación y perfil — `/api/auth`
 
@@ -393,7 +401,7 @@ SlowAPI, por dirección IP, con contador en memoria del proceso. Al superarlos l
 
 **Validaciones:**
 - Contraseña: 8–100 caracteres, al menos una mayúscula y un número (registro y cambio de contraseña).
-- Email: formato válido (`email-validator`). Nombre: 2–100 caracteres.
+- Email: formato válido (`email-validator`); se guarda y se busca en minúsculas, así que el registro y el inicio de sesión no distinguen mayúsculas. Nombre: 2–100 caracteres.
 - `acepta_aviso` y `declara_edad` deben ser `true` (422 en caso contrario).
 - Cambio de contraseña: 400 si la actual es incorrecta o si la nueva es igual a la actual; 422 si la confirmación no coincide.
 - Eliminación de cuenta: 400 si la contraseña es incorrecta o si la persona es el único administrador activo; 409 si tiene un análisis en curso.
@@ -416,6 +424,13 @@ Las tres rutas devuelven `IngestaResponse` (`texto_procesado`, `caracteres`, `pa
 
 **URL:** tiempo de espera de 10 s; solo acepta respuestas HTML; descarta `script`, `style`, `nav`, `header`, `footer`, `aside` y `form`, y toma el contenido de `main`, `article` o `body`.
 
+Solo se descargan sitios web públicos (`validar_url_publica`), para que el servidor no pueda usarse para consultar servicios internos:
+- esquema `http` o `https` (si no: 422 *"La dirección debe comenzar con http:// o https://."*);
+- puerto estándar (80, 443 o sin puerto) y sin usuario ni contraseña en la URL;
+- el nombre del sitio debe resolver solo a direcciones IP públicas (si no: 422 *"La dirección indicada no es un sitio web público."*; si no resuelve: *"No se pudo conectar a la URL proporcionada."*).
+
+`_descargar` sigue las redirecciones a mano (`allow_redirects=False`), como máximo 5, y valida cada destino con las mismas reglas; más de 5 → 422 *"La URL redirige demasiadas veces."* Queda la posibilidad teórica de que el DNS cambie entre la validación y la descarga.
+
 **Archivo:**
 - Solo `.pdf` (`application/pdf`, `application/x-pdf`) o `.txt` (`text/plain`); extensión y tipo deben coincidir; un PDF debe empezar con `%PDF-` (415 en caso contrario).
 - Tamaño máximo **5 MB** (413). Rechazo temprano: el middleware `LimiteCargaArchivoMiddleware` responde 413 a partir de la cabecera `Content-Length` (umbral de 6 MB, para dejar margen al encabezado multipart) antes de leer el cuerpo.
@@ -429,13 +444,15 @@ Las tres rutas devuelven `IngestaResponse` (`texto_procesado`, `caracteres`, `pa
 |---|---|---|
 | `POST` | `/iniciar` | Crea el análisis y lo procesa en segundo plano → 202 `{id_analisis, estado: "procesando"}` |
 | `GET` | `/{id}/estado` | Progreso: `estado` (`procesando`/`completado`/`error`), `seccion_actual`, `secciones_total` |
-| `GET` | `/{id}` | Resultado completo (solo si está `completado`; si no, 404) |
+| `GET` | `/{id}` | Resultado completo (solo si está `completado`; si está en curso o terminó con error, 409) |
 | `GET` | `` (raíz) | Historial paginado con filtros |
 | `GET` | `/estadisticas` | Totales del usuario para el panel |
 | `GET` | `/{id}/pdf` | Descarga el reporte PDF (`privapp-analisis-{id}.pdf`) |
 | `DELETE` | `/{id}` | Elimina el análisis de forma definitiva → 204 |
 
 Todas las consultas se limitan a los análisis del usuario autenticado: un análisis ajeno o inexistente responde **404** (sin revelar si existe).
+
+**Detalle y PDF (`GET /api/analisis/{id}` y `/{id}/pdf`):** 404 solo si no existe o es ajeno; 409 *"El análisis todavía se está procesando."* si está en curso; 409 *"El análisis no pudo completarse. Intenta analizar la política de nuevo."* si terminó con error.
 
 **Historial (`GET /api/analisis`):** parámetros `page` (≥1), `page_size` (1–50, por defecto 10), `nivel` (`bajo`/`medio`/`alto`), `desde` y `hasta` (ISO 8601, inclusivos; las fechas sin zona se toman como UTC) y `q` (máx. 100 caracteres). Solo lista análisis completados, del más reciente al más antiguo. `q` busca en el extracto de la política y en el comentario del resumen, sin distinguir mayúsculas ni acentos (`unaccent`), y trata `%` y `_` como caracteres literales. `desde` posterior a `hasta` → 422.
 
@@ -479,7 +496,8 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
             }
           ]
         }
-      ]
+      ],
+      "analizada": true
     }
   ],
   "recomendaciones": ["Revisa qué permisos tiene la aplicación..."]
@@ -487,6 +505,7 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
 ```
 
 - `tipo`: `riesgo` | `transparencia` | `neutral`. `nivel`: `bajo` | `medio` | `alto`.
+- `analizada` (de la sección): `false` en la sección de respaldo, que no pudo analizarse; no cuenta para el nivel global ni para la puntuación. Por defecto `true` (también en análisis anteriores, que no traen el campo).
 - `tipo_tratamiento`: uno de los 8 valores de la lista cerrada (sección 7); es `null` solo en análisis realizados antes de incorporar la clasificación.
 - `jurisdiccion` de la fuente: `null` en análisis antiguos (el cliente y el PDF la deducen del nombre del documento).
 - Tras la primera descarga del PDF, `resultado` incluye además `metadatos_reporte` (sección 14).
@@ -499,7 +518,7 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
 | `PATCH` | `/usuarios/{id}/estado` | `{activo}`; un administrador no puede desactivarse a sí mismo (400) |
 | `GET` | `/corpus` | Documentos del corpus: jurisdicción, número de fragmentos, fecha de carga, estado |
 | `PATCH` | `/corpus/estado` | `{documento_fuente, activo}`: activa o desactiva todos los fragmentos del documento |
-| `POST` | `/corpus` | Multipart `archivo` (PDF/TXT ≤ 5 MB) + `jurisdiccion` (`guatemala`, `internacional`, `estandar_tecnico`) → 201 |
+| `POST` | `/corpus` | Multipart `archivo` (PDF/TXT ≤ 5 MB) + `jurisdiccion` (`guatemala`, `internacional`, `estandar_tecnico`) → 201; 5/min; `Content-Length` > 6 MB → 413 antes de leer el cuerpo |
 
 El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, `role`, `is_active`, `created_at`), nunca el contenido de sus análisis. Ninguna ruta permite cambiar roles (ver `scripts/promover_admin.py`).
 
@@ -520,7 +539,7 @@ El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, 
 | `CuentaConAnalisisEnCursoError` | 409 | Eliminar la cuenta con un análisis en curso |
 | `TextoDemasiadoCortoError` | 422 | < 200 caracteres o < 40 palabras |
 | `TextoDemasiadoLargoError` | 422 | > 200,000 caracteres |
-| `ExtraccionURLError` | 422 | URL no accesible, no HTML o sin texto |
+| `ExtraccionURLError` | 422 | URL que no es de un sitio web público, no accesible, con demasiadas redirecciones, no HTML o sin texto |
 | `ArchivoNoPermitidoError` | 415 | Archivo que no es PDF o TXT |
 | `ArchivoDemasiadoGrandeError` | 413 | Archivo > 5 MB |
 | `PdfSinTextoError` | 422 | PDF sin texto extraíble (escaneado) |
@@ -529,8 +548,12 @@ El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, 
 | `DocumentoCorpusSinTextoError` | 422 | Documento con menos de 50 palabras |
 | `RangoFechasInvalidoError` | 422 | `desde` posterior a `hasta` |
 | `AnalisisEnCursoError` | 409 | Eliminar un análisis que se está procesando |
-| `AnalisisNoEncontradoError` | 404 | Análisis inexistente, ajeno o no completado |
+| `AnalisisEnProcesoError` | 409 | Consultar el detalle o el PDF de un análisis en curso |
+| `AnalisisFallidoError` | 409 | Consultar el detalle o el PDF de un análisis que terminó con error |
+| `AnalisisNoEncontradoError` | 404 | Análisis inexistente o ajeno |
 | `LLMError` | 502 | Fallo no recuperable del proveedor del modelo |
+
+**Formato de los errores:** todos usan `{"detail": ...}`. Los 429 llevan el mensaje en español de `manejar_limite_superado`; los 422 de validación conservan la lista de FastAPI (`manejar_validacion`), pero sin el prefijo "Value error, " que Pydantic antepone a los mensajes propios.
 
 ---
 
@@ -538,7 +561,7 @@ El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, 
 
 El motor se encuentra en `backend/app/services/analisis_service.py`. `POST /api/analisis/iniciar` crea el registro (`estado = procesando`), lo confirma en la base y lanza `ejecutar_analisis_background` como tarea `asyncio` del mismo proceso, con su propia sesión de base de datos. El cliente consulta `/{id}/estado` cada 1.5 s.
 
-> **Limitación:** la tarea vive en memoria del proceso del backend; si el proceso se reinicia durante un análisis, ese registro queda en estado `procesando`.
+> **Limitación:** la tarea vive en memoria del proceso del backend; si el proceso se reinicia durante un análisis, ese análisis no continúa. Para que no quede `procesando` para siempre (y no bloquee, por ejemplo, la eliminación de la cuenta), al arrancar el servidor (`lifespan` en `app/main.py`) `marcar_analisis_interrumpidos()` pasa a `error` todos los análisis que siguen `procesando`. Si la base no está disponible al arrancar, se registra el error y el servidor inicia igual.
 
 ### Flujo completo
 
@@ -569,7 +592,7 @@ segmentar_politica()
     │        ▼
     │   _parsear_seccion(json, chunks)
     │        │  Respuesta inválida → Llamada 2: la instrucción completa + el motivo del rechazo
-    │        │  Segunda respuesta inválida o LLMError → sección de respaldo
+    │        │  Segunda respuesta inválida o LLMError → sección de respaldo (analizada = false)
     │        ▼
     │   _respaldar_hallazgos()  (segunda pasada de respaldo, si hay hallazgos sin fragmentos)
     │        ▼
@@ -577,7 +600,7 @@ segmentar_politica()
     │
     ▼ list[SeccionAnalizada] (en el orden original de la política)
     │
-_calcular_resumen()                     → nivel global y puntuación 0–100
+_calcular_resumen()                     → nivel global y puntuación 0–100 (sin secciones de respaldo)
 _generar_recomendaciones_practicas()    → 3–5 recomendaciones
     │
     ▼
@@ -599,7 +622,7 @@ Todas usan el mismo adaptador (sección 9), `temperature = 0.2` y respuesta forz
 
 ### Tipo de tratamiento de datos (RN-08)
 
-Cada hallazgo se clasifica en **uno** de 8 valores de una lista cerrada (`TIPOS_TRATAMIENTO` en `schemas/analysis.py`): Recopilación de datos personales; Uso y finalidad de los datos; Transferencia de datos a terceros; Tiempo de conservación de los datos; Seguridad de los datos; Derechos del usuario sobre sus datos; Cambios en la política; Otro. Se toleran solo diferencias de mayúsculas o espacios; cualquier otro valor invalida la respuesta y provoca la llamada de corrección. La sección de respaldo usa "Otro". Los análisis anteriores a esta clasificación no tienen etiqueta (`null`) y así se muestran.
+Cada hallazgo se clasifica en **uno** de 8 valores de una lista cerrada (`TIPOS_TRATAMIENTO` en `schemas/analysis.py`): Recopilación de datos personales; Uso y finalidad de los datos; Transferencia de datos a terceros; Tiempo de conservación de los datos; Seguridad de los datos; Derechos del usuario sobre sus datos; Cambios en la política; Otro. Se toleran solo diferencias de mayúsculas o espacios; cualquier otro valor invalida la respuesta y provoca la llamada de corrección. La sección de respaldo usa "Otro", lleva `analizada: false` y no cuenta para el nivel global ni para la puntuación. Los análisis anteriores a esta clasificación no tienen etiqueta (`null`) y así se muestran.
 
 ### Citas verificables (RN-06)
 
@@ -633,7 +656,7 @@ En la interfaz, el panel y el PDF se denomina **"Puntuación de riesgo"** (el ca
 ```python
 _PESO_NIVEL = {"bajo": 1, "medio": 2, "alto": 3}
 
-# Solo hallazgos con respaldo (sin_respaldo == False)
+# Solo hallazgos con respaldo (sin_respaldo == False) de secciones analizadas (analizada == True)
 pesos = [_PESO_NIVEL[h.nivel] for h in hallazgos_respaldados]
 promedio = sum(pesos) / len(pesos)
 puntaje = min(100, int((promedio - 1) / 2 * 100))
@@ -673,7 +696,7 @@ Documentos del directorio `corpus_normativo/` (el script solo toma archivos dent
 
 Los administradores pueden agregar documentos desde `/admin/corpus` y activar o desactivar documentos completos. **Solo los fragmentos activos** participan en la recuperación; desactivar no modifica el texto ni los embeddings.
 
-> **Limitación conocida:** el PDF de los Principios OEA 2021 está diagramado a dos columnas y su texto extraído mezcla columnas. Conviene reemplazarlo por una versión a una columna o por un TXT y volver a cargarlo.
+Los **Principios OEA 2021** se cargan desde `internacional/Principios OEA 2021.txt`: el PDF oficial está maquetado en pliegos con texto a dos columnas y su extracción directa mezclaba las columnas, así que el TXT se obtuvo de ese mismo PDF extrayendo cada página del libro por separado, uniendo las palabras cortadas con guion y quitando números de página y encabezados repetidos. El PDF original se conserva en `corpus_normativo/originales/`, que el script no carga (detalle en `corpus_normativo/README.md`).
 
 ### Modelo de embeddings
 
@@ -693,7 +716,7 @@ Por párrafos (y por oraciones si un párrafo supera el máximo): objetivo 400 p
 
 **Por script** (ver sección 14): `scripts/cargar_corpus.py` recorre `guatemala/`, `internacional/` y `estandares_tecnicos/` (archivos `.pdf`, `.txt`, `.md`), ignora los que tengan menos de 50 palabras y es **idempotente**: los fragmentos cuyo hash ya existe no se vuelven a insertar.
 
-**Desde la administración** (`POST /api/admin/corpus`): PDF o TXT de hasta 5 MB y jurisdicción elegida. El **nombre del archivo es el identificador del documento**: si ya existe un documento con ese nombre, responde **409**. Se reutiliza el mismo proceso de segmentación, embeddings y deduplicación del script; el archivo original se descarta y solo se conservan los fragmentos.
+**Desde la administración** (`POST /api/admin/corpus`): PDF o TXT de hasta 5 MB y jurisdicción elegida; como cada carga genera embeddings, se admiten como máximo 5 por minuto, y un envío con `Content-Length` mayor de 6 MB se rechaza con 413 antes de leerlo. El **nombre del archivo es el identificador del documento**: si ya existe un documento con ese nombre, responde **409**. Se reutiliza el mismo proceso de segmentación, embeddings y deduplicación del script; el archivo original se descarta y solo se conservan los fragmentos.
 
 ### Búsqueda vectorial
 
@@ -886,7 +909,7 @@ El estado de revocación vive en Redis (compartido entre instancias), no en memo
 - Los mensajes propios del servidor no incluyen correos, nombres de archivos cargados por el usuario ni direcciones web completas: de una URL solo se registra el nombre del sitio; los usuarios se identifican por su `id`.
 - SlowAPI escribe la IP al rechazar una solicitud por exceso; el filtro `OcultarIpLimitador` la reemplaza por `[ip omitida]`.
 - En producción el registro de acceso de Uvicorn (una línea con la IP por solicitud) se desactiva con `--no-access-log` (CMD del Dockerfile). La plataforma de alojamiento (Railway) recibe la IP en su propia capa, fuera del control de la aplicación (lo indica el aviso de privacidad).
-- Con `ENVIRONMENT=development`, SQLAlchemy registra las sentencias SQL (`echo`), lo que puede incluir parámetros como el correo de una consulta. En producción `ENVIRONMENT` debe tener otro valor.
+- SQLAlchemy solo registra las sentencias SQL con sus parámetros (`echo`), que pueden incluir el correo de una consulta, si `SQL_ECHO=true`. Está apagado por defecto y ya no depende de `ENVIRONMENT`; se activa solo para depurar en local, nunca en producción.
 
 ---
 
@@ -912,8 +935,12 @@ Límites: ver sección 6
 ### Cargas de archivo
 
 - Validación de extensión, tipo de contenido y firma `%PDF-`.
-- Rechazo temprano por `Content-Length` en `/api/ingesta/archivo` y lectura limitada a 5 MB + 1 byte en las dos rutas de carga (ingesta y corpus).
+- Rechazo temprano por `Content-Length` (> 6 MB → 413) en los `POST` a `/api/ingesta/archivo` y `/api/admin/corpus` (`RUTAS_CARGA_ARCHIVO` en `app/core/limite_carga.py`) y lectura limitada a 5 MB + 1 byte en las dos rutas.
 - Procesamiento solo en memoria (sin archivos temporales para cargas válidas).
+
+### Ingesta por URL
+
+Solo se descargan sitios web públicos: `http`/`https`, puertos estándar, sin credenciales en la URL y con un nombre que resuelva solo a IP públicas; las redirecciones se siguen a mano (máximo 5) validando cada destino (sección 6). Evita que el servidor se use para consultar servicios internos (SSRF).
 
 ### CORS
 
@@ -950,8 +977,8 @@ cd PrivApp
 
 # 2. Crear archivo de entorno y completar los valores
 cp .env.example .env
-#    Para Docker Compose local, REDIS_URL debe apuntar al servicio redis
-#    (redis://redis:6379/0) o quedar vacía para usar ese valor por defecto.
+#    El REDIS_URL de .env.example (redis://redis:6379/0) ya apunta al servicio
+#    redis de Docker Compose; en Railway se usa la URL de su servicio de Redis.
 
 # 3. Construir e iniciar los servicios
 docker compose up --build
@@ -997,7 +1024,7 @@ docker compose exec backend pytest
 docker compose exec backend python scripts/cargar_corpus.py
 docker compose exec backend python scripts/cargar_corpus.py --limpiar   # vacía corpus_chunks (pide confirmación)
 ```
-Lee `/app/corpus_normativo/` (docker-compose monta `./corpus_normativo` en solo lectura); solo procesa archivos dentro de `guatemala/`, `internacional/` y `estandares_tecnicos/`, lo que excluye el README y otras notas. Es idempotente (deduplicación por hash) y al final imprime documentos procesados, fragmentos insertados y duplicados, archivos saltados y errores. Requiere que la tabla exista (`alembic upgrade head`). Como alternativa, los documentos se pueden cargar desde `/admin/corpus` (PDF/TXT ≤ 5 MB; el nombre del archivo es el identificador; un nombre repetido → 409).
+Lee `/app/corpus_normativo/` (docker-compose monta `./corpus_normativo` en solo lectura); solo procesa archivos dentro de `guatemala/`, `internacional/` y `estandares_tecnicos/`, lo que excluye el README, otras notas y `originales/`. Es idempotente (deduplicación por hash) y al final imprime documentos procesados, fragmentos insertados y duplicados, archivos saltados y errores. Requiere que la tabla exista (`alembic upgrade head`). Como alternativa, los documentos se pueden cargar desde `/admin/corpus` (PDF/TXT ≤ 5 MB; el nombre del archivo es el identificador; un nombre repetido → 409).
 
 **Promover administrador — `promover_admin.py`**
 ```bash
@@ -1050,7 +1077,7 @@ docker compose exec backend pytest
 docker compose exec backend pytest --cov=app --cov-report=term-missing
 ```
 
-Última ejecución (30/09/2026): **358 pruebas aprobadas y 15 omitidas** (las omitidas son las de integración, que se saltan si no se define `PRIVAPP_TEST_PG_URL`).
+Última ejecución (01/10/2026): **408 pruebas aprobadas y 16 omitidas** sin `PRIVAPP_TEST_PG_URL` (las omitidas son las de integración contra PostgreSQL); con esa variable definida, 421 aprobadas y 1 omitida.
 
 **Infraestructura (`tests/conftest.py`):**
 - SQLite en memoria (`sqlite+aiosqlite:///:memory:`) con `StaticPool`, para que la tarea de fondo del análisis vea la misma base que la solicitud. Solo se crean `users` y `analysis_temp` (pgvector no existe en SQLite).
@@ -1065,6 +1092,9 @@ docker compose exec backend pytest --cov=app --cov-report=term-missing
 | `test_aviso_privacidad.py` | Aceptación del aviso y declaración de edad |
 | `test_admin_usuarios.py`, `test_admin_corpus.py` | Administración de usuarios y del corpus |
 | `test_ingesta.py`, `test_carga_archivo.py`, `test_validacion_longitud.py` | Limpieza, URL, archivos PDF/TXT, regla RN-01 |
+| `test_url_publica.py` | Ingesta por URL solo de sitios públicos: esquema, puerto, credenciales, IP y redirecciones |
+| `test_email_minusculas.py` | Registro e inicio de sesión sin distinguir mayúsculas en el correo |
+| `test_coherencia_resultados.py` | Secciones no analizadas fuera del resumen, análisis interrumpidos, 409 del detalle y del PDF, formato de 429 y 422, versión |
 | `test_analisis.py` | Segmentación, parseo, tipo de tratamiento, citas, sin respaldo, segunda pasada, recomendaciones, resumen, endpoints |
 | `test_rag.py` | Chunking, metadatos, extracción de PDF, embeddings, recuperación |
 | `test_llm_adapters.py` | Política de reintentos del adaptador de OpenAI |
@@ -1108,7 +1138,7 @@ En Docker Desktop con WSL2, el reloj del contenedor puede retroceder unos 32 s c
 | Sprint 6 | `dc5468e` | Documentación final del prototipo v1.0 |
 | v1.0 | `e98e50a` | Release oficial del prototipo |
 | Sprint 7 | `27cccac` | Migración a OpenAI, límite 200k chars, pruebas corregidas |
-| Proyecto de Graduación II | rama `develop` | Roles, sesiones revocables, aviso de privacidad, perfil y eliminación de cuenta, administración, carga de archivos, análisis completo en paralelo, citas verificables, recomendaciones prácticas, historial con filtros, panel estadístico, glosario, migraciones 0004–0009, Vitest (detalle en `CHANGELOG.md`) |
+| Proyecto de Graduación II | rama `develop` | Roles, sesiones revocables, aviso de privacidad, perfil y eliminación de cuenta, administración, carga de archivos, análisis completo en paralelo, citas verificables, recomendaciones prácticas, historial con filtros, panel estadístico, glosario, migraciones 0004–0010, Vitest (detalle en `CHANGELOG.md`) |
 
 ---
 
@@ -1129,7 +1159,7 @@ JWT_ALGORITHM=HS256
 JWT_EXPIRATION_HOURS=24
 
 # Redis (lista de revocación de tokens al cerrar sesión)
-REDIS_URL=<url-de-redis>          # local con Docker Compose: redis://redis:6379/0
+REDIS_URL=redis://redis:6379/0    # local con Docker Compose; en Railway, la URL de su servicio de Redis
 
 # Proveedor del modelo de lenguaje (único valor admitido: openai)
 LLM_PROVIDER=openai
@@ -1137,12 +1167,13 @@ OPENAI_API_KEY=<clave-de-api-de-openai>
 OPENAI_MODEL=gpt-4o-mini
 
 # General
-ENVIRONMENT=development           # en producción, otro valor (desactiva el eco de SQL)
+ENVIRONMENT=development
 CORS_ORIGINS=http://localhost:5173
 LOG_LEVEL=INFO
+SQL_ECHO=false                    # true: registra cada consulta SQL con sus parámetros (solo depuración local)
 ```
 
-`DATABASE_URL`, `JWT_SECRET_KEY` y `REDIS_URL` son obligatorias para arrancar el backend. En `docker-compose.yml`, `REDIS_URL`, `LLM_PROVIDER`, `OPENAI_MODEL` y `LOG_LEVEL` tienen valores por defecto si no se definen. En el frontend, `VITE_API_URL` indica la URL del backend.
+`DATABASE_URL`, `JWT_SECRET_KEY` y `REDIS_URL` son obligatorias para arrancar el backend. En `docker-compose.yml`, `REDIS_URL`, `LLM_PROVIDER`, `OPENAI_MODEL`, `LOG_LEVEL` y `SQL_ECHO` (`false`) tienen valores por defecto si no se definen. En el frontend, `VITE_API_URL` indica la URL del backend.
 
 ---
 
@@ -1165,7 +1196,7 @@ LOG_LEVEL=INFO
     11a. Segmentación de la política completa
     11b. Hasta 4 secciones en paralelo: RAG (5 + 2 guatemaltecos), llamada al modelo,
          citas construidas por el servidor, segunda pasada de respaldo
-    11c. Resumen (solo hallazgos respaldados) y recomendaciones prácticas
+    11c. Resumen (solo hallazgos respaldados de secciones analizadas) y recomendaciones prácticas
     11d. Persistencia en analysis_temp (estado completado)
 12. GET /api/analisis/{id} → semáforo, secciones, citas, filtros y recomendaciones
 13. (Opcional) GET /api/analisis/{id}/pdf → reporte PDF (se registra su tiempo)
@@ -1188,7 +1219,7 @@ Para cada sección (hasta 4 a la vez):
         → JSON con hallazgos y números de fragmento
     _parsear_seccion(json_str, chunks)
         → citas con el texto real; sin fragmentos válidos → sin_respaldo
-        → respuesta inválida: reintento con el motivo; segunda falla: sección de respaldo
+        → respuesta inválida: reintento con el motivo; segunda falla: sección de respaldo (analizada = false)
     _respaldar_hallazgos()
         → búsqueda con la descripción de cada hallazgo pendiente + SYSTEM_PROMPT_RESPALDO
     ↓
@@ -1208,7 +1239,7 @@ AnalisisResponse → persistida en JSONB → consultada por el cliente
 3. /admin/usuarios → GET /api/admin/usuarios?q=... → activar/desactivar
    (desactivar invalida todas las sesiones de esa cuenta)
 4. /admin/corpus → GET /api/admin/corpus → activar/desactivar documentos
-   o cargar uno nuevo (POST /api/admin/corpus, PDF/TXT ≤ 5 MB, jurisdicción)
+   o cargar uno nuevo (POST /api/admin/corpus, PDF/TXT ≤ 5 MB, jurisdicción, 5/min)
 ```
 
 ---
