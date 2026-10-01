@@ -13,9 +13,9 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 ## Funciones principales
 
 - **Cuentas de usuario:** registro con aceptación del aviso de privacidad y declaración de edad o de consentimiento de la madre, el padre o la persona encargada; inicio y cierre de sesión con revocación de tokens.
-- **Ingesta de políticas:** texto pegado, URL o archivo PDF/TXT (máximo 5 MB, procesado en memoria y descartado), con vista previa obligatoria antes de analizar.
+- **Ingesta de políticas:** texto pegado, URL de un sitio web público o archivo PDF/TXT (máximo 5 MB, procesado en memoria y descartado), con vista previa obligatoria antes de analizar.
 - **Análisis completo:** la política se divide en secciones que se analizan en paralelo, con progreso visible; cada sección se contrasta con fragmentos del corpus, incluidos siempre fragmentos guatemaltecos.
-- **Citas verificables:** el servidor arma cada cita con el extracto real del corpus y su jurisdicción (Guatemala, Internacional o Estándar técnico); los hallazgos sin respaldo se marcan y no cuentan para el nivel ni la puntuación de riesgo.
+- **Citas verificables:** el servidor arma cada cita con el extracto real del corpus y su jurisdicción (Guatemala, Internacional o Estándar técnico); los hallazgos sin respaldo y las secciones que no pudieron analizarse se marcan y no cuentan para el nivel ni la puntuación de riesgo.
 - **Resultados claros:** semáforo, puntuación de riesgo (0–100), tipo de tratamiento de datos por hallazgo, filtros por nivel y jurisdicción, ayuda del glosario junto a los términos técnicos y recomendaciones prácticas redactadas a partir de los riesgos encontrados.
 - **Reporte PDF** descargable de cada análisis.
 - **Historial** con búsqueda sin distinción de acentos, filtros por nivel y fechas, y eliminación definitiva de análisis.
@@ -23,7 +23,7 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 - **Perfil:** edición del nombre, cambio de contraseña (cierra las demás sesiones) y eliminación de la cuenta con todos sus análisis.
 - **Glosario** y **aviso de privacidad** públicos.
 - **Administración:** gestión de usuarios (activar o desactivar cuentas) y del corpus normativo (cargar, activar o desactivar documentos).
-- **Privacidad por diseño:** los registros del servidor no contienen datos personales y se aplican límites de solicitudes por IP.
+- **Privacidad por diseño:** los registros del servidor no contienen datos personales, se aplican límites de solicitudes por IP y la ingesta por URL solo descarga sitios web públicos.
 
 ## Tecnologías
 
@@ -88,11 +88,12 @@ Copia `.env.example` como `.env` y reemplaza los valores de ejemplo por los tuyo
 | `DATABASE_URL` | Cadena de conexión (`postgresql+asyncpg://…@db:5432/…`) |
 | `JWT_SECRET_KEY` | Clave aleatoria de al menos 32 caracteres |
 | `JWT_ALGORITHM`, `JWT_EXPIRATION_HOURS` | Algoritmo y vigencia del token |
-| `REDIS_URL` | Redis para revocar tokens; en local, `redis://redis:6379/0` (o vacía para usar el servicio de Docker Compose) |
+| `REDIS_URL` | Redis para revocar tokens; el valor de `.env.example` (`redis://redis:6379/0`) sirve en local tal cual; en Railway, la URL de su servicio de Redis |
 | `LLM_PROVIDER` | `openai` |
 | `OPENAI_API_KEY` | Tu API key de OpenAI |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
 | `ENVIRONMENT`, `CORS_ORIGINS`, `LOG_LEVEL` | Configuración general |
+| `SQL_ECHO` | `true` registra cada consulta SQL con sus parámetros (solo para depurar en local); `false` por defecto |
 
 > El archivo `.env` está en `.gitignore` y **nunca debe subirse al repositorio**.
 
@@ -142,7 +143,7 @@ docker compose logs -f backend
 │   │   ├── repositories/
 │   │   ├── services/   # auth, ingesta, rag, analisis, reportes, corpus, admin, llm/
 │   │   └── utils/      # chunking, embeddings, pdf_extractor, validación de texto
-│   ├── migrations/     # Versiones Alembic (0001–0009)
+│   ├── migrations/     # Versiones Alembic (0001–0010)
 │   ├── scripts/        # cargar_corpus.py, promover_admin.py, tiempos_reporte.py
 │   └── tests/          # Pruebas pytest (integracion/ contra PostgreSQL)
 ├── frontend/           # App React + TypeScript
@@ -156,9 +157,10 @@ docker compose logs -f backend
 ├── corpus_normativo/   # Documentos de normativa guatemalteca e internacional
 │   ├── guatemala/
 │   ├── internacional/
-│   └── estandares_tecnicos/
+│   ├── estandares_tecnicos/
+│   └── originales/     # Documentos fuente que no se cargan (PDF original de los Principios OEA 2021)
 ├── docs/               # Documentación detallada
-└── postgres/           # init.sql (pgvector, corpus_chunks)
+└── postgres/           # init.sql (pgvector, corpus_chunks igual que en las migraciones)
 ```
 
 ## Documentación adicional

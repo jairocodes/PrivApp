@@ -189,7 +189,9 @@ fuera de la lista o `fragmentos` que no es una lista), el servicio:
 2. Si falla, repite la instrucción completa (sección, fragmentos y esquema) junto con
    el motivo del rechazo.
 3. Si falla de nuevo, usa una sección de respaldo ("No fue posible analizar esta
-   sección automáticamente"), sin afectar a las demás secciones.
+   sección automáticamente"), sin afectar a las demás secciones. La sección de
+   respaldo lleva `analizada: false`: se muestra, pero **no cuenta** para el nivel
+   global ni para la puntuación de riesgo.
 
 **Razón:** Robustez ante comportamiento no determinista del modelo.
 
@@ -224,8 +226,9 @@ No hay tokens de refresco: al expirar el token, la persona vuelve a iniciar sesi
     activación y desactivación; un administrador no puede desactivarse a sí mismo;
   - corpus: listado por documento (jurisdicción, fragmentos, fecha, estado),
     activación o desactivación del documento completo y carga de documentos nuevos
-    (PDF o TXT de hasta 5 MB; el nombre del archivo es el identificador y uno repetido
-    responde 409). La carga usa el mismo proceso que el script de carga del corpus.
+    (PDF o TXT de hasta 5 MB, como máximo 5 cargas por minuto; el nombre del archivo
+    es el identificador y uno repetido responde 409). La carga usa el mismo proceso
+    que el script de carga del corpus.
 - No se puede eliminar la cuenta del único administrador activo.
 
 ### 11. Registros sin datos personales
@@ -238,20 +241,35 @@ No hay tokens de refresco: al expirar el token, la persona vuelve a iniciar sesi
   por exceso;
 - en producción, uvicorn arranca con `--no-access-log` (ver `backend/Dockerfile`),
   porque el registro de acceso escribiría la IP de cada solicitud. La plataforma de
-  despliegue recibe la IP en su propia capa (sección 5 del aviso de privacidad).
+  despliegue recibe la IP en su propia capa (sección 5 del aviso de privacidad);
+- SQLAlchemy solo registra las consultas SQL con sus parámetros (que pueden incluir
+  correos) si `SQL_ECHO=true`; está apagado por defecto y no depende de
+  `ENVIRONMENT`.
 
 ### 12. Protección de la entrada
 
 - Límites de solicitudes por IP con SlowAPI (en memoria): registro 10/min, inicio de
   sesión 5/min, cambio de contraseña 5/min, eliminación de cuenta 5/min, ingesta de
-  texto 20/min, de URL 10/min, de archivo 10/min, inicio de análisis 5/min y PDF
-  10/min. El cliente muestra un mensaje claro ante una respuesta 429.
-- `LimiteCargaArchivoMiddleware` (`app/core/limite_carga.py`) rechaza con 413 una carga
-  a `/api/ingesta/archivo` cuyo `Content-Length` supere el máximo, antes de leer el
-  cuerpo. El archivo se procesa en memoria y no se guarda.
+  texto 20/min, de URL 10/min, de archivo 10/min, inicio de análisis 5/min, PDF
+  10/min y carga de documentos al corpus 5/min. Al superarlos, la API responde 429
+  con `{"detail": "Demasiadas solicitudes. Espera un minuto antes de volver a
+  intentarlo."}` (`app/core/manejadores.py`) y el cliente muestra un mensaje claro.
+- `LimiteCargaArchivoMiddleware` (`app/core/limite_carga.py`) rechaza con 413 un `POST`
+  a `/api/ingesta/archivo` o a `/api/admin/corpus` (`RUTAS_CARGA_ARCHIVO`) cuyo
+  `Content-Length` supere 6 MB (el máximo de 5 MB más margen para el formulario),
+  antes de leer el cuerpo. El archivo se procesa en memoria y no se guarda.
+- Ingesta por URL (`validar_url_publica` y `_descargar` en `ingesta_service.py`): para
+  que el servidor no pueda usarse para consultar servicios internos, solo se descargan
+  direcciones `http` o `https`, con puerto estándar (80, 443 o sin puerto), sin
+  credenciales en la URL y cuyo nombre resuelva solo a IP públicas. Las redirecciones
+  se siguen a mano (máximo 5) y cada destino se valida igual.
+- El correo se guarda y se busca en minúsculas (`auth_service.normalizar_email`), así
+  que el registro y el inicio de sesión no distinguen mayúsculas.
 - Regla única de longitud tras la limpieza (RN-01): mínimo 200 caracteres y 40
   palabras, máximo 200,000 caracteres; el texto crudo se limita a 400,000. La misma
   regla se aplica al iniciar el análisis, para que no pueda saltarse llamando a la API.
+- Los errores de validación (422) conservan el formato de FastAPI, pero sin el prefijo
+  "Value error, " que Pydantic antepone a los mensajes propios.
 
 ---
 
@@ -262,7 +280,8 @@ Usuario
   │ POST /api/ingesta/texto | /url | /archivo
   ▼
 ingesta_service
-  │ extraer (URL: requests + BeautifulSoup; PDF: pdfplumber → pypdf;
+  │ extraer (URL: validar_url_publica + requests sin redirecciones automáticas
+  │          + BeautifulSoup; PDF: pdfplumber → pypdf;
   │          TXT: UTF-8 o Windows-1252)
   │ limpiar_texto() → validar_longitud_politica() (RN-01)
   │ → texto limpio
@@ -299,7 +318,8 @@ ejecutar_analisis_background()  (sesión de BD propia)
   │   │   sección queda igual
   │   │ seccion_actual += 1 → commit   (el progreso cuenta secciones listas)
   │
-  │ _calcular_resumen()  solo hallazgos con respaldo
+  │ _calcular_resumen()  solo hallazgos con respaldo de secciones analizadas
+  │   (las secciones de respaldo, analizada=false, no cuentan)
   │   pesos = [bajo=1, medio=2, alto=3]
   │   puntuación = (promedio - 1) / 2 * 100
   │
@@ -314,9 +334,14 @@ ejecutar_analisis_background()  (sesión de BD propia)
   ▼
 Frontend: sondea GET /api/analisis/{id}/estado (seccion_actual / secciones_total)
   │ al completarse: GET /api/analisis/{id}
+  │   (409 si todavía se procesa o si terminó con error)
   └─→ Resultados: resumen, secciones con hallazgos, citas, filtro por nivel
       y jurisdicción (en el cliente), recomendaciones y descarga del PDF
 ```
+
+La tarea de fondo vive en el proceso del backend: si el servidor se reinicia durante un
+análisis, al arrancar (`lifespan` en `app/main.py`) `marcar_analisis_interrumpidos()`
+pasa a `error` todos los análisis que quedaron en `procesando`.
 
 El PDF (`GET /api/analisis/{id}/pdf`) se genera con ReportLab bajo demanda; cada
 generación registra su duración en `resultado.metadatos_reporte` (últimas 10
@@ -332,7 +357,7 @@ mediciones), que resume `scripts/tiempos_reporte.py`.
 |---|---|---|
 | `id` | integer, PK | |
 | `nombre` | varchar(100) | editable desde el perfil |
-| `email` | varchar(255), único | no editable |
+| `email` | varchar(255), único | no editable; se guarda en minúsculas |
 | `hashed_password` | varchar(255) | bcrypt |
 | `is_active` | boolean | la desactivación invalida las sesiones |
 | `role` | varchar(20) | `usuario` o `administrador` (`ck_users_role`), por defecto `usuario` |
@@ -355,7 +380,8 @@ mediciones), que resume `scripts/tiempos_reporte.py`.
 | `created_at` | timestamptz | |
 
 La eliminación de un análisis es definitiva; uno ajeno o inexistente responde 404 y
-uno en curso, 409.
+uno en curso, 409. Al consultar el detalle o el PDF, uno ajeno o inexistente responde
+404, y uno en curso o que terminó con error, 409.
 
 ### `corpus_chunks`
 
@@ -370,14 +396,14 @@ uno en curso, 409.
 | `embedding` | vector(768) | sin índice vectorial (búsqueda exacta) |
 | `metadatos` | JSONB | `hash` MD5 del fragmento para evitar duplicados y ruta u origen |
 | `active` | boolean | solo los fragmentos activos participan en la recuperación |
-| `fecha_carga` | timestamp | |
+| `fecha_carga` | timestamptz | |
 
 ### Migraciones
 
 | Migración | Cambio |
 |---|---|
 | 0001 | Tabla `users` |
-| 0002 | Extensión `vector` y tabla `corpus_chunks` (también puede venir de `postgres/init.sql`) |
+| 0002 | Extensión `vector` y tabla `corpus_chunks` (también puede venir de `postgres/init.sql`, que la crea igual que las migraciones: con `active`, `fecha_carga` con zona horaria e índice `idx_corpus_documento_fuente`) |
 | 0003 | Tabla `analysis_temp` |
 | 0004 | `seccion_actual` y `secciones_total` (progreso) |
 | 0005 | `role`, `privacy_accepted_at` y `sessions_valid_from` en `users` |
@@ -385,6 +411,7 @@ uno en curso, 409.
 | 0007 | Extensión `unaccent` (búsquedas sin acentos) |
 | 0008 | Elimina el índice `ivfflat` (búsqueda exacta) |
 | 0009 | `users.age_declaration_at` |
+| 0010 | Correos de `users` en minúsculas (se detiene si dos cuentas solo difieren en mayúsculas) |
 
 ---
 
@@ -392,7 +419,7 @@ uno en curso, 409.
 
 ```
 app/
-├── main.py              # FastAPI app, CORS, SlowAPI, límite de carga, routers
+├── main.py              # FastAPI app (VERSION_API), lifespan, CORS, SlowAPI, límite de carga, routers
 ├── config.py            # Pydantic Settings (variables de entorno)
 ├── database.py          # Async engine, AsyncSessionLocal, get_db()
 ├── api/
@@ -408,6 +435,7 @@ app/
 │   ├── exceptions.py    # HTTPExceptions personalizadas con status codes
 │   ├── limiter.py       # slowapi Limiter (por IP)
 │   ├── limite_carga.py  # rechazo temprano por Content-Length
+│   ├── manejadores.py   # respuestas 429 y 422 con formato {"detail": ...}
 │   └── registro.py      # registros sin datos personales
 ├── models/
 │   ├── user.py          # User
@@ -421,7 +449,7 @@ app/
 ├── schemas/             # auth, user, ingesta, analysis, analisis_request, admin, corpus
 ├── services/
 │   ├── auth_service.py      # registro, login, perfil, contraseña, eliminar cuenta, promover
-│   ├── ingesta_service.py   # limpieza, URL, archivo PDF/TXT
+│   ├── ingesta_service.py   # limpieza, URL (solo sitios públicos), archivo PDF/TXT
 │   ├── rag_service.py       # recuperar_contexto (pgvector), contar_chunks
 │   ├── analisis_service.py  # segmentación, análisis en segundo plano, resumen,
 │   │                        # recomendaciones, historial, estadísticas, fábrica del LLM

@@ -38,17 +38,18 @@ Abre `.env` y completa los valores. Nunca subas `.env` al repositorio.
 | `JWT_SECRET_KEY` | Clave secreta aleatoria (mínimo 32 caracteres) |
 | `JWT_ALGORITHM` | Algoritmo de firma del token (HS256) |
 | `JWT_EXPIRATION_HOURS` | Vigencia del token en horas (24 por defecto) |
-| `REDIS_URL` | Conexión a Redis para la revocación de sesiones; en Docker Compose, el servicio `redis` en el puerto 6379 (base 0) |
+| `REDIS_URL` | Conexión a Redis para la revocación de sesiones; en Docker Compose, el servicio `redis` (`redis://redis:6379/0`, el valor de `.env.example`); en Railway, la URL que entrega su servicio de Redis |
 | `LLM_PROVIDER` | Proveedor del modelo de lenguaje; el único soportado es `openai` |
 | `OPENAI_API_KEY` | Tu API key de OpenAI |
 | `OPENAI_MODEL` | Modelo de OpenAI (`gpt-4o-mini`) |
 | `ENVIRONMENT` | `development` o `production` |
 | `CORS_ORIGINS` | Orígenes permitidos para el frontend, separados por comas |
 | `LOG_LEVEL` | Nivel de los registros del servidor (`INFO` por defecto) |
+| `SQL_ECHO` | `true` para registrar cada consulta SQL con sus parámetros (pueden incluir correos); `false` por defecto. Solo para depurar en local, nunca en producción |
 
-`.env.example` trae en `REDIS_URL` una dirección de ejemplo con usuario y contraseña
-para un Redis externo. Para trabajar en local con Docker Compose, reemplázala por la del
-servicio `redis` o deja la variable vacía: el backend usa entonces la del servicio.
+El `REDIS_URL` de `.env.example` (`redis://redis:6379/0`) apunta al servicio `redis` de
+Docker Compose, así que funciona en local tal cual. Si se deja vacía, Docker Compose usa
+ese mismo valor por defecto.
 
 Para generar una clave JWT segura:
 ```bash
@@ -62,6 +63,11 @@ jurisdicción: `guatemala/`, `internacional/` y `estandares_tecnicos/`. El scrip
 carga solo toma los archivos PDF, TXT o MD que estén dentro de esas carpetas (el README
 y cualquier otro archivo del directorio se ignoran). Para agregar un documento,
 colócalo en la carpeta que corresponde a su jurisdicción.
+
+La carpeta `originales/` guarda documentos fuente que no se cargan: ahí está el PDF
+oficial de los Principios OEA 2021, que está maquetado a dos columnas. En su lugar se
+carga `internacional/Principios OEA 2021.txt`, el texto extraído de ese PDF columna por
+columna (el detalle está en `corpus_normativo/README.md`).
 
 ### 4. Levantar el sistema
 
@@ -83,9 +89,14 @@ En una segunda terminal:
 docker compose exec backend alembic upgrade head
 ```
 
-Esto aplica las migraciones 0001 a 0009 (tablas, rol y fechas de aceptación del aviso
+Esto aplica las migraciones 0001 a 0010 (tablas, rol y fechas de aceptación del aviso
 y de declaración de edad, estado activo de los fragmentos del corpus, extensión
-`unaccent` y búsqueda exacta sin índice vectorial).
+`unaccent`, búsqueda exacta sin índice vectorial y correos en minúsculas).
+
+La migración 0010 pasa a minúsculas los correos ya guardados, porque el registro y el
+inicio de sesión ahora no distinguen mayúsculas. Si dos cuentas solo se diferencian por
+mayúsculas en el correo, la migración se detiene y las lista: hay que resolverlas a mano
+(no se fusionan automáticamente) y volver a ejecutar `alembic upgrade head`.
 
 La migración 0007 ejecuta `CREATE EXTENSION unaccent`: el usuario de `DATABASE_URL`
 debe tener permiso para crear extensiones. Con el contenedor `db` de Docker Compose el
@@ -106,7 +117,8 @@ un hash y los repetidos no se vuelven a insertar, así que puede ejecutarse de n
 agregar documentos. Con `--limpiar` vacía la tabla antes de cargar (pide confirmación).
 
 Un administrador también puede incorporar documentos desde `/admin/corpus` (PDF o TXT
-de hasta 5 MB; el nombre del archivo identifica al documento y uno repetido se rechaza).
+de hasta 5 MB, como máximo 5 cargas por minuto; el nombre del archivo identifica al
+documento y uno repetido se rechaza).
 
 ### 7. Crear el primer administrador
 
@@ -189,6 +201,11 @@ Verifica que el servicio `redis` esté en línea (`docker compose logs redis`) y
 El backend no pudo usar el modelo de OpenAI. Verifica que `.env` contenga
 `OPENAI_API_KEY` con un valor real, que `LLM_PROVIDER` sea `openai` y que la cuenta de
 OpenAI tenga saldo. Revisa `docker compose logs backend`.
+
+### La migración 0010 se detiene por correos repetidos
+Hay cuentas cuyo correo solo se distingue por mayúsculas (por ejemplo,
+`Ana@Ejemplo.com` y `ana@ejemplo.com`). El mensaje las lista; decide cuál conservar,
+elimina o cambia el correo de la otra y vuelve a ejecutar `alembic upgrade head`.
 
 ### La migración 0007 falla con un error de permisos
 El usuario de la base no puede crear la extensión `unaccent`. Actívala con un usuario
