@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: str = "http://localhost:5173"
     log_level: str = "INFO"
+    # Registrar cada consulta SQL con sus parámetros: solo para depurar en local.
+    sql_echo: bool = False
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -8,7 +8,8 @@ from app.config import settings
 
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.environment == "development",
+    # Desactivado por defecto: los parámetros de las consultas pueden incluir datos personales.
+    echo=settings.sql_echo,
     pool_pre_ping=True,
 )
 
