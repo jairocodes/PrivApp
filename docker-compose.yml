@@ -70,6 +70,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Servidor de Vite; la imagen de producción es la etapa final del Dockerfile.
+      target: desarrollo
     restart: unless-stopped
     environment:
       VITE_API_URL: http://localhost:8000

@@ -841,7 +841,7 @@ La clave de API se lee solo de la configuración y nunca se escribe en los regis
 // - Eliminar cuenta / logout: olvida el token en el navegador
 ```
 
-`VITE_API_URL` define la URL del backend (por defecto `http://localhost:8000`); en desarrollo Vite además redirige `/api` al servicio `backend`.
+`VITE_API_URL` define la URL del backend (por defecto `http://localhost:8000`); en desarrollo Vite además redirige `/api` al servicio `backend`. En la imagen de producción es obligatoria y se fija al construirla (ver sección 14).
 
 ---
 
@@ -1005,6 +1005,23 @@ docker compose exec backend pytest
 | Cabeceras del proxy | `--proxy-headers --forwarded-allow-ips=*` | `--proxy-headers --forwarded-allow-ips=*` |
 
 `--forwarded-allow-ips="*"` se usa porque Railway no publica direcciones IP fijas para su proxy; así Uvicorn toma la IP real del cliente de las cabeceras reenviadas (necesaria para el límite de solicitudes por IP). La imagen del backend instala torch en su variante solo CPU antes del resto de dependencias.
+
+El `frontend/Dockerfile` tiene tres etapas:
+
+| Etapa | Uso | Qué hace |
+|---|---|---|
+| `desarrollo` | `docker-compose.yml` (`target: desarrollo`) | Servidor de Vite con recarga automática en el puerto 5173 |
+| `construccion` | Intermedia | `npm ci` y `npm run build`; exige el argumento `VITE_API_URL` y falla si falta |
+| `produccion` | Por defecto (Railway) | nginx sirve `dist/` en el puerto `PORT` (80 si no se define) |
+
+Vite incrusta `VITE_API_URL` en los archivos generados, así que en producción se fija **al construir** la imagen, no al arrancarla: en Railway basta con definir la variable `VITE_API_URL` (URL pública del backend, con `https://`) en el servicio del frontend, y si cambia hay que volver a desplegarlo. nginx (`frontend/nginx/default.conf.template`) devuelve `index.html` para cualquier ruta desconocida, para que React Router resuelva rutas como `/resultados/12` al recargar la página; los archivos de `/assets/` llevan caché larga porque su nombre incluye un hash, e `index.html` se sirve sin caché para que cada despliegue se vea de inmediato.
+
+Para probar la imagen de producción en local:
+
+```bash
+docker build -t privapp-frontend-prod --build-arg VITE_API_URL=http://localhost:8000 frontend
+docker run --rm -p 5173:80 privapp-frontend-prod   # http://localhost:5173, con el backend de Compose
+```
 
 ### Servicios disponibles (entorno local)
 
