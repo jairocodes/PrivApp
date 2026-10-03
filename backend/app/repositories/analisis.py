@@ -64,6 +64,21 @@ class RepositorioAnalisis:
         )
         return result.scalar_one_or_none()
 
+    async def completados_con_hash(self, text_hash: str, excluir_id: int, limite: int = 10) -> list[AnalysisTemp]:
+        """Análisis completados del mismo texto, de cualquier usuario y del más
+        reciente al más antiguo. Solo se usan para copiar su resultado."""
+        result = await self.db.execute(
+            select(AnalysisTemp)
+            .where(
+                AnalysisTemp.text_hash == text_hash,
+                AnalysisTemp.estado == "completado",
+                AnalysisTemp.id != excluir_id,
+            )
+            .order_by(AnalysisTemp.id.desc())
+            .limit(limite)
+        )
+        return list(result.scalars().all())
+
     async def guardar_metadatos_reporte(self, registro: AnalysisTemp, metadatos: dict) -> None:
         """Guarda los metadatos del reporte dentro de resultado. Se asigna un
         diccionario nuevo para que SQLAlchemy detecte el cambio en la columna JSON."""

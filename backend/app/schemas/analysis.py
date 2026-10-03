@@ -51,6 +51,10 @@ class Hallazgo(BaseModel):
     # None solo en análisis realizados antes de incorporar la clasificación;
     # toda respuesta nueva del modelo debe traerlo (ver _parsear_seccion).
     tipo_tratamiento: TipoTratamiento | None = None
+    # Código del criterio de la rúbrica que cumple la cláusula (A1–A10, M1–M5,
+    # B1–B4); de él se derivan el nivel y el tipo. None en análisis anteriores
+    # y en las secciones que no pudieron analizarse.
+    criterio: str | None = None
     # True si ningún fragmento del corpus respalda el hallazgo (RN-06): se
     # muestra marcado y no suma al puntaje.
     sin_respaldo: bool = False

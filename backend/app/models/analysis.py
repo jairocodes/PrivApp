@@ -43,6 +43,9 @@ class AnalysisTemp(Base):
     estado: Mapped[str] = mapped_column(String(20), default="pendiente")
     seccion_actual: Mapped[int] = mapped_column(Integer, default=0)
     secciones_total: Mapped[int | None] = mapped_column(Integer)
+    # SHA-256 del texto analizado (normalizado): permite reutilizar el resultado
+    # de un texto idéntico. None en los análisis anteriores a la migración 0011.
+    text_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

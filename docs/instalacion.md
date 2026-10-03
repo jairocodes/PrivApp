@@ -42,6 +42,8 @@ Abre `.env` y completa los valores. Nunca subas `.env` al repositorio.
 | `LLM_PROVIDER` | Proveedor del modelo de lenguaje; el único soportado es `openai` |
 | `OPENAI_API_KEY` | Tu API key de OpenAI |
 | `OPENAI_MODEL` | Modelo de OpenAI (`gpt-4o-mini`) |
+| `OPENAI_TEMPERATURE` | Opcional. Temperatura de generación (`0` por defecto, para resultados reproducibles) |
+| `OPENAI_SEED` | Opcional. Semilla de generación (`20261003` por defecto) |
 | `ENVIRONMENT` | `development` o `production` |
 | `CORS_ORIGINS` | Orígenes permitidos para el frontend, separados por comas |
 | `LOG_LEVEL` | Nivel de los registros del servidor (`INFO` por defecto) |
@@ -89,9 +91,10 @@ En una segunda terminal:
 docker compose exec backend alembic upgrade head
 ```
 
-Esto aplica las migraciones 0001 a 0010 (tablas, rol y fechas de aceptación del aviso
+Esto aplica las migraciones 0001 a 0011 (tablas, rol y fechas de aceptación del aviso
 y de declaración de edad, estado activo de los fragmentos del corpus, extensión
-`unaccent`, búsqueda exacta sin índice vectorial y correos en minúsculas).
+`unaccent`, búsqueda exacta sin índice vectorial, correos en minúsculas y huella del
+texto analizado para reutilizar resultados).
 
 La migración 0010 pasa a minúsculas los correos ya guardados, porque el registro y el
 inicio de sesión ahora no distinguen mayúsculas. Si dos cuentas solo se diferencian por

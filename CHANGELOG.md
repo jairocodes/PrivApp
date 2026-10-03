@@ -44,7 +44,14 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   tiempo de generación y script `tiempos_reporte.py`.
 - **Pruebas:** Vitest con jsdom en el cliente; pruebas de integración contra
   PostgreSQL con pgvector (`PRIVAPP_TEST_PG_URL`).
-- Migraciones 0005 a 0009.
+- **Consistencia del análisis:** el modelo elige el código del criterio de la rúbrica
+  (A1–A10, M1–M5, B1–B4) y el servidor deriva el nivel y el tipo del hallazgo;
+  temperatura 0, semilla fija y salidas estructuradas estrictas; un último intento
+  por sección ante errores transitorios; reutilización del resultado de un texto
+  idéntico analizado con la misma configuración (`analysis_temp.text_hash`);
+  configuración de cada análisis en `resultado.metadatos_analisis`; script
+  `medir_consistencia.py`.
+- Migraciones 0005 a 0011.
 
 ### Changed
 - OpenAI es el único proveedor del modelo de lenguaje (`LLM_PROVIDER=openai`).

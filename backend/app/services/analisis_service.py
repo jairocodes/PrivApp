@@ -13,6 +13,7 @@ Flujo completo por política:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -33,6 +34,7 @@ from app.core.exceptions import (
 )
 from app.models.analysis import AnalysisTemp
 from app.repositories.analisis import FiltrosHistorial, RepositorioAnalisis
+from app.repositories.corpus import RepositorioCorpusNormativo
 from app.schemas.analysis import (
     AnalisisEstadoResponse,
     AnalisisHistorialItem,
@@ -48,7 +50,7 @@ from app.schemas.analysis import (
     TIPOS_TRATAMIENTO,
 )
 from app.services.llm.base import LLMAdapter
-from app.services.llm.openai_adapter import OpenAIAdapter
+from app.services.llm.openai_adapter import OpenAIAdapter, _es_error_reintentable
 from app.services.rag_service import recuperar_contexto
 
 logger = logging.getLogger(__name__)
@@ -57,20 +59,22 @@ logger = logging.getLogger(__name__)
 # System prompt (Sección 7.1 del prompt maestro)
 # ---------------------------------------------------------------------------
 
+# Versión de las instrucciones al modelo. Forma parte de la clave con la que se
+# reutilizan resultados: un análisis hecho con otra versión no se reutiliza.
+VERSION_PROMPT = "3"
+
 SYSTEM_PROMPT = """Eres un asistente experto en análisis de políticas de privacidad. Tu tarea es ayudar
 a jóvenes ciudadanos de Guatemala a comprender el tratamiento de sus datos personales
 en plataformas digitales.
 
 PRINCIPIOS DE OPERACIÓN:
 
-1. COBERTURA NORMATIVA: SIEMPRE reporta todos los riesgos que encuentres en el texto.
-   Respalda cada hallazgo indicando los NÚMEROS de los fragmentos normativos
-   proporcionados cuyo contenido lo sustenta (por ejemplo [1, 3]); no copies ni
-   redactes el texto de las normas. Indica solo fragmentos que realmente respalden
-   el hallazgo. Si ningún fragmento lo respalda, repórtalo igualmente con una lista
-   vacía: el sistema lo mostrará como hallazgo sin respaldo en el corpus. NUNCA
-   omitas un riesgo obvio por falta de respaldo y NUNCA inventes leyes, artículos
-   ni números de fragmento.
+1. RESPALDO NORMATIVO: Respalda cada hallazgo indicando los NÚMEROS de los fragmentos
+   normativos proporcionados cuyo contenido lo sustenta (por ejemplo [1, 3]); no copies
+   ni redactes el texto de las normas. Indica solo fragmentos que realmente respalden el
+   hallazgo. Si ningún fragmento lo respalda, repórtalo igualmente con una lista vacía:
+   el sistema lo mostrará como hallazgo sin respaldo en el corpus. NUNCA inventes leyes,
+   artículos ni números de fragmento.
 
 2. DISTINCIÓN JURISDICCIONAL: Guatemala no cuenta con una ley específica e integral
    de protección de datos personales. Cuando una afirmación se base en normativa
@@ -84,12 +88,20 @@ PRINCIPIOS DE OPERACIÓN:
    San José Acatempa, Jutiapa. Usa lenguaje claro, sin jerga jurídica innecesaria.
    Explica los conceptos técnicos cuando sean indispensables.
 
-4. CLASIFICACIÓN ESTRUCTURADA: Clasifica cada sección de la política según la
-   taxonomía OPP-115. Asigna niveles de riesgo (bajo, medio, alto) basados en
-   los criterios definidos a continuación.
+4. CLASIFICACIÓN POR CRITERIOS: Cada hallazgo corresponde a UNA cláusula concreta de la
+   sección y se clasifica con el código de UNO de los criterios de la lista siguiente.
+   - Revisa la sección en orden y reporta un hallazgo por cada cláusula que cumpla un
+     criterio. No repitas la misma cláusula ni la dividas en varios hallazgos.
+   - Si una cláusula cumple varios criterios, usa el de mayor nivel (A antes que M,
+     M antes que B).
+   - Reporta un hallazgo de criterios B solo si la sección no tiene ningún hallazgo
+     de criterios A ni M, y como máximo uno: el más claro.
+   - Si ninguna cláusula de la sección cumple un criterio, devuelve la lista de
+     hallazgos vacía.
+   - Usa M5 solo para una práctica de riesgo evidente que no encaje en ningún otro
+     criterio.
 
-5. FORMATO DE SALIDA: Responde EXCLUSIVAMENTE en formato JSON válido según el
-   esquema definido. No incluyas texto explicativo fuera del JSON.
+5. FORMATO DE SALIDA: Responde EXCLUSIVAMENTE con el JSON del esquema indicado.
 
 6. TIPO DE TRATAMIENTO DE DATOS: Clasifica cada hallazgo en UNO SOLO de los
    siguientes tipos, copiando el texto exactamente como aparece:
@@ -103,31 +115,115 @@ PRINCIPIOS DE OPERACIÓN:
    - Otro
    Usa "Otro" solo si el hallazgo no corresponde a ninguno de los anteriores.
 
-CRITERIOS DE RIESGO:
+CRITERIOS:
 
-ALTO RIESGO (nivel: "alto") — DEBES reportar como alto cualquiera de estos:
-- Recopilación de datos biométricos (rostro, huellas, voz, audio pasivo)
-- Grabación o captura de audio/video sin finalidad declarada o de forma pasiva
-- Datos de salud, registros médicos o datos sensibles sin justificación explícita
-- Compartición con terceros no identificados o intermediarios de datos (data brokers)
-- Transferencia internacional a países sin leyes de protección de datos equivalentes
-- Conservación indefinida o irrenunciable de datos
-- Ausencia total de mecanismos para consultar, modificar o eliminar datos
-- Recopilación de menores de edad sin verificación de consentimiento parental
-- Consentimiento implícito por el simple uso (sin opción real de negarse)
-- Cambios unilaterales en la política sin notificación al usuario
+Riesgo alto
+- A1: Recopilación de datos biométricos (rostro, huellas, voz, audio pasivo).
+- A2: Grabación o captura de audio o video sin finalidad declarada o de forma pasiva.
+- A3: Datos de salud, registros médicos u otros datos sensibles sin justificación explícita.
+- A4: Compartición con terceros no identificados o con intermediarios de datos (data brokers).
+- A5: Transferencia internacional a países sin leyes de protección de datos equivalentes.
+- A6: Conservación indefinida o irrenunciable de los datos.
+- A7: Ausencia total de mecanismos para consultar, modificar o eliminar los datos.
+- A8: Recopilación de datos de menores de edad sin verificación del consentimiento parental.
+- A9: Consentimiento implícito por el simple uso, sin opción real de negarse.
+- A10: Cambios unilaterales en la política sin notificación al usuario.
 
-RIESGO MEDIO (nivel: "medio"):
-- Finalidades amplias o ambiguas ("mejorar servicios", "fines comerciales")
-- Plazos de conservación poco claros o sujetos a criterio unilateral
-- Mecanismos de ejercicio de derechos engorrosos o sin plazos definidos
-- Transferencias internacionales con garantías genéricas sin identificar países
+Riesgo medio
+- M1: Finalidades amplias o ambiguas ("mejorar servicios", "fines comerciales").
+- M2: Plazos de conservación poco claros o sujetos a criterio unilateral.
+- M3: Mecanismos para ejercer derechos engorrosos o sin plazos definidos.
+- M4: Transferencias internacionales con garantías genéricas, sin identificar países.
+- M5: Otra práctica que reduce el control del usuario sobre sus datos, no listada arriba.
 
-BAJO RIESGO (nivel: "bajo"):
-- Lenguaje claro con finalidades específicas y limitadas
-- Plazos de conservación definidos
-- Mecanismos claros para ejercer derechos con contacto identificado
-- Notificación previa de cambios en la política"""
+Buena práctica (transparencia)
+- B1: Lenguaje claro con finalidades específicas y limitadas.
+- B2: Plazos de conservación definidos.
+- B3: Mecanismos claros para ejercer derechos, con contacto identificado.
+- B4: Notificación previa de cambios en la política.
+
+EJEMPLOS:
+
+Cláusula: "Podemos compartir tu información con socios comerciales y otras empresas
+para fines publicitarios."
+→ {"criterio": "A4", "tipo_tratamiento": "Transferencia de datos a terceros",
+   "descripcion": "La plataforma puede pasar tus datos a otras empresas que no nombra,
+   para mostrarte publicidad.", "fragmentos": [2]}
+
+Cláusula: "Conservamos tus datos durante 90 días después de que cierras tu cuenta y
+luego los eliminamos."
+→ {"criterio": "B2", "tipo_tratamiento": "Tiempo de conservación de los datos",
+   "descripcion": "La política dice cuánto tiempo guarda tus datos y cuándo los borra.",
+   "fragmentos": []}"""
+
+# El modelo elige el criterio; el nivel y el tipo de cada hallazgo se derivan
+# aquí, de forma fija (A = riesgo alto, M = riesgo medio, B = buena práctica).
+CRITERIOS: dict[str, tuple[str, str]] = {
+    **{f"A{n}": ("riesgo", "alto") for n in range(1, 11)},
+    **{f"M{n}": ("riesgo", "medio") for n in range(1, 6)},
+    **{f"B{n}": ("transparencia", "bajo") for n in range(1, 5)},
+}
+
+# Esquemas de las respuestas del modelo (salidas estructuradas estrictas).
+ESQUEMA_SECCION = {
+    "name": "analisis_seccion",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "categoria_opp115": {"type": "string"},
+            "titulo": {"type": "string"},
+            "hallazgos": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "criterio": {"type": "string", "enum": list(CRITERIOS)},
+                        "descripcion": {"type": "string"},
+                        "tipo_tratamiento": {"type": "string", "enum": list(TIPOS_TRATAMIENTO)},
+                        "fragmentos": {"type": "array", "items": {"type": "integer"}},
+                    },
+                    "required": ["criterio", "descripcion", "tipo_tratamiento", "fragmentos"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["categoria_opp115", "titulo", "hallazgos"],
+        "additionalProperties": False,
+    },
+}
+
+ESQUEMA_RESPALDO = {
+    "name": "respaldo_hallazgos",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "respaldos": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "hallazgo": {"type": "integer"},
+                        "fragmentos": {"type": "array", "items": {"type": "integer"}},
+                    },
+                    "required": ["hallazgo", "fragmentos"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["respaldos"],
+        "additionalProperties": False,
+    },
+}
+
+ESQUEMA_RECOMENDACIONES = {
+    "name": "recomendaciones",
+    "schema": {
+        "type": "object",
+        "properties": {"recomendaciones": {"type": "array", "items": {"type": "string"}}},
+        "required": ["recomendaciones"],
+        "additionalProperties": False,
+    },
+}
 
 # Fragmentos del corpus a recuperar por sección (5 da mejor cobertura con OpenAI)
 _K_FRAGMENTOS = 5
@@ -283,27 +379,11 @@ def _construir_prompt_seccion(texto_seccion: str, contexto_normativo: str) -> st
     return (
         f'SECCIÓN DE LA POLÍTICA A ANALIZAR:\n"""\n{texto_seccion}\n"""\n\n'
         f"FRAGMENTOS NORMATIVOS DE REFERENCIA:\n{contexto_normativo}\n\n"
-        "TAREA: Identifica y reporta TODOS los riesgos presentes en la sección anterior.\n"
+        "TAREA: Revisa la sección en orden y reporta los hallazgos según los criterios.\n"
         '- En "fragmentos" indica los números de los fragmentos normativos que respaldan\n'
-        "  cada hallazgo.\n"
-        "- Si un riesgo es evidente pero ningún fragmento lo respalda, repórtalo igual\n"
-        '  con "fragmentos": [].\n'
-        "- NUNCA devuelvas hallazgos vacíos si el texto contiene cláusulas problemáticas.\n\n"
-        "Devuelve SOLO el siguiente JSON sin texto adicional:\n\n"
-        "{\n"
-        '  "categoria_opp115": "<categoría según taxonomía OPP-115>",\n'
-        '  "titulo": "<título descriptivo de la sección>",\n'
-        '  "texto_original": "<primeras 300 chars de la sección>",\n'
-        '  "hallazgos": [\n'
-        "    {\n"
-        '      "tipo": "riesgo",\n'
-        '      "descripcion": "<qué riesgo representa para el usuario en lenguaje claro>",\n'
-        '      "nivel": "alto",\n'
-        '      "tipo_tratamiento": "<uno de los tipos de tratamiento, copiado exactamente>",\n'
-        '      "fragmentos": [<números de los fragmentos que respaldan el hallazgo>]\n'
-        "    }\n"
-        "  ]\n"
-        "}"
+        "  cada hallazgo; si ninguno lo respalda, usa una lista vacía.\n"
+        '- En "titulo" escribe un título breve y descriptivo de la sección y en\n'
+        '  "categoria_opp115" su categoría según la taxonomía OPP-115.'
     )
 
 
@@ -339,23 +419,45 @@ def _tipo_tratamiento_valido(valor) -> str:
     raise ValueError(f"tipo_tratamiento fuera de la lista cerrada: {valor!r}")
 
 
-def _parsear_seccion(json_str: str, chunks=()) -> SeccionAnalizada:
+# Caracteres de la sección que se guardan como "fragmento analizado".
+_LARGO_TEXTO_ORIGINAL = 300
+
+
+def _criterio_valido(valor) -> str:
+    if isinstance(valor, str) and valor.strip().upper() in CRITERIOS:
+        return valor.strip().upper()
+    raise ValueError(f"criterio fuera de la lista cerrada: {valor!r}")
+
+
+def _parsear_seccion(json_str: str, chunks=(), texto_seccion: str = "") -> SeccionAnalizada:
     """Convierte la respuesta JSON del LLM en SeccionAnalizada validada.
 
-    Las fuentes normativas se construyen con los fragmentos recuperados
-    (`chunks`) que el modelo indica por número; un hallazgo sin fragmentos
-    válidos queda marcado como sin respaldo (RN-06)."""
+    El nivel y el tipo de cada hallazgo se derivan del criterio que eligió el
+    modelo (ver CRITERIOS). Una buena práctica solo se conserva en una sección
+    sin riesgos, y como máximo una: así la puntuación refleja qué parte de la
+    política es riesgosa. Las fuentes normativas se construyen con los
+    fragmentos recuperados (`chunks`) que el modelo indica por número; un
+    hallazgo sin fragmentos válidos queda marcado como sin respaldo (RN-06)."""
     datos = json.loads(_extraer_json(json_str))
+    crudos = [(h, _criterio_valido(h.get("criterio"))) for h in datos.get("hallazgos", [])]
+    hay_riesgo = any(CRITERIOS[criterio][0] == "riesgo" for _, criterio in crudos)
 
     hallazgos = []
-    for h in datos.get("hallazgos", []):
+    hay_buena_practica = False
+    for h, criterio in crudos:
+        tipo, nivel = CRITERIOS[criterio]
+        if tipo == "transparencia":
+            if hay_riesgo or hay_buena_practica:
+                continue
+            hay_buena_practica = True
         numeros = _numeros_de_fragmento(h.get("fragmentos"), len(chunks))
         fuentes = [_fuente_desde_fragmento(chunks[n - 1]) for n in numeros]
         hallazgos.append(
             Hallazgo(
-                tipo=h.get("tipo", "neutral"),
+                tipo=tipo,
                 descripcion=h.get("descripcion", ""),
-                nivel=h.get("nivel", "bajo"),
+                nivel=nivel,
+                criterio=criterio,
                 fuentes_normativas=fuentes,
                 tipo_tratamiento=_tipo_tratamiento_valido(h.get("tipo_tratamiento")),
                 sin_respaldo=not fuentes,
@@ -365,7 +467,7 @@ def _parsear_seccion(json_str: str, chunks=()) -> SeccionAnalizada:
     return SeccionAnalizada(
         categoria_opp115=datos.get("categoria_opp115", "General"),
         titulo=datos.get("titulo", "Sección sin título"),
-        texto_original=datos.get("texto_original", ""),
+        texto_original=texto_seccion[:_LARGO_TEXTO_ORIGINAL],
         hallazgos=hallazgos,
     )
 
@@ -493,7 +595,8 @@ async def _generar_recomendaciones_practicas(
         return _generar_recomendaciones(secciones)
     try:
         respuesta = await llm.generar_analisis(
-            SYSTEM_PROMPT_RECOMENDACIONES, _construir_prompt_recomendaciones(hallazgos), ""
+            SYSTEM_PROMPT_RECOMENDACIONES, _construir_prompt_recomendaciones(hallazgos), "",
+            esquema=ESQUEMA_RECOMENDACIONES,
         )
         return _parsear_recomendaciones(respuesta)
     except LLMError as exc:
@@ -529,7 +632,12 @@ def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
 def _crear_adaptador_llm() -> LLMAdapter:
     """Selecciona el adaptador del modelo de lenguaje según LLM_PROVIDER en el .env."""
     if settings.llm_provider == "openai":
-        return OpenAIAdapter(api_key=settings.openai_api_key, model=settings.openai_model)
+        return OpenAIAdapter(
+            api_key=settings.openai_api_key,
+            model=settings.openai_model,
+            temperature=settings.openai_temperature,
+            seed=settings.openai_seed,
+        )
     raise ValueError(f"Proveedor de modelo de lenguaje no soportado: {settings.llm_provider}")
 
 
@@ -562,6 +670,60 @@ async def crear_analisis(
 _tareas_en_fondo: set[asyncio.Task] = set()
 
 
+def huella_texto(texto: str) -> str:
+    """SHA-256 del texto con los espacios normalizados: dos copias del mismo
+    texto que solo difieren en saltos de línea o espacios dan la misma huella."""
+    return hashlib.sha256(" ".join(texto.split()).encode("utf-8")).hexdigest()
+
+
+async def _version_corpus(db: AsyncSession) -> str:
+    return await RepositorioCorpusNormativo(db).huella_fragmentos_activos()
+
+
+def _configuracion_analisis(version_corpus: str) -> dict:
+    """Lo que debe coincidir para que un resultado anterior sea reutilizable."""
+    return {
+        "modelo": settings.openai_model,
+        "temperatura": settings.openai_temperature,
+        "semilla": settings.openai_seed,
+        "version_prompt": VERSION_PROMPT,
+        "version_corpus": version_corpus,
+    }
+
+
+def _resultado_reutilizable(candidatos: list[AnalysisTemp], configuracion: dict) -> AnalysisTemp | None:
+    """Primer análisis hecho con la misma configuración y sin secciones fallidas
+    (un fallo momentáneo no debe repetirse en los análisis siguientes)."""
+    for candidato in candidatos:
+        resultado = candidato.resultado or {}
+        metadatos = resultado.get("metadatos_analisis") or {}
+        if any(metadatos.get(clave) != valor for clave, valor in configuracion.items()):
+            continue
+        if all(s.get("analizada", True) for s in resultado.get("secciones_analizadas", [])):
+            return candidato
+    return None
+
+
+async def _reutilizar_resultado(
+    repo: RepositorioAnalisis, registro: AnalysisTemp, configuracion: dict
+) -> bool:
+    """Si el mismo texto ya se analizó con la misma configuración, copia ese
+    resultado (con el id y la fecha de este análisis) y lo marca completado."""
+    previo = _resultado_reutilizable(
+        await repo.completados_con_hash(registro.text_hash, excluir_id=registro.id), configuracion
+    )
+    if previo is None:
+        return False
+    resultado = {k: v for k, v in previo.resultado.items() if k != "metadatos_reporte"}
+    resultado["id_analisis"] = str(registro.id)
+    resultado["fecha"] = datetime.now(timezone.utc).isoformat()
+    resultado["metadatos_analisis"] = {**resultado["metadatos_analisis"], "reutilizado_de": previo.id}
+    registro.resultado = resultado
+    registro.secciones_total = registro.seccion_actual = len(resultado.get("secciones_analizadas", []))
+    registro.estado = "completado"
+    return True
+
+
 def lanzar_analisis_en_fondo(analisis_id: int, texto: str) -> None:
     """Programa ejecutar_analisis_background como tarea de fondo del event loop."""
     tarea = asyncio.create_task(ejecutar_analisis_background(analisis_id, texto))
@@ -581,6 +743,14 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
             registro = await repo.obtener_por_id(analisis_id)
             if registro is None:
                 raise NoResultFound(f"AnalysisTemp {analisis_id} no encontrado")
+
+            # Mismo texto, mismas instrucciones y mismo corpus: mismo resultado.
+            registro.text_hash = huella_texto(texto)
+            configuracion = _configuracion_analisis(await _version_corpus(db))
+            if await _reutilizar_resultado(repo, registro, configuracion):
+                await db.commit()
+                logger.info("Análisis %s completado reutilizando un resultado anterior.", analisis_id)
+                return
 
             llm = _crear_adaptador_llm()
             secciones = segmentar_politica(texto)
@@ -623,7 +793,11 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
                 recomendaciones=recomendaciones,
             )
 
-            registro.resultado = respuesta.model_dump(mode="json")
+            huellas = sorted(h for h in getattr(llm, "huellas_sistema", ()) if isinstance(h, str))
+            registro.resultado = {
+                **respuesta.model_dump(mode="json"),
+                "metadatos_analisis": {**configuracion, "huellas_sistema": huellas, "reutilizado_de": None},
+            }
             registro.estado = "completado"
             await db.commit()
             logger.info(
@@ -657,9 +831,9 @@ async def _analizar_seccion(
         user_msg = _construir_prompt_seccion(seccion, contexto)
 
         # Intento 1
-        json_str = await llm.generar_analisis(SYSTEM_PROMPT, user_msg, "")
+        json_str = await _llamar_modelo(llm, SYSTEM_PROMPT, user_msg, ESQUEMA_SECCION, idx)
         try:
-            analizada = _parsear_seccion(json_str, chunks)
+            analizada = _parsear_seccion(json_str, chunks, seccion)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             logger.warning("Sección %d: respuesta inválida en intento 1 (%s). Reintentando...", idx, e)
             # Intento 2: se repite la instrucción completa (sección, contexto y
@@ -669,9 +843,9 @@ async def _analizar_seccion(
                 f"Tu respuesta anterior no cumplía el formato requerido ({str(e)[:200]}). "
                 "Devuelve ÚNICAMENTE el JSON corregido, sin texto adicional."
             )
-            json_str2 = await llm.generar_analisis(SYSTEM_PROMPT, prompt_correccion, "")
+            json_str2 = await _llamar_modelo(llm, SYSTEM_PROMPT, prompt_correccion, ESQUEMA_SECCION, idx)
             try:
-                analizada = _parsear_seccion(json_str2, chunks)
+                analizada = _parsear_seccion(json_str2, chunks, seccion)
             except (json.JSONDecodeError, KeyError, ValueError) as e2:
                 logger.error("Sección %d: respuesta inválida tras corrección (%s). Usando fallback.", idx, e2)
                 return _seccion_fallback(seccion, idx)
@@ -682,6 +856,26 @@ async def _analizar_seccion(
     except Exception as exc:
         logger.error("Error inesperado en sección %d: %s", idx, exc, exc_info=True)
         return _seccion_fallback(seccion, idx)
+
+
+# Espera antes de repetir una llamada que falló por un error transitorio (límite
+# de solicitudes o red) aun después de los reintentos del adaptador.
+_ESPERA_REINTENTO_SECCION = 15
+
+
+async def _llamar_modelo(llm: LLMAdapter, sistema: str, mensaje: str, esquema: dict, idx: int) -> str:
+    """Llama al modelo y, si falla por un error transitorio, lo intenta una vez
+    más tras una pausa: así una sección no queda fuera de la puntuación solo
+    por un límite de solicitudes momentáneo."""
+    try:
+        return await llm.generar_analisis(sistema, mensaje, "", esquema=esquema)
+    except Exception as exc:
+        if not _es_error_reintentable(exc):
+            raise
+        logger.warning("Sección %d: error transitorio (%s). Último intento en %d s.",
+                       idx, type(exc).__name__, _ESPERA_REINTENTO_SECCION)
+        await asyncio.sleep(_ESPERA_REINTENTO_SECCION)
+        return await llm.generar_analisis(sistema, mensaje, "", esquema=esquema)
 
 
 SYSTEM_PROMPT_RESPALDO = """Eres un asistente experto en protección de datos personales.
@@ -728,7 +922,9 @@ async def _respaldar_hallazgos(
             return seccion
 
         prompt = _construir_prompt_respaldo(pendientes, _construir_contexto_normativo(fragmentos))
-        datos = json.loads(_extraer_json(await llm.generar_analisis(SYSTEM_PROMPT_RESPALDO, prompt, "")))
+        datos = json.loads(_extraer_json(
+            await llm.generar_analisis(SYSTEM_PROMPT_RESPALDO, prompt, "", esquema=ESQUEMA_RESPALDO)
+        ))
         for respaldo in datos.get("respaldos", []):
             try:
                 numero_hallazgo = int(respaldo.get("hallazgo"))

@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    # Generación lo más reproducible posible: el mismo texto debe dar el mismo
+    # resultado. OpenAI trata la semilla como "mejor esfuerzo", no como garantía.
+    openai_temperature: float = 0.0
+    openai_seed: int | None = 20261003
 
     # General
     environment: str = "development"

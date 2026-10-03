@@ -33,13 +33,14 @@ class RepositorioCorpusNormativo:
 
         # Búsqueda exacta (sin índice aproximado, ver la migración 0008): los
         # filtros se aplican antes de ordenar, así que siempre se completan k
-        # fragmentos mientras haya suficientes activos.
+        # fragmentos mientras haya suficientes activos. El id desempata las
+        # distancias iguales, para que el mismo texto recupere siempre lo mismo.
         sql = text(f"""
             SELECT id, documento_fuente, jurisdiccion, referencia,
                    categoria_tematica, texto_original, metadatos
             FROM   corpus_chunks
             {where_sql}
-            ORDER  BY embedding <=> CAST(:embedding AS vector)
+            ORDER  BY embedding <=> CAST(:embedding AS vector), id
             LIMIT  :k
         """)
 
@@ -89,6 +90,15 @@ class RepositorioCorpusNormativo:
 
     def agregar(self, fragmento) -> None:
         self.db.add(fragmento)
+
+    async def huella_fragmentos_activos(self) -> str:
+        """Huella del conjunto de fragmentos activos: cambia al cargar, activar o
+        desactivar documentos, y con ella deja de reutilizarse un resultado."""
+        result = await self.db.execute(text(
+            "SELECT md5(COALESCE(string_agg(id::text, ',' ORDER BY id), '')) "
+            "FROM corpus_chunks WHERE active = true"
+        ))
+        return result.scalar_one()
 
     async def contar(self) -> int:
         result = await self.db.execute(text("SELECT COUNT(*) FROM corpus_chunks"))

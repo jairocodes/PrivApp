@@ -220,7 +220,7 @@ PrivApp/
 │   │       ├── pdf_extractor.py  ← PDF desde disco o desde memoria
 │   │       └── validacion_texto.py ← Regla única de longitud (RN-01)
 │   │
-│   ├── migrations/versions/      ← 0001 … 0010 (ver sección 5)
+│   ├── migrations/versions/      ← 0001 … 0011 (ver sección 5)
 │   │
 │   ├── scripts/
 │   │   ├── cargar_corpus.py      ← Carga del corpus normativo
@@ -318,18 +318,20 @@ CREATE TABLE corpus_chunks (
 -- Sin índice vectorial aproximado: la migración 0008 elimina el ivfflat (ver sección 8).
 ```
 
-#### `analysis_temp` (migraciones 0003 y 0004)
+#### `analysis_temp` (migraciones 0003, 0004 y 0011)
 ```sql
 CREATE TABLE analysis_temp (
     id              SERIAL PRIMARY KEY,
     user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     texto_original  TEXT    NOT NULL,   -- solo los primeros 2,000 caracteres de la política
-    resultado       JSONB,              -- AnalisisResponse serializado (+ metadatos_reporte)
+    resultado       JSONB,              -- AnalisisResponse serializado (+ metadatos_analisis, metadatos_reporte)
     estado          VARCHAR(20) NOT NULL DEFAULT 'pendiente', -- procesando | completado | error
     seccion_actual  INTEGER NOT NULL DEFAULT 0,  -- 0004: secciones ya analizadas
     secciones_total INTEGER,                     -- 0004
+    text_hash       VARCHAR(64),                 -- 0011: SHA-256 del texto analizado (reutilización)
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX ix_analysis_temp_text_hash ON analysis_temp(text_hash);  -- 0011
 ```
 
 > **Nota técnica:** solo se guarda un extracto de 2,000 caracteres del texto de la política (se usa en la búsqueda del historial); el análisis se realiza siempre sobre el texto completo, que no se persiste. El campo `resultado` usa `JSONB` en PostgreSQL y un `TypeDecorator` (`JSONBCompat`) que lo mapea a `TEXT` en SQLite (pruebas). Las consultas dentro del JSON y la búsqueda sin acentos se escriben con expresiones portables (`repositories/json_sql.py`: `json_texto`, `sin_acentos`).
@@ -348,6 +350,7 @@ CREATE TABLE analysis_temp (
 | 0008 | Elimina el índice ivfflat de `corpus_chunks.embedding` (búsqueda exacta) |
 | 0009 | `users.age_declaration_at` |
 | 0010 | Pasa a minúsculas los correos de `users` (la migración inversa no restaura las mayúsculas) |
+| 0011 | `analysis_temp.text_hash` (nullable) e índice: reutilización del resultado de un texto idéntico (sección 7) |
 
 > **Advertencia sobre 0005:** `privacy_accepted_at` es obligatoria y no tiene valor por defecto; si la tabla `users` ya tuviera filas, la migración falla en lugar de inventar una aceptación que no ocurrió.
 
@@ -485,6 +488,7 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
           "tipo": "riesgo",
           "descripcion": "Se recopilan datos biométricos sin finalidad declarada",
           "nivel": "alto",
+          "criterio": "A1",
           "tipo_tratamiento": "Recopilación de datos personales",
           "sin_respaldo": false,
           "fuentes_normativas": [
@@ -504,11 +508,12 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
 }
 ```
 
-- `tipo`: `riesgo` | `transparencia` | `neutral`. `nivel`: `bajo` | `medio` | `alto`.
+- `tipo`: `riesgo` | `transparencia` | `neutral`. `nivel`: `bajo` | `medio` | `alto`. Ambos se derivan de `criterio` (sección 7).
+- `criterio`: código del criterio de la rúbrica (`A1`–`A10`, `M1`–`M5`, `B1`–`B4`); `null` en análisis anteriores y en la sección de respaldo.
 - `analizada` (de la sección): `false` en la sección de respaldo, que no pudo analizarse; no cuenta para el nivel global ni para la puntuación. Por defecto `true` (también en análisis anteriores, que no traen el campo).
 - `tipo_tratamiento`: uno de los 8 valores de la lista cerrada (sección 7); es `null` solo en análisis realizados antes de incorporar la clasificación.
 - `jurisdiccion` de la fuente: `null` en análisis antiguos (el cliente y el PDF la deducen del nombre del documento).
-- Tras la primera descarga del PDF, `resultado` incluye además `metadatos_reporte` (sección 14).
+- En la base, `resultado` incluye además `metadatos_analisis` (configuración con la que se generó; sección 7) y, tras la primera descarga del PDF, `metadatos_reporte` (sección 14). Ninguno de los dos se devuelve en la API.
 
 ### Administración — `/api/admin` (solo rol administrador)
 
@@ -569,6 +574,12 @@ El motor se encuentra en `backend/app/services/analisis_service.py`. `POST /api/
 texto completo (str)
     │
     ▼
+text_hash = huella_texto(texto)          (SHA-256 con los espacios normalizados)
+    │  ¿Hay un análisis completado con el mismo text_hash, la misma configuración
+    │  (modelo, temperatura, semilla, VERSION_PROMPT, huella del corpus) y sin
+    │  secciones fallidas? → se copia su resultado y termina (sin llamar al modelo)
+    │
+    ▼
 segmentar_politica()
     │  Divide por encabezados (numeración, romanos, markdown, líneas en mayúsculas)
     │  Descarta secciones < 30 palabras
@@ -586,11 +597,13 @@ segmentar_politica()
     │        │  5 fragmentos activos más cercanos + hasta 2 guatemaltecos (RN-07)
     │        ▼
     │   _construir_contexto_normativo()  → fragmentos numerados [Fragmento 1..n]
-    │   _construir_prompt_seccion()      → sección + fragmentos + esquema JSON
+    │   _construir_prompt_seccion()      → sección + fragmentos (el esquema lo impone la API)
     │        ▼
-    │   Llamada 1: análisis de la sección (SYSTEM_PROMPT)
+    │   Llamada 1: análisis de la sección (SYSTEM_PROMPT, ESQUEMA_SECCION)
+    │        │  Error transitorio tras los reintentos del adaptador → una pausa de 15 s y un último intento
     │        ▼
-    │   _parsear_seccion(json, chunks)
+    │   _parsear_seccion(json, chunks, seccion)
+    │        │  criterio → tipo y nivel; un solo hallazgo B por sección; texto_original = sección[:300]
     │        │  Respuesta inválida → Llamada 2: la instrucción completa + el motivo del rechazo
     │        │  Segunda respuesta inválida o LLMError → sección de respaldo (analizada = false)
     │        ▼
@@ -604,21 +617,43 @@ _calcular_resumen()                     → nivel global y puntuación 0–100 (
 _generar_recomendaciones_practicas()    → 3–5 recomendaciones
     │
     ▼
-resultado (JSONB), estado = completado   (cualquier error no controlado → estado = error)
+resultado (JSONB) + metadatos_analisis, text_hash, estado = completado
+                                        (cualquier error no controlado → estado = error)
 ```
 
 La sesión de base de datos no admite uso concurrente, así que la búsqueda en el corpus y el guardado del progreso se serializan con un `asyncio.Lock`; solo las llamadas al modelo corren en paralelo.
 
 ### Llamadas al modelo
 
-Todas usan el mismo adaptador (sección 9), `temperature = 0.2` y respuesta forzada en JSON. Los textos de las instrucciones del sistema están en `analisis_service.py`; aquí se describe lo que hace cada llamada:
+Todas usan el mismo adaptador (sección 9), con `temperature = 0`, semilla fija (`OPENAI_SEED`) y **salidas estructuradas estrictas**: cada llamada envía su esquema JSON (`ESQUEMA_SECCION`, `ESQUEMA_RESPALDO`, `ESQUEMA_RECOMENDACIONES`) y OpenAI garantiza que la respuesta lo cumple, incluidas las listas cerradas del criterio y del tipo de tratamiento. Los textos de las instrucciones del sistema están en `analisis_service.py`; aquí se describe lo que hace cada llamada:
 
 | Llamada | Instrucción del sistema | Cuándo | Qué pide |
 |---|---|---|---|
-| Análisis de sección | `SYSTEM_PROMPT` | Una por sección | Reportar todos los riesgos de la sección, con nivel, tipo de tratamiento, categoría OPP-115 y los **números** de los fragmentos que los respaldan. Define el rol (orientación a jóvenes de Guatemala), la distinción entre normativa guatemalteca y referencias internacionales, los criterios de riesgo alto/medio/bajo y la prohibición de inventar normas o números de fragmento |
+| Análisis de sección | `SYSTEM_PROMPT` | Una por sección | Un hallazgo por cada cláusula que cumpla un criterio de la rúbrica, con el **código del criterio**, la descripción, el tipo de tratamiento y los **números** de los fragmentos que lo respaldan; además el título y la categoría OPP-115 de la sección. Define el rol (orientación a jóvenes de Guatemala), la distinción entre normativa guatemalteca y referencias internacionales, los 19 criterios con dos ejemplos y la prohibición de inventar normas o números de fragmento |
 | Corrección | `SYSTEM_PROMPT` | Si la respuesta anterior no es válida | Repite la instrucción completa (sección, fragmentos y esquema) con el motivo del rechazo |
 | Segunda pasada de respaldo | `SYSTEM_PROMPT_RESPALDO` | Una por sección con hallazgos sin fragmentos | Para cada hallazgo pendiente, indicar qué fragmentos (recuperados con su descripción) lo respaldan |
 | Recomendaciones prácticas | `SYSTEM_PROMPT_RECOMENDACIONES` | Una al final del análisis | Redactar acciones concretas a partir de los riesgos encontrados |
+
+### Consistencia de los resultados
+
+El mismo texto debe producir el mismo resultado. Se combinan cuatro medidas:
+
+1. **Criterios en lugar de niveles.** El modelo no asigna el nivel: elige el código del criterio de la rúbrica que cumple cada cláusula y el servidor deriva el nivel y el tipo con la tabla fija `CRITERIOS`:
+
+   | Códigos | Criterios | Tipo | Nivel |
+   |---|---|---|---|
+   | `A1`–`A10` | Biométricos, audio o video pasivo, datos sensibles, terceros no identificados, transferencia a países sin protección, conservación indefinida, sin mecanismos de acceso, menores sin consentimiento parental, consentimiento implícito, cambios sin aviso | `riesgo` | `alto` |
+   | `M1`–`M5` | Finalidades ambiguas, plazos poco claros, derechos engorrosos, transferencias con garantías genéricas, otra práctica que reduce el control del usuario | `riesgo` | `medio` |
+   | `B1`–`B4` | Finalidades claras, plazos definidos, derechos con contacto identificado, aviso previo de cambios | `transparencia` | `bajo` |
+
+   Si una cláusula cumple varios criterios se usa el de mayor nivel y se reporta un hallazgo por cláusula. Una buena práctica (B) solo se reporta en una sección **sin riesgos** (A o M), y como máximo una; el servidor aplica la misma regla y descarta las demás. Así la puntuación refleja qué parte de la política es riesgosa, sin que una buena práctica dentro de una sección con riesgos los compense. La fórmula de la puntuación (RN-05) no cambia.
+2. **Generación reproducible.** `temperature = 0`, semilla fija y esquema estricto. OpenAI trata la semilla como "mejor esfuerzo": si cambia la configuración de sus servidores (`system_fingerprint`, que se registra) la respuesta puede variar.
+3. **Recuperación reproducible.** La búsqueda en el corpus desempata las distancias iguales por `id`.
+4. **Reutilización.** Si el texto (con los espacios normalizados) ya se analizó con la misma configuración, se copia ese resultado con el id y la fecha del análisis nuevo, sin llamar al modelo. Aplica entre usuarios distintos (solo se copia el resultado; el texto de una política es público) y nunca a un resultado con secciones fallidas. Cambiar `VERSION_PROMPT`, el modelo, la temperatura, la semilla o el corpus (cargar, activar o desactivar documentos) invalida la reutilización.
+
+Cada resultado guarda en `metadatos_analisis` lo que hizo falta para generarlo: `modelo`, `temperatura`, `semilla`, `version_prompt`, `version_corpus` (MD5 de los ids de los fragmentos activos), `huellas_sistema` y `reutilizado_de` (id del análisis copiado o `null`). **Al modificar cualquier instrucción al modelo hay que incrementar `VERSION_PROMPT`.**
+
+La consistencia se mide con `scripts/medir_consistencia.py` (sección 14).
 
 ### Tipo de tratamiento de datos (RN-08)
 
@@ -766,8 +801,11 @@ class LLMAdapter(ABC):
 ```python
 # Configuración
 Modelo: OPENAI_MODEL (por defecto gpt-4o-mini)
-Temperature: 0.2
-response_format: {"type": "json_object"}  # JSON forzado
+Temperature: OPENAI_TEMPERATURE (por defecto 0)
+Seed: OPENAI_SEED (por defecto 20261003; "mejor esfuerzo" según OpenAI)
+response_format: {"type": "json_schema", "json_schema": {..., "strict": true}}  # si la llamada envía esquema
+                 {"type": "json_object"}                                      # si no lo envía
+huellas_sistema: system_fingerprint de cada respuesta (se guardan en metadatos_analisis)
 Mensajes: system (instrucción) + user (prompt completo construido por el motor)
 
 # Reintentos (tenacity)
@@ -1056,6 +1094,16 @@ docker compose exec backend python scripts/tiempos_reporte.py --detalle   # adem
 ```
 Cada descarga del PDF mide el tiempo de construcción del documento y lo registra en `resultado.metadatos_reporte` del análisis (última generación, total de generaciones y las **últimas 10 mediciones**); si el registro falla, la descarga no se interrumpe. El script muestra promedio, mediana, mínimo, máximo y percentil 95 (método del rango más cercano) de todas las mediciones guardadas. No existe ninguna ruta de la API para estos datos.
 
+**Consistencia del análisis — `medir_consistencia.py`**
+```bash
+# Credenciales de una cuenta ya registrada, en variables de entorno (no en la línea de comandos)
+docker compose exec -e PRIVAPP_CORREO -e PRIVAPP_PASSWORD backend \
+    python scripts/medir_consistencia.py --url-politica https://... --archivo /tmp/politica.txt --repeticiones 0
+docker compose exec -e PRIVAPP_CORREO -e PRIVAPP_PASSWORD backend \
+    python scripts/medir_consistencia.py --archivo /tmp/politica.txt --repeticiones 5 --sin-reutilizacion --salida /tmp/medicion.json
+```
+Analiza varias veces el mismo texto mediante la API (respetando el límite de 5 análisis por minuto) y compara puntuación (promedio, desviación y rango), nivel general, hallazgos que cuentan por nivel, secciones con los mismos niveles en todas las ejecuciones y similitud de las recomendaciones. Con `--sin-reutilizacion` elimina cada análisis al terminar para que el siguiente se calcule de nuevo y así medir al modelo; sin esa opción, a partir de la segunda ejecución se reutiliza el resultado. Cada ejecución consume llamadas reales a OpenAI. `--repeticiones 0` solo descarga y guarda el texto.
+
 ### Comandos útiles
 
 ```bash
@@ -1182,6 +1230,8 @@ REDIS_URL=redis://redis:6379/0    # local con Docker Compose; en Railway, la URL
 LLM_PROVIDER=openai
 OPENAI_API_KEY=<clave-de-api-de-openai>
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_TEMPERATURE=0              # opcional; 0 = respuestas lo más reproducibles posible
+OPENAI_SEED=20261003              # opcional; semilla fija de la generación
 
 # General
 ENVIRONMENT=development
@@ -1190,7 +1240,7 @@ LOG_LEVEL=INFO
 SQL_ECHO=false                    # true: registra cada consulta SQL con sus parámetros (solo depuración local)
 ```
 
-`DATABASE_URL`, `JWT_SECRET_KEY` y `REDIS_URL` son obligatorias para arrancar el backend. En `docker-compose.yml`, `REDIS_URL`, `LLM_PROVIDER`, `OPENAI_MODEL`, `LOG_LEVEL` y `SQL_ECHO` (`false`) tienen valores por defecto si no se definen. En el frontend, `VITE_API_URL` indica la URL del backend.
+`DATABASE_URL`, `JWT_SECRET_KEY` y `REDIS_URL` son obligatorias para arrancar el backend. En `docker-compose.yml`, `REDIS_URL`, `LLM_PROVIDER`, `OPENAI_MODEL`, `OPENAI_TEMPERATURE`, `OPENAI_SEED`, `LOG_LEVEL` y `SQL_ECHO` (`false`) tienen valores por defecto si no se definen. Cambiar el modelo, la temperatura o la semilla hace que los análisis siguientes no reutilicen resultados anteriores (sección 7). En el frontend, `VITE_API_URL` indica la URL del backend.
 
 ---
 
