@@ -5,12 +5,17 @@ Uso (con la pila local en marcha y una cuenta ya registrada):
     PRIVAPP_CORREO=... PRIVAPP_PASSWORD=... \\
         python scripts/medir_consistencia.py --archivo politica.txt --repeticiones 5
 
+    # Medir la consistencia del modelo sin que el servidor reutilice resultados:
+    python scripts/medir_consistencia.py --archivo politica.txt --sin-reutilizacion
+
     # Obtener el texto una sola vez desde una URL y guardarlo para reutilizarlo:
     python scripts/medir_consistencia.py --url-politica https://... --archivo politica.txt
 
 Envía el mismo texto a POST /api/analisis/iniciar las veces indicadas, espera a que
 cada análisis termine y compara los resultados: puntuación, nivel general,
 hallazgos que cuentan para la puntuación, nivel de cada sección y recomendaciones.
+El servidor reutiliza el resultado de un texto idéntico; con --sin-reutilizacion
+cada análisis se elimina al terminar, para que el siguiente se calcule de nuevo.
 Las credenciales se leen de variables de entorno para no dejarlas en el historial
 de la terminal. Cada ejecución consume llamadas reales al modelo de lenguaje.
 """
@@ -77,6 +82,10 @@ def _ejecutar_analisis(sesion: requests.Session, api: str, texto: str) -> tuple[
     return resultado.json(), time.monotonic() - inicio
 
 
+def _eliminar_analisis(sesion: requests.Session, api: str, id_analisis: str) -> None:
+    _verificar(sesion.delete(f"{api}/api/analisis/{id_analisis}", timeout=30))
+
+
 def _resumir_ejecucion(resultado: dict, segundos: float) -> dict:
     secciones = resultado["secciones_analizadas"]
     contados = [
@@ -96,6 +105,7 @@ def _resumir_ejecucion(resultado: dict, segundos: float) -> dict:
         # Niveles de cada sección, ordenados: permite comparar sección por sección.
         "niveles_por_seccion": [sorted(h["nivel"] for h in s["hallazgos"]) for s in secciones],
         "recomendaciones": resultado["recomendaciones"],
+        "criterios": sorted(h.get("criterio") or "-" for s in secciones for h in s["hallazgos"]),
     }
 
 
@@ -167,6 +177,8 @@ def main() -> int:
     parser.add_argument("--archivo", type=Path, help="Archivo de texto con la política (UTF-8)")
     parser.add_argument("--url-politica", help="Obtiene el texto desde esta URL y lo guarda en --archivo")
     parser.add_argument("--repeticiones", type=int, default=5, help="0 solo obtiene el texto")
+    parser.add_argument("--sin-reutilizacion", action="store_true",
+                        help="Elimina cada análisis al terminar para que el siguiente se calcule de nuevo")
     parser.add_argument("--salida", type=Path, help="Guarda el detalle de cada ejecución en JSON")
     args = parser.parse_args()
 
@@ -198,6 +210,8 @@ def main() -> int:
         print(f"Ejecución {n} de {args.repeticiones}...", flush=True)
         resultado, segundos = _ejecutar_analisis(sesion, api, texto)
         ejecuciones.append(_resumir_ejecucion(resultado, segundos))
+        if args.sin_reutilizacion:
+            _eliminar_analisis(sesion, api, resultado["id_analisis"])
 
     reporte = _reporte(ejecuciones)
     _imprimir(ejecuciones, reporte)
