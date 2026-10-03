@@ -92,6 +92,7 @@ Copia `.env.example` como `.env` y reemplaza los valores de ejemplo por los tuyo
 | `LLM_PROVIDER` | `openai` |
 | `OPENAI_API_KEY` | Tu API key de OpenAI |
 | `OPENAI_MODEL` | `gpt-4o-mini` |
+| `OPENAI_TEMPERATURE`, `OPENAI_SEED` | Opcionales: `0` y una semilla fija por defecto, para que el mismo texto dé el mismo resultado |
 | `ENVIRONMENT`, `CORS_ORIGINS`, `LOG_LEVEL` | Configuración general |
 | `SQL_ECHO` | `true` registra cada consulta SQL con sus parámetros (solo para depurar en local); `false` por defecto |
 
@@ -143,7 +144,7 @@ docker compose logs -f backend
 │   │   ├── repositories/
 │   │   ├── services/   # auth, ingesta, rag, analisis, reportes, corpus, admin, llm/
 │   │   └── utils/      # chunking, embeddings, pdf_extractor, validación de texto
-│   ├── migrations/     # Versiones Alembic (0001–0010)
+│   ├── migrations/     # Versiones Alembic (0001–0011)
 │   ├── scripts/        # cargar_corpus.py, promover_admin.py, tiempos_reporte.py
 │   └── tests/          # Pruebas pytest (integracion/ contra PostgreSQL)
 ├── frontend/           # App React + TypeScript

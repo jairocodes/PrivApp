@@ -73,12 +73,14 @@ La integración con el modelo está abstraída en la interfaz `LLMAdapter`
 ```python
 class LLMAdapter(ABC):
     @abstractmethod
-    async def generar_analisis(self, system_prompt, texto_seccion, contexto_normativo) -> str: ...
+    async def generar_analisis(self, system_prompt, texto_seccion, contexto_normativo, esquema=None) -> str: ...
 ```
 
 `OpenAIAdapter` ([`openai_adapter.py`](../backend/app/services/llm/openai_adapter.py))
-implementa esta interfaz con el SDK `openai`: temperatura 0.2, respuesta en modo JSON
-(`response_format={"type": "json_object"}`) y hasta 3 intentos con espera exponencial
+implementa esta interfaz con el SDK `openai`: temperatura 0 y semilla fija (configurables con
+`OPENAI_TEMPERATURE` y `OPENAI_SEED`), salidas estructuradas estrictas cuando la llamada envía
+un esquema JSON (`response_format={"type": "json_schema", ...}`; si no, modo JSON simple),
+registro del `system_fingerprint` de cada respuesta y hasta 3 intentos con espera exponencial
 (tenacity) ante límites de solicitudes, errores de red o errores 5xx. Los errores no
 reintentables se convierten en `LLMError`.
 
@@ -171,6 +173,30 @@ El system prompt implementa la taxonomía OPP-115 para clasificar secciones
 alto, medio y bajo del diseño del proyecto y la distinción jurisdiccional (Guatemala
 no cuenta con una ley integral de protección de datos; las referencias internacionales
 se presentan como buena práctica).
+
+Los criterios están numerados (`A1`–`A10` alto, `M1`–`M5` medio, `B1`–`B4` buena
+práctica): el modelo elige el **código del criterio** que cumple cada cláusula y el
+servidor deriva de él el nivel y el tipo del hallazgo (tabla `CRITERIOS`). El esquema
+estricto de la respuesta solo admite esos códigos. Una buena práctica solo cuenta en una
+sección sin riesgos (como máximo una), regla que también aplica el servidor.
+
+**Razón:** el nivel asignado libremente por el modelo era la principal fuente de
+variación entre análisis del mismo texto; elegir entre criterios cerrados es mucho más
+estable y deja explícito por qué cada hallazgo tiene su nivel.
+
+### 7.1 Reutilización del resultado de un texto idéntico
+
+Antes de llamar al modelo se calcula la huella SHA-256 del texto (con los espacios
+normalizados, `analysis_temp.text_hash`). Si existe un análisis completado con la misma
+huella, la misma configuración (modelo, temperatura, semilla, `VERSION_PROMPT` y huella de
+los fragmentos activos del corpus) y sin secciones fallidas, se copia su resultado con el
+id y la fecha del análisis nuevo. Aplica entre usuarios: solo se copia el resultado de
+una política pública, nunca datos de la cuenta que la analizó antes. La configuración
+queda registrada en `resultado.metadatos_analisis`.
+
+**Razón:** OpenAI no garantiza respuestas idénticas ni con temperatura 0 y semilla fija;
+la reutilización asegura que dos personas que analizan la misma política vean el mismo
+resultado, y evita repetir el costo y la espera.
 
 Cada hallazgo lleva un **tipo de tratamiento** de una lista cerrada de 8 valores
 (recopilación, uso y finalidad, transferencia a terceros, conservación, seguridad,
@@ -412,6 +438,7 @@ uno en curso, 409. Al consultar el detalle o el PDF, uno ajeno o inexistente res
 | 0008 | Elimina el índice `ivfflat` (búsqueda exacta) |
 | 0009 | `users.age_declaration_at` |
 | 0010 | Correos de `users` en minúsculas (se detiene si dos cuentas solo difieren en mayúsculas) |
+| 0011 | `analysis_temp.text_hash` e índice (reutilización del resultado de un texto idéntico) |
 
 ---
 

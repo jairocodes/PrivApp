@@ -514,6 +514,7 @@ Respuesta de `GET /api/analisis/{id}`:
           "tipo": "riesgo",
           "descripcion": "Se comparten datos con terceros no identificados.",
           "nivel": "alto",
+          "criterio": "A4",
           "tipo_tratamiento": "Transferencia de datos a terceros",
           "sin_respaldo": false,
           "fuentes_normativas": [
@@ -561,6 +562,7 @@ Respuesta de `GET /api/analisis/{id}`:
 | `tipo` | `riesgo` \| `transparencia` \| `neutral` | Tipo de hallazgo |
 | `descripcion` | texto | Descripción en lenguaje sencillo |
 | `nivel` | `bajo` \| `medio` \| `alto` | Nivel del hallazgo |
+| `criterio` | texto o `null` | Código del criterio de la rúbrica que cumple la cláusula: `A1`–`A10` (riesgo alto), `M1`–`M5` (riesgo medio), `B1`–`B4` (buena práctica, nivel bajo). `tipo` y `nivel` se derivan de él. `null` en análisis anteriores y en secciones que no pudieron analizarse |
 | `tipo_tratamiento` | texto o `null` | Tipo de tratamiento de datos (lista cerrada, ver abajo). `null` solo en análisis realizados antes de incorporar la clasificación |
 | `sin_respaldo` | booleano | `true` si ningún fragmento del corpus normativo respalda el hallazgo: se muestra marcado y no cuenta para el nivel global ni para el puntaje (sí para las recomendaciones) |
 | `fuentes_normativas` | lista | Citas del corpus normativo que respaldan el hallazgo (vacía si `sin_respaldo` es `true`) |
