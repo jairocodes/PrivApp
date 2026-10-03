@@ -52,6 +52,8 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
 - "Puntaje de riesgo" pasa a llamarse "Puntuación de riesgo".
 - Arranque con `lifespan`; `--reload` solo en desarrollo; cabeceras de reenvío del
   proxy de Railway.
+- Imagen de producción del frontend: los archivos estáticos se construyen con
+  `VITE_API_URL` y los sirve nginx; el servidor de Vite queda solo para desarrollo.
 - Repositorios separados para usuarios, análisis y corpus.
 
 ### Removed
