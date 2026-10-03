@@ -19,12 +19,10 @@ def _respuesta_llm_valida() -> str:
     return json.dumps({
         "categoria_opp115": "First Party Collection/Use",
         "titulo": "Recopilación de datos personales",
-        "texto_original": "Recopilamos datos para operar el servicio.",
         "hallazgos": [
             {
-                "tipo": "transparencia",
+                "criterio": "B1",
                 "descripcion": "La finalidad está claramente declarada.",
-                "nivel": "bajo",
                 "tipo_tratamiento": "Uso y finalidad de los datos",
                 "fragmentos": [1]
             }
@@ -124,12 +122,10 @@ class TestParseoJSON:
         return json.dumps({
             "categoria_opp115": "First Party Collection/Use",
             "titulo": "Recopilación de datos",
-            "texto_original": "Recopilamos tus datos para operar el servicio.",
             "hallazgos": [
                 {
-                    "tipo": "riesgo",
+                    "criterio": "A4",
                     "descripcion": "Se comparten datos con terceros no identificados.",
-                    "nivel": "alto",
                     "tipo_tratamiento": "Transferencia de datos a terceros",
                     "fragmentos": [1]
                 }
@@ -171,12 +167,10 @@ class TestParseoJSON:
         datos = {
             "categoria_opp115": "Data Retention",
             "titulo": "Retención de datos",
-            "texto_original": "Los datos se guardan indefinidamente.",
             "hallazgos": [
                 {
-                    "tipo": "riesgo",
+                    "criterio": "M2",
                     "descripcion": "No se especifica plazo de retención.",
-                    "nivel": "medio",
                     "tipo_tratamiento": "Tiempo de conservación de los datos",
                     "fragmentos": []
                 }
@@ -535,11 +529,12 @@ class TestTipoTratamiento:
 
     def test_la_instruccion_al_modelo_incluye_toda_la_lista(self):
         from app.schemas.analysis import TIPOS_TRATAMIENTO
-        from app.services.analisis_service import SYSTEM_PROMPT, _construir_prompt_seccion
+        from app.services.analisis_service import ESQUEMA_SECCION, SYSTEM_PROMPT
 
         for tipo in TIPOS_TRATAMIENTO:
             assert f"   - {tipo}\n" in SYSTEM_PROMPT
-        assert '"tipo_tratamiento"' in _construir_prompt_seccion("sección", "contexto")
+        hallazgo = ESQUEMA_SECCION["schema"]["properties"]["hallazgos"]["items"]
+        assert hallazgo["properties"]["tipo_tratamiento"]["enum"] == list(TIPOS_TRATAMIENTO)
 
     def test_categoria_valida_aceptada(self):
         from app.services.analisis_service import _parsear_seccion
@@ -616,6 +611,7 @@ class TestTipoTratamiento:
             "resumen_general": {"nivel_riesgo_global": "medio", "puntaje": 50, "comentario_breve": "c"},
             "secciones_analizadas": [{
                 **{k: v for k, v in json.loads(_respuesta_llm_valida()).items() if k != "hallazgos"},
+                "texto_original": "Recopilamos datos para operar el servicio.",
                 "hallazgos": [{
                     "tipo": "riesgo",
                     "descripcion": "Hallazgo previo a la clasificación.",
@@ -668,7 +664,7 @@ class TestAnalisisEnParalelo:
     async def test_conserva_el_orden_y_completa_el_progreso(self, db_session, seed_user):
         secciones = [f"S{i} " + "texto de la sección " * 10 for i in range(1, 13)]
 
-        async def generar(_sistema, user_msg, _contexto):
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
             # Las primeras secciones tardan más: terminan en otro orden.
             numero = int(user_msg.split('"""')[1].strip().split()[0][1:])
             await asyncio.sleep(0.02 * (13 - numero))
@@ -687,7 +683,7 @@ class TestAnalisisEnParalelo:
         activas = 0
         maximo = 0
 
-        async def generar(_sistema, user_msg, _contexto):
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
             nonlocal activas, maximo
             activas += 1
             maximo = max(maximo, activas)
@@ -703,7 +699,7 @@ class TestAnalisisEnParalelo:
     async def test_una_seccion_fallida_no_afecta_a_las_demas(self, db_session, seed_user):
         from app.core.exceptions import LLMError
 
-        async def generar(_sistema, user_msg, _contexto):
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
             if user_msg.split('"""')[1].strip().startswith("S2 "):
                 raise LLMError("fallo simulado")
             return self._respuesta_para(user_msg)
@@ -733,7 +729,7 @@ def _fragmento(id_, documento, jurisdiccion, texto):
 def _respuesta_con_fragmentos(*listas) -> str:
     datos = json.loads(_respuesta_llm_valida())
     base = datos["hallazgos"][0]
-    datos["hallazgos"] = [{**base, "tipo": "riesgo", "nivel": "alto", "fragmentos": f} for f in listas]
+    datos["hallazgos"] = [{**base, "criterio": "A4", "fragmentos": f} for f in listas]
     return json.dumps(datos)
 
 
@@ -823,9 +819,13 @@ class TestCitasDelCorpus:
     def test_la_instruccion_pide_numeros_de_fragmento(self):
         from app.services.analisis_service import SYSTEM_PROMPT, _construir_prompt_seccion
 
+        from app.services.analisis_service import ESQUEMA_SECCION
+
         prompt = _construir_prompt_seccion("texto", "[Fragmento 1] ...")
-        assert '"fragmentos": [' in prompt
-        assert "fragmento_relevante" not in prompt
+        hallazgo = ESQUEMA_SECCION["schema"]["properties"]["hallazgos"]["items"]["properties"]
+        assert '"fragmentos"' in prompt
+        assert hallazgo["fragmentos"] == {"type": "array", "items": {"type": "integer"}}
+        assert "fragmento_relevante" not in prompt + json.dumps(ESQUEMA_SECCION)
         assert "Principios generales" not in prompt + SYSTEM_PROMPT
 
     async def test_el_analisis_completo_guarda_las_citas_reales(self, db_session, seed_user):

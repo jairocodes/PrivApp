@@ -88,6 +88,16 @@ def dns_publico(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def version_corpus_fija(monkeypatch):
+    # La huella del corpus consulta corpus_chunks, que no existe en SQLite; las
+    # pruebas de reutilización la cambian para simular un corpus distinto.
+    async def _version(db):
+        return "corpus-de-prueba"
+
+    monkeypatch.setattr("app.services.analisis_service._version_corpus", _version)
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     # El limiter (slowapi) es un singleton en memoria compartido por toda la
     # sesión de pytest; sin este reset, las pruebas que llaman a endpoints

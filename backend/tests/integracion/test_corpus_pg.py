@@ -194,3 +194,36 @@ class TestBusquedaExacta:
             "SELECT indexdef FROM pg_indexes WHERE tablename = 'corpus_chunks'"
         ))).scalars().all()
         assert not any("ivfflat" in i or "hnsw" in i for i in indices)
+
+
+class TestRecuperacionReproducible:
+    async def test_las_distancias_iguales_se_desempatan_por_id(self, db_pg):
+        for i in range(4):
+            db_pg.add(CorpusChunk(
+                documento_fuente="empate.pdf", jurisdiccion="internacional", referencia=f"Art. {i}",
+                categoria_tematica="proteccion_datos", texto_original=f"empate {i}",
+                embedding=_vector(0.8), metadatos={"hash": f"empate-{i}"},
+            ))
+        await db_pg.commit()
+
+        filas = await RepositorioCorpusNormativo(db_pg).buscar_similares(CONSULTA, k=4)
+
+        assert [f["id"] for f in filas] == sorted(f["id"] for f in filas)
+
+    async def test_la_huella_cambia_al_desactivar_un_documento(self, db_pg):
+        await _insertar(db_pg, "RGPD.pdf", 2, 0.9)
+        await _insertar(db_pg, "LOPDP.pdf", 2, 0.8)
+        repo = RepositorioCorpusNormativo(db_pg)
+
+        inicial = await repo.huella_fragmentos_activos()
+        assert await repo.huella_fragmentos_activos() == inicial
+
+        await repo.cambiar_estado_documento("LOPDP.pdf", False)
+        await db_pg.commit()
+        desactivado = await repo.huella_fragmentos_activos()
+
+        await repo.cambiar_estado_documento("LOPDP.pdf", True)
+        await db_pg.commit()
+
+        assert desactivado != inicial
+        assert await repo.huella_fragmentos_activos() == inicial
