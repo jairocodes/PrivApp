@@ -1,6 +1,6 @@
 """Tests de la regla única de longitud (RN-01) en las vías de ingesta.
 
-Tras la limpieza: mínimo 200 caracteres y 40 palabras, máximo 200,000.
+Tras la limpieza: mínimo 200 caracteres y 40 palabras, máximo 300,000.
 """
 
 from unittest.mock import MagicMock, patch
@@ -36,15 +36,15 @@ CARACTERES_200 = _texto(40, 4, extra=1)
 # 39 y 40 palabras de 5 letras (233 y 239 caracteres).
 PALABRAS_39 = _texto(39, 5)
 PALABRAS_40 = _texto(40, 5)
-# 40,000 palabras de 4 letras con 39,999 espacios = 199,999 caracteres.
-CARACTERES_200000 = _texto(40_000, 4, extra=1)
-CARACTERES_200001 = _texto(40_000, 4, extra=2)
+# 60,000 palabras de 4 letras con 59,999 espacios = 299,999 caracteres.
+CARACTERES_300000 = _texto(60_000, 4, extra=1)
+CARACTERES_300001 = _texto(60_000, 4, extra=2)
 
 
 def test_los_textos_de_prueba_tienen_la_longitud_esperada():
     assert len(CARACTERES_199) == 199 and len(CARACTERES_200) == 200
     assert len(PALABRAS_39.split()) == 39 and len(PALABRAS_40.split()) == 40
-    assert len(CARACTERES_200000) == 200_000 and len(CARACTERES_200001) == 200_001
+    assert len(CARACTERES_300000) == 300_000 and len(CARACTERES_300001) == 300_001
 
 
 @pytest.mark.parametrize("via", VIAS)
@@ -63,12 +63,12 @@ class TestLimitesDeLongitud:
     def test_40_palabras_se_acepta(self, via):
         assert via(PALABRAS_40) == PALABRAS_40
 
-    def test_200000_caracteres_se_acepta(self, via):
-        assert len(via(CARACTERES_200000)) == 200_000
+    def test_300000_caracteres_se_acepta(self, via):
+        assert len(via(CARACTERES_300000)) == 300_000
 
-    def test_mas_de_200000_caracteres_se_rechaza(self, via):
+    def test_mas_de_300000_caracteres_se_rechaza(self, via):
         with pytest.raises(TextoDemasiadoLargoError):
-            via(CARACTERES_200001)
+            via(CARACTERES_300001)
 
     def test_la_regla_se_aplica_despues_de_la_limpieza(self, via):
         # 30 palabras separadas por muchos espacios: más de 200 caracteres
@@ -91,10 +91,10 @@ class TestLongitudEnLosEndpoints:
         assert r.json()["detail"] == "El texto debe tener al menos 200 caracteres y 40 palabras."
 
     async def test_texto_crudo_largo_que_cumple_tras_limpiar_se_acepta(self, client):
-        # 200,500 caracteres en crudo (por espacios repetidos) que quedan en
+        # 300,500 caracteres en crudo (por espacios repetidos) que quedan en
         # rango tras la limpieza: antes se rechazaba sin limpiar.
-        crudo = CARACTERES_200 + " " * 200_300
-        assert len(crudo) > 200_000
+        crudo = CARACTERES_200 + " " * 300_300
+        assert len(crudo) > 300_000
         token = create_access_token("1")
         r = await client.post(
             "/api/ingesta/texto",
@@ -141,11 +141,23 @@ class TestLongitudAlIniciarAnalisis:
         assert r.status_code == 422
         assert r.json()["detail"] == "El texto debe tener al menos 200 caracteres y 40 palabras."
 
-    async def test_iniciar_rechaza_mas_de_200000_caracteres(self, client):
+    async def test_iniciar_rechaza_mas_de_300000_caracteres(self, client):
         token = create_access_token("1")
         r = await client.post(
             "/api/analisis/iniciar",
-            json={"texto": CARACTERES_200001},
+            json={"texto": CARACTERES_300001},
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 422
+
+    async def test_el_mensaje_dice_cuanto_mide_el_texto_y_que_hacer(self, client):
+        token = create_access_token("1")
+        r = await client.post(
+            "/api/ingesta/texto",
+            json={"texto": CARACTERES_300001},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 422
+        detalle = r.json()["detail"]
+        assert detalle.startswith("Esta política tiene 300,001 caracteres y el máximo es 300,000.")
+        assert "copia solo la parte general" in detalle

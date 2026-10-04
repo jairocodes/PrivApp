@@ -436,7 +436,7 @@ Umbrales calibrados con `scripts/evaluar_deteccion.py` sobre 22 textos (03/10/20
 **Red de seguridad después del análisis** — si casi ninguna sección cumple un criterio de la rúbrica (menos de 3 hallazgos y menos del 20 % de las secciones analizadas con hallazgos), el análisis termina con `estado = error` y `resultado = {"motivo_error": "no_es_politica"}`: no recibe puntuación, no aparece en el historial ni en las estadísticas, y `GET /{id}/estado` devuelve `motivo: "no_es_politica"` para que el cliente lo explique.
 
 **Regla única de longitud (RN-01, `utils/validacion_texto.py`)** — se aplica siempre sobre el texto ya limpio, en las tres vías y de nuevo en `/api/analisis/iniciar`:
-- Mínimo **200 caracteres y 40 palabras**; máximo **200,000 caracteres**.
+- Mínimo **200 caracteres y 40 palabras**; máximo **300,000 caracteres** (alcanza, por ejemplo, para la declaración de privacidad completa de Microsoft, de unos 252,000 caracteres y 77 secciones, que se analiza en unos minutos). El mensaje de error indica cuánto mide el texto y sugiere copiar solo la parte general o la del servicio que se usa.
 - Tope previo del texto crudo recibido: **400,000 caracteres** (solo evita procesar entradas desproporcionadas; la limpieza puede reducir mucho la longitud).
 
 **Limpieza (`ingesta_service.limpiar_texto`):** normalización Unicode NFC, eliminación de caracteres de control, colapso de espacios por línea, máximo un párrafo en blanco consecutivo.
@@ -559,7 +559,7 @@ El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, 
 | `AutodesactivacionError` | 400 | Un administrador intenta desactivarse |
 | `CuentaConAnalisisEnCursoError` | 409 | Eliminar la cuenta con un análisis en curso |
 | `TextoDemasiadoCortoError` | 422 | < 200 caracteres o < 40 palabras |
-| `TextoDemasiadoLargoError` | 422 | > 200,000 caracteres |
+| `TextoDemasiadoLargoError` | 422 | > 300,000 caracteres; el mensaje dice cuánto mide el texto y qué hacer |
 | `TextoNoEsPoliticaError` | 422 | El texto claramente no es una política de privacidad (RN-18) |
 | `ConfirmacionPoliticaRequeridaError` | 422 | Texto dudoso sin `confirma_politica: true` |
 | `ExtraccionURLError` | 422 | URL que no es de un sitio web público, no accesible, con demasiadas redirecciones, no HTML o sin texto |
@@ -889,7 +889,7 @@ Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y to
 
 ### Ingesta y vista previa
 
-`IngestaForm` tiene tres pestañas (pegar texto, desde URL, desde archivo). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 200,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar). Si la detección considera el texto dudoso, la vista previa muestra los temas encontrados y el botón de analizar se habilita solo al marcar "Confirmo que este texto es una política de privacidad..."; entonces envía `confirma_politica: true`. Si el análisis termina con el motivo `no_es_politica`, la pantalla de resultados lo explica en lugar de mostrar un error genérico.
+`IngestaForm` tiene tres pestañas (pegar texto, desde URL, desde archivo). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 300,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar). Si la detección considera el texto dudoso, la vista previa muestra los temas encontrados y el botón de analizar se habilita solo al marcar "Confirmo que este texto es una política de privacidad..."; entonces envía `confirma_politica: true`. Si el análisis termina con el motivo `no_es_politica`, la pantalla de resultados lo explica en lugar de mostrar un error genérico.
 
 ### Progreso y resultados
 

@@ -29,7 +29,7 @@ describe('validarTextoPolítica', () => {
   })
 
   it('rechaza textos por encima del máximo', () => {
-    expect(validarTextoPolítica('a '.repeat(MAX_TEXTO / 2 + 1))).toMatch(/no puede superar/)
+    expect(validarTextoPolítica('a '.repeat(MAX_TEXTO / 2 + 1))).toMatch(/y el máximo es 300,000/)
   })
 
   it('acepta textos dentro del rango', () => {

@@ -255,7 +255,7 @@ sesión desde la que se hizo el cambio continúe.
 | POST | `/api/ingesta/archivo` | Extrae texto de un archivo PDF o TXT | Usuario | 10/min |
 
 Las tres vías aplican la misma regla de longitud **sobre el texto ya limpio** (espacios y saltos de
-línea normalizados): mínimo **200 caracteres y 40 palabras**, máximo **200,000 caracteres**. La
+línea normalizados): mínimo **200 caracteres y 40 palabras**, máximo **300,000 caracteres**. La
 ingesta no guarda nada: el texto se devuelve para que el usuario lo revise antes de analizarlo.
 
 **Body `POST /texto`:**
@@ -325,7 +325,7 @@ que claramente no lo es se rechaza con 422 y no llega a esta respuesta.
 | 413 | archivo | "El archivo supera el tamaño máximo de 5 MB." |
 | 415 | archivo | "Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt)." |
 | 422 | todas | "El texto debe tener al menos 200 caracteres y 40 palabras." |
-| 422 | todas | "El texto no puede exceder los 200,000 caracteres." |
+| 422 | todas | "Esta política tiene N caracteres y el máximo es 300,000. Las políticas muy extensas suelen tener una sección por cada producto o servicio: copia solo la parte general o la del servicio que usas y pégala en «Pegar texto»." |
 | 422 | todas | "El texto no parece una política de privacidad: no explica qué datos personales se recopilan, para qué se usan ni con quién se comparten." |
 | 422 | archivo | "No se encontró texto en el PDF. Si es un documento escaneado, el sistema no puede leerlo: copia el texto de la política y pégalo directamente." |
 | 422 | url | "La dirección debe comenzar con http:// o https://." |
@@ -377,7 +377,7 @@ arrancar, el servidor marca como `error` todos los que quedaron en `procesando`.
 dudoso: la persona confirmó en la vista previa que es una política de privacidad.
 
 Se aplica la misma regla de longitud que en la ingesta (200 caracteres y 40 palabras como mínimo,
-200,000 caracteres como máximo). El análisis usa el texto completo; en la base solo se conservan los
+300,000 caracteres como máximo). El análisis usa el texto completo; en la base solo se conservan los
 primeros 2,000 caracteres.
 
 **Respuesta:**

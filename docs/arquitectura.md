@@ -292,7 +292,7 @@ No hay tokens de refresco: al expirar el token, la persona vuelve a iniciar sesi
 - El correo se guarda y se busca en minúsculas (`auth_service.normalizar_email`), así
   que el registro y el inicio de sesión no distinguen mayúsculas.
 - Regla única de longitud tras la limpieza (RN-01): mínimo 200 caracteres y 40
-  palabras, máximo 200,000 caracteres; el texto crudo se limita a 400,000. La misma
+  palabras, máximo 300,000 caracteres; el texto crudo se limita a 600,000. La misma
   regla se aplica al iniciar el análisis, para que no pueda saltarse llamando a la API.
 - Los errores de validación (422) conservan el formato de FastAPI, pero sin el prefijo
   "Value error, " que Pydantic antepone a los mensajes propios.

@@ -24,7 +24,8 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   activación y desactivación de cuentas; listado, carga (PDF/TXT) y activación o
   desactivación de documentos del corpus normativo. Script `promover_admin.py`.
 - **Ingesta:** carga de archivos PDF o TXT de hasta 5 MB procesados en memoria,
-  regla única de longitud (200 caracteres y 40 palabras, máximo 200,000) y vista
+  regla única de longitud (200 caracteres y 40 palabras, máximo 300,000, con un
+  mensaje que dice cuánto mide el texto y qué hacer si lo supera) y vista
   previa obligatoria antes de analizar.
 - **Análisis:** progreso en segundo plano; clasificación de cada hallazgo en uno de
   ocho tipos de tratamiento de datos; análisis de la política completa, con hasta
