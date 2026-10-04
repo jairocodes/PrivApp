@@ -1,3 +1,4 @@
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
 import {
   INTRODUCCION,
   SECCIONES_AVISO,
@@ -73,26 +74,40 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
 
 export default function AvisoPrivacidad() {
   return (
-    <>
+    <main className="mx-auto max-w-3xl px-4 py-6 pb-16">
+      <EncabezadoPagina titulo={TITULO_AVISO} subtitulo={`Última actualización: ${ULTIMA_ACTUALIZACION}`} />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
-        <h1 className="text-xl font-bold text-texto">{TITULO_AVISO}</h1>
-        <p className="text-xs text-texto-2 mt-1 mb-4">Última actualización: {ULTIMA_ACTUALIZACION}</p>
-
-        <article className="card text-sm text-texto-2 leading-relaxed space-y-6">
-          <p>{INTRODUCCION}</p>
+      <nav aria-label="Contenido del aviso" className="card mb-5 p-5">
+        <p className="mb-2 text-sm font-bold text-texto">En este aviso</p>
+        <ol className="grid gap-1 text-sm sm:grid-cols-2">
           {SECCIONES_AVISO.map((seccion) => (
-            <section key={seccion.id} id={seccion.id} aria-labelledby={`titulo-${seccion.id}`} className="space-y-3">
-              <h2 id={`titulo-${seccion.id}`} className="text-base font-semibold text-texto">
+            <li key={seccion.id}>
+              <a href={`#${seccion.id}`} className="inline-flex min-h-[36px] items-center text-marca-texto hover:underline">
                 {seccion.titulo}
-              </h2>
-              {seccion.bloques.map((bloque, i) => (
-                <BloqueAviso key={i} bloque={bloque} />
-              ))}
-            </section>
+              </a>
+            </li>
           ))}
-        </article>
-      </main>
-    </>
+        </ol>
+      </nav>
+
+      <article className="card space-y-8 text-base leading-relaxed text-texto-2 sm:p-8">
+        <p>{INTRODUCCION}</p>
+        {SECCIONES_AVISO.map((seccion) => (
+          <section
+            key={seccion.id}
+            id={seccion.id}
+            aria-labelledby={`titulo-${seccion.id}`}
+            className="scroll-mt-24 space-y-3"
+          >
+            <h2 id={`titulo-${seccion.id}`} className="text-lg font-bold text-texto">
+              {seccion.titulo}
+            </h2>
+            {seccion.bloques.map((bloque, i) => (
+              <BloqueAviso key={i} bloque={bloque} />
+            ))}
+          </section>
+        ))}
+      </article>
+    </main>
   )
 }
