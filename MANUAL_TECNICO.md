@@ -894,11 +894,15 @@ Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y to
 ### Progreso y resultados
 
 - `useProgresoAnalisis` consulta `/{id}/estado` cada 1.5 s; `VistaProgreso` muestra las secciones terminadas y rota consejos de privacidad (`data/consejosPrivacidad.ts`) cada 6 s.
-- **IndicadorSemaforo:** nivel de riesgo global (verde/amarillo/rojo) y puntuación de riesgo.
-- **TarjetaSeccion:** hallazgos de cada sección con nivel, tipo de tratamiento y marca de "sin respaldo".
+- **Disposición:** en el celular, una sola columna; desde `lg`, el resumen queda fijo a la izquierda (puntuación, "¿Por qué este resultado?" y acciones) y el detalle a la derecha ("Qué hace con tus datos", hallazgos, recomendaciones y aviso).
+- **MedidorRiesgo:** semicírculo de 0 a 100 con las franjas de la RN-05 (bajo < 25, medio < 75, alto) y la aguja en la puntuación; su nombre accesible es "Puntuación de riesgo: N de 100, Riesgo X".
+- **InsigniaNivel:** nivel con icono y texto ("Riesgo alto", "Riesgo medio", "Riesgo bajo"; "Buena práctica" para los hallazgos de transparencia): nunca solo color.
+- **PorQueResultado:** cuántas cláusulas cuentan para el resultado (secciones analizadas y con respaldo, `utils/resumenResultados.ts`), barras por nivel y la regla que decide el nivel general, la misma del servidor (`explicarNivel`).
+- **ResumenTratamiento** ("Qué hace con tus datos"): una ficha por tipo de tratamiento con sus riesgos ("6 altos · 2 medios"), de la que tiene más riesgos altos a la que menos; al pulsarla, la lista de hallazgos se filtra por ese tipo.
+- **TarjetaSeccion:** secciones plegables; cada hallazgo muestra nivel, tipo de tratamiento, la descripción, **"Por qué"** (el criterio de la rúbrica en lenguaje sencillo, `data/criterios.ts`; solo en análisis con `criterio`), la marca de "sin respaldo" y, desplegables, las normas que lo respaldan y el fragmento analizado.
 - **CitaNormativa:** documento, referencia, extracto real y jurisdicción de cada cita.
-- **FiltroHallazgos:** filtra por nivel y por jurisdicción de la cita, **solo en el cliente**; las secciones sin coincidencias se ocultan y las visibles conservan su número original; el resumen general no cambia.
-- **ListaRecomendaciones:** recomendaciones prácticas.
+- **FiltroHallazgos:** filtra por nivel, por jurisdicción de la cita y por tipo de tratamiento, **solo en el cliente**; las secciones sin coincidencias se ocultan y las visibles conservan su número original; el resumen general no cambia.
+- **ListaRecomendaciones** ("Qué puedes hacer"): recomendaciones prácticas como tarjetas numeradas.
 - **AyudaGlosario:** ayuda contextual que muestra la definición de un término del glosario.
 - Descarga del PDF y eliminación del análisis con confirmación (`DialogoConfirmacion`).
 

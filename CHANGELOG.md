@@ -58,6 +58,11 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   actual marcada; enlace para saltar al contenido; componentes comunes (avisos,
   carga, estado vacío, encabezado, insignias, paginación y campos); diálogo de
   confirmación con Headless UI (foco retenido); favicon.
+- **Pantalla de resultados rediseñada:** medidor semicircular con franjas de
+  referencia, "¿Por qué este resultado?" con las cláusulas que cuentan y la regla del
+  nivel, fichas de "Qué hace con tus datos" por tipo de tratamiento que filtran la
+  lista, "Por qué" de cada hallazgo según su criterio, normas desplegables,
+  recomendaciones como tarjetas de acción y dos columnas en escritorio.
 - **Validación del contenido (RN-18):** cada vía de ingesta y el inicio del análisis
   detectan si el texto es una política de privacidad con vocabulario por temas,
   semejanza semántica (embeddings del corpus) y la voz del responsable; los textos que
