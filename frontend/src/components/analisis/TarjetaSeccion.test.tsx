@@ -27,7 +27,17 @@ describe('TarjetaSeccion', () => {
     render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
     expect(screen.getByText('Tus datos pueden llegar a empresas que no conoces.')).toBeInTheDocument()
     expect(screen.getByText('RGPD')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'riesgo' })).toBeInTheDocument()
+    expect(screen.getByText('Riesgo alto')).toBeInTheDocument()
+    expect(screen.getByText('Buena práctica')).toBeInTheDocument()
+    expect(screen.getByText('Ver la norma que lo respalda')).toBeInTheDocument()
+  })
+
+  it('explica por qué de cada hallazgo según su criterio', () => {
+    const [primero, ...resto] = seccionEjemplo.hallazgos
+    const seccion = { ...seccionEjemplo, hallazgos: [{ ...primero, criterio: 'A4' }, ...resto] }
+    render(<TarjetaSeccion seccion={seccion} indice={1} inicialmenteExpandida />)
+
+    expect(screen.getByText('La política comparte tus datos con terceros que no identifica (criterio A4).')).toBeInTheDocument()
   })
 
   it('avisa cuando una sección no tiene hallazgos', () => {

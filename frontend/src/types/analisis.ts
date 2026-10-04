@@ -19,6 +19,8 @@ export interface Hallazgo {
   tipo_tratamiento?: string | null
   // Ningún fragmento del corpus respalda el hallazgo: no suma al puntaje.
   sin_respaldo?: boolean
+  // Código del criterio de la rúbrica (A1–A10, M1–M5, B1–B4); ausente en análisis antiguos.
+  criterio?: string | null
 }
 
 export interface SeccionAnalizada {
@@ -26,6 +28,8 @@ export interface SeccionAnalizada {
   titulo: string
   texto_original: string
   hallazgos: Hallazgo[]
+  // false si la sección no pudo analizarse: no cuenta para el nivel ni la puntuación.
+  analizada?: boolean
 }
 
 export interface ResumenGeneral {
