@@ -52,8 +52,8 @@ export default function FormEliminarCuenta() {
   }
 
   return (
-    <form onSubmit={solicitar} noValidate className="card flex flex-col gap-4 border border-riesgo-alto/20">
-      <h2 className="text-base font-semibold text-texto">Eliminar mi cuenta</h2>
+    <form onSubmit={solicitar} noValidate className="card flex flex-col gap-4 border-riesgo-alto/30">
+      <h2 className="text-lg font-bold text-riesgo-alto">Eliminar mi cuenta</h2>
       <p className="text-sm text-texto-2 leading-relaxed">
         Se eliminarán de forma definitiva tu cuenta y todos tus análisis. Esta acción no se puede
         deshacer.

@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import Aviso from '@/components/common/Aviso'
 import Button from '@/components/common/Button'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
 import Input from '@/components/common/Input'
+import Apariencia from '@/components/perfil/Apariencia'
 import FormCambioPassword from '@/components/perfil/FormCambioPassword'
 import FormEliminarCuenta from '@/components/perfil/FormEliminarCuenta'
 import { useAuth } from '@/hooks/useAuth'
@@ -45,12 +48,22 @@ export default function Perfil() {
 
   return (
     <>
+      <main className="mx-auto max-w-2xl space-y-5 px-4 py-6 pb-16">
+        <EncabezadoPagina titulo="Mi perfil" />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-16 space-y-5">
-        <h1 className="text-xl font-bold text-texto">Mi perfil</h1>
-
-        <section className="card space-y-3">
-          <h2 className="text-base font-semibold text-texto">Datos de la cuenta</h2>
+        <section className="card space-y-4">
+          <div className="flex items-center gap-4">
+            <span
+              aria-hidden="true"
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-marca text-2xl font-extrabold text-white"
+            >
+              {user.nombre.trim().charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-bold text-texto">{user.nombre}</p>
+              <h2 className="text-sm font-semibold text-texto-2">Datos de la cuenta</h2>
+            </div>
+          </div>
           <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
             <dt className="text-texto-2">Correo electrónico</dt>
             <dd className="text-texto break-all">{user.email}</dd>
@@ -61,7 +74,7 @@ export default function Perfil() {
         </section>
 
         <form onSubmit={guardar} noValidate className="card flex flex-col gap-4">
-          <h2 className="text-base font-semibold text-texto">Editar nombre</h2>
+          <h2 className="text-lg font-bold text-texto">Editar nombre</h2>
           <Input
             label="Nombre completo"
             id="nombre"
@@ -74,15 +87,13 @@ export default function Perfil() {
             }}
             error={error ?? undefined}
           />
-          {exito && (
-            <p role="status" className="text-sm text-riesgo-bajo">
-              Tu nombre se actualizó correctamente.
-            </p>
-          )}
+          {exito && <Aviso tipo="exito">Tu nombre se actualizó correctamente.</Aviso>}
           <Button type="submit" isLoading={guardando} className="self-start">
             Guardar cambios
           </Button>
         </form>
+
+        <Apariencia />
 
         <FormCambioPassword />
 
