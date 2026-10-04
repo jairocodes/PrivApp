@@ -24,6 +24,7 @@ import {
 import {
   MENSAJE_ELIMINAR_ANALISIS,
   MENSAJE_LIMITE_SOLICITUDES,
+  MENSAJE_NO_ES_POLITICA,
   detalleDeError,
   esLimiteDeSolicitudes,
 } from '@/utils/errores'
@@ -31,7 +32,7 @@ import {
 export default function Resultados() {
   const { id } = useParams<{ id: string }>()
   const { resultado, isLoading, error, obtener } = useAnalisis()
-  const { estado, seccionActual, seccionesTotal } = useProgresoAnalisis(id)
+  const { estado, seccionActual, seccionesTotal, motivo } = useProgresoAnalisis(id)
 
   // El análisis (nuevo o ya completado, ej. desde el historial) siempre pasa
   // primero por /estado: si ya está "completado" ese primer sondeo responde
@@ -63,7 +64,13 @@ export default function Resultados() {
           <VistaProgreso seccionActual={seccionActual} seccionesTotal={seccionesTotal} />
         )}
         {estado === 'error' && (
-          <EstadoError mensaje="Ocurrió un error durante el análisis. Intenta nuevamente." />
+          <EstadoError
+            mensaje={
+              motivo === 'no_es_politica'
+                ? MENSAJE_NO_ES_POLITICA
+                : 'Ocurrió un error durante el análisis. Intenta nuevamente.'
+            }
+          />
         )}
 
         {/* Resultado ya completado */}

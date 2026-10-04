@@ -437,7 +437,7 @@ class TestEstadoYProgreso:
         )
         assert response.status_code == 200
         datos = response.json()
-        assert datos == {"estado": "procesando", "seccion_actual": 1, "secciones_total": 3}
+        assert datos == {"estado": "procesando", "seccion_actual": 1, "secciones_total": 3, "motivo": None}
 
     async def test_ejecutar_analisis_background_completa_y_persiste_resultado(
         self, db_session, seed_user

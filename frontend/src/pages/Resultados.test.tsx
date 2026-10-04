@@ -31,7 +31,7 @@ describe('Resultados', () => {
   })
 
   it('muestra la vista de progreso mientras el análisis se procesa', () => {
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'procesando', seccionActual: 1, seccionesTotal: 3 })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'procesando', seccionActual: 1, seccionesTotal: 3, motivo: null })
     renderResultados()
 
     expect(screen.getByText('Analizando la política: 1 de 3 secciones listas...')).toBeInTheDocument()
@@ -39,21 +39,31 @@ describe('Resultados', () => {
   })
 
   it('muestra un mensaje si el análisis terminó con error', () => {
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'error', seccionActual: 0, seccionesTotal: null })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'error', seccionActual: 0, seccionesTotal: null, motivo: null })
     renderResultados()
 
     expect(screen.getByText('Ocurrió un error durante el análisis. Intenta nuevamente.')).toBeInTheDocument()
   })
 
+  it('explica que el texto no parece una política de privacidad', () => {
+    vi.mocked(useProgresoAnalisis).mockReturnValue({
+      estado: 'error', seccionActual: 3, seccionesTotal: 3, motivo: 'no_es_politica',
+    })
+    renderResultados()
+
+    expect(screen.getByRole('alert')).toHaveTextContent('El texto no parece una política de privacidad')
+    expect(screen.queryByText('Ocurrió un error durante el análisis. Intenta nuevamente.')).not.toBeInTheDocument()
+  })
+
   it('pide el resultado al completarse el análisis', () => {
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 3, seccionesTotal: 3 })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 3, seccionesTotal: 3, motivo: null })
     renderResultados()
 
     expect(obtener).toHaveBeenCalledWith('7')
   })
 
   it('presenta el panel con puntuación accesible, secciones y recomendaciones', () => {
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
     vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     renderResultados()
 
@@ -68,7 +78,7 @@ describe('Resultados', () => {
 
   it('explica el límite de descargas del PDF ante un 429', async () => {
     vi.mocked(analisisApi.descargarPDF).mockRejectedValue({ response: { status: 429 } })
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
     vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     renderResultados()
 
@@ -78,7 +88,7 @@ describe('Resultados', () => {
   })
 
   it('ofrece ayuda del glosario para el nivel, la puntuación y las recomendaciones', () => {
-    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
     vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     renderResultados()
 
@@ -100,7 +110,7 @@ describe('Resultados', () => {
     }
 
     beforeEach(() => {
-      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1 })
+      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
       vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
     })
 
@@ -158,7 +168,7 @@ describe('Resultados', () => {
     }
 
     beforeEach(() => {
-      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 2, seccionesTotal: 2 })
+      vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 2, seccionesTotal: 2, motivo: null })
       vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisConVarios, isLoading: false, error: null, obtener })
     })
 

@@ -29,9 +29,10 @@ export function parametrosDeFiltros(filtros: FiltrosHistorial = {}): Record<stri
 }
 
 export const analisisApi = {
-  // El análisis se procesa en segundo plano; este endpoint solo confirma que inició (202)
-  iniciar: (texto: string) =>
-    apiClient.post<AnalisisIniciado>('/api/analisis/iniciar', { texto }),
+  // El análisis se procesa en segundo plano; este endpoint solo confirma que inició (202).
+  // confirmaPolitica: la persona confirmó que un texto dudoso es una política (RN-18).
+  iniciar: (texto: string, confirmaPolitica = false) =>
+    apiClient.post<AnalisisIniciado>('/api/analisis/iniciar', { texto, confirma_politica: confirmaPolitica }),
 
   consultarEstado: (id: string | number) =>
     apiClient.get<AnalisisEstado>(`/api/analisis/${id}/estado`),

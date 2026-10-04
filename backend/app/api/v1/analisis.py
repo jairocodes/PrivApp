@@ -19,7 +19,11 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_current_user
 from app.database import get_db
-from app.core.exceptions import RangoFechasInvalidoError
+from app.core.exceptions import (
+    ConfirmacionPoliticaRequeridaError,
+    RangoFechasInvalidoError,
+    TextoNoEsPoliticaError,
+)
 from app.core.limiter import limiter
 from app.models.user import User
 from app.repositories.analisis import FiltrosHistorial
@@ -41,6 +45,7 @@ from app.services.analisis_service import (
     obtener_analisis,
     obtener_estado_analisis,
 )
+from app.services.deteccion_politica import detectar_politica
 from app.services.reportes_service import generar_pdf_y_medir
 from app.utils.validacion_texto import validar_longitud_politica
 
@@ -61,8 +66,13 @@ async def iniciar(
     El cliente debe sondear GET /{id}/estado hasta que el análisis esté
     'completado', y luego consultar GET /{id} para el resultado completo.
     """
-    # Misma regla que la ingesta, para que no pueda saltarse llamando a la API.
+    # Mismas reglas que la ingesta, para que no puedan saltarse llamando a la API.
     validar_longitud_politica(payload.texto)
+    deteccion = await run_in_threadpool(detectar_politica, payload.texto)
+    if deteccion.resultado == "no_politica":
+        raise TextoNoEsPoliticaError()
+    if deteccion.resultado == "dudosa" and not payload.confirma_politica:
+        raise ConfirmacionPoliticaRequeridaError()
     logger.info(
         "Usuario %d solicitó análisis [%d palabras].",
         current_user.id,

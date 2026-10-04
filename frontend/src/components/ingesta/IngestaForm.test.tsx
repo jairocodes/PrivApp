@@ -83,8 +83,27 @@ describe('IngestaForm', () => {
 
       await userEvent.click(screen.getByRole('button', CONFIRMAR))
 
-      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado', false)
       expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
+    })
+
+    it('con un texto dudoso exige confirmar que es una política y lo envía confirmado', async () => {
+      vi.mocked(ingestaApi.enviarTexto).mockResolvedValue({
+        data: {
+          ...responder('texto_directo').data,
+          deteccion: {
+            resultado: 'dudosa', temas_encontrados: ['privacidad'], temas_total: 10, cobertura: 0.7, voz_responsable: 0,
+          },
+        },
+      } as Awaited<ReturnType<typeof ingestaApi.enviarTexto>>)
+      await revisarTextoValido()
+
+      const confirmar = screen.getByRole('button', CONFIRMAR)
+      expect(confirmar).toBeDisabled()
+      await userEvent.click(screen.getByRole('checkbox', { name: /Confirmo que este texto es una política/ }))
+      await userEvent.click(confirmar)
+
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado', true)
     })
 
     it('cancelar no inicia el análisis y descarta lo ingresado', async () => {
@@ -126,7 +145,7 @@ describe('IngestaForm', () => {
       expect(analisisApi.iniciar).not.toHaveBeenCalled()
 
       await userEvent.click(screen.getByRole('button', CONFIRMAR))
-      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado', false)
     })
   })
 
@@ -208,7 +227,7 @@ describe('IngestaForm', () => {
       expect(analisisApi.iniciar).not.toHaveBeenCalled()
 
       await userEvent.click(screen.getByRole('button', CONFIRMAR))
-      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado')
+      expect(analisisApi.iniciar).toHaveBeenCalledWith('texto normalizado', false)
       expect(await screen.findByText('Pantalla de resultados')).toBeInTheDocument()
     })
 

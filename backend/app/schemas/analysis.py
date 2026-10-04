@@ -121,6 +121,9 @@ class AnalisisEstadoResponse(BaseModel):
     estado: Literal["procesando", "completado", "error"]
     seccion_actual: int
     secciones_total: int | None
+    # Por qué terminó con error, si se sabe: "no_es_politica" cuando el análisis
+    # casi no encontró cláusulas sobre datos personales (RN-18).
+    motivo: Literal["no_es_politica"] | None = None
 
 
 class IngestaTextoRequest(BaseModel):

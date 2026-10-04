@@ -56,4 +56,40 @@ describe('VistaPreviaTexto', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent('No fue posible iniciar el análisis.')
   })
+
+  it('con un texto que sí parece una política no pide confirmación adicional', () => {
+    renderVista({
+      resultado: {
+        ...RESULTADO,
+        deteccion: { resultado: 'politica', temas_encontrados: [], temas_total: 10, cobertura: 1, voz_responsable: 20 },
+      },
+    })
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar y analizar' })).toBeEnabled()
+  })
+
+  it('con un texto dudoso avisa qué encontró y pide confirmar antes de analizar', async () => {
+    const { onConfirmar } = renderVista({
+      resultado: {
+        ...RESULTADO,
+        deteccion: {
+          resultado: 'dudosa',
+          temas_encontrados: ['privacidad', 'conservacion'],
+          temas_total: 10,
+          cobertura: 0.7,
+          voz_responsable: 0,
+        },
+      },
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Este texto no parece una política de privacidad típica.')
+    expect(screen.getByRole('status')).toHaveTextContent('Encontramos 2 de 10 temas habituales (privacidad, conservación de los datos)')
+    const confirmar = screen.getByRole('button', { name: 'Confirmar y analizar' })
+    expect(confirmar).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Confirmo que este texto es una política/ }))
+    await userEvent.click(confirmar)
+
+    expect(onConfirmar).toHaveBeenCalledTimes(1)
+  })
 })

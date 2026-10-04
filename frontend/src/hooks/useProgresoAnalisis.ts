@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { analisisApi } from '@/api/analisis'
-import type { EstadoAnalisis } from '@/types/analisis'
+import type { AnalisisEstado, EstadoAnalisis } from '@/types/analisis'
 
 const INTERVALO_POLLING_MS = 1500
 
@@ -8,6 +8,7 @@ export function useProgresoAnalisis(id: string | undefined) {
   const [estado, setEstado] = useState<EstadoAnalisis>('procesando')
   const [seccionActual, setSeccionActual] = useState(0)
   const [seccionesTotal, setSeccionesTotal] = useState<number | null>(null)
+  const [motivo, setMotivo] = useState<AnalisisEstado['motivo']>(null)
 
   useEffect(() => {
     if (!id) return
@@ -22,6 +23,7 @@ export function useProgresoAnalisis(id: string | undefined) {
         setEstado(data.estado)
         setSeccionActual(data.seccion_actual)
         setSeccionesTotal(data.secciones_total)
+        setMotivo(data.motivo ?? null)
         if (data.estado !== 'procesando') {
           clearInterval(intervalo)
         }
@@ -42,5 +44,5 @@ export function useProgresoAnalisis(id: string | undefined) {
     }
   }, [id])
 
-  return { estado, seccionActual, seccionesTotal }
+  return { estado, seccionActual, seccionesTotal, motivo }
 }
