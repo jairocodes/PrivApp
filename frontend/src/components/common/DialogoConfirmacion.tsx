@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { Description, Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 
 interface Props {
   abierto: boolean
@@ -11,6 +11,8 @@ interface Props {
   onCancelar: () => void
 }
 
+/** Confirmación de una acción irreversible. Headless UI mantiene el foco dentro
+ *  del diálogo mientras está abierto y lo devuelve al cerrarse. */
 export default function DialogoConfirmacion({
   abierto,
   titulo,
@@ -21,61 +23,38 @@ export default function DialogoConfirmacion({
   onConfirmar,
   onCancelar,
 }: Props) {
-  const idTitulo = useId()
-  const idMensaje = useId()
-  const cancelarRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (abierto) cancelarRef.current?.focus()
-  }, [abierto])
-
-  if (!abierto) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !procesando) onCancelar()
+    <Dialog
+      open={abierto}
+      role="alertdialog"
+      // Escape o un clic fuera cancelan, salvo mientras la acción está en curso.
+      onClose={() => {
+        if (!procesando) onCancelar()
       }}
+      className="relative z-50"
     >
-      <div
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={idTitulo}
-        aria-describedby={idMensaje}
-        className="card w-full max-w-sm space-y-4"
-      >
-        <h2 id={idTitulo} className="text-lg font-semibold text-gray-900">
-          {titulo}
-        </h2>
-        <p id={idMensaje} className="text-sm text-gray-600 leading-relaxed">
-          {mensaje}
-        </p>
-        {error && (
-          <p role="alert" className="text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        <div className="flex justify-end gap-2">
-          <button
-            ref={cancelarRef}
-            type="button"
-            onClick={onCancelar}
-            disabled={procesando}
-            className="btn-secondary text-sm"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={onConfirmar}
-            disabled={procesando}
-            className="btn-primary text-sm"
-          >
-            {procesando ? 'Procesando...' : textoConfirmar}
-          </button>
-        </div>
+      <div className="fixed inset-0 bg-black/50" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <DialogPanel className="card w-full max-w-sm space-y-4">
+          <DialogTitle as="h2" className="text-lg font-bold text-texto">
+            {titulo}
+          </DialogTitle>
+          <Description className="text-sm leading-relaxed text-texto-2">{mensaje}</Description>
+          {error && (
+            <p role="alert" className="text-sm text-riesgo-alto">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" autoFocus onClick={onCancelar} disabled={procesando} className="btn-secondary text-sm">
+              Cancelar
+            </button>
+            <button type="button" onClick={onConfirmar} disabled={procesando} className="btn-primary text-sm">
+              {procesando ? 'Procesando...' : textoConfirmar}
+            </button>
+          </div>
+        </DialogPanel>
       </div>
-    </div>
+    </Dialog>
   )
 }
