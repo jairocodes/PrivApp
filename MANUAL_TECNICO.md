@@ -147,6 +147,8 @@ El sistema sigue una arquitectura de **capas desacopladas** desplegada mediante 
 | Axios | ^1.7.9 | Cliente HTTP |
 | recharts | ^2.13.3 | Gráfico del panel estadístico (carga diferida) |
 | lucide-react | ^0.468.0 | Íconos |
+| Headless UI (`@headlessui/react`) | ^2.2.10 | Componentes accesibles sin estilos (diálogo de confirmación: foco retenido, Escape) |
+| Figtree (fuente, SIL OFL) | — | Tipografía, servida desde `public/fonts/` |
 | Vitest + Testing Library + jsdom | ^2.1.8 / ^16.1.0 / ^25.0.1 | Pruebas del cliente |
 
 ### Infraestructura
@@ -839,6 +841,35 @@ La clave de API se lee solo de la configuración y nunca se escribe en los regis
 | AdminCorpus | `/admin/corpus` | Administrador | Documentos del corpus: carga y activación |
 
 `ProtectedRoute` exige sesión; `AdminRoute` además exige el rol administrador. Estas guardas solo ocultan la navegación: **el servidor verifica el rol en cada ruta administrativa**. El pie de página enlaza el glosario y el aviso de privacidad en todas las pantallas.
+
+### Estructura y navegación
+
+- `LayoutPublico` (`/login`, `/registro`): contenido, interruptor del tema y pie de página.
+- `AppLayout` (todas las demás): enlace "Saltar al contenido", barra superior (`Navbar`), la página, el pie de página y, **con sesión**, las pestañas inferiores del celular (`BarraPestanas`, ocultas desde `md`). Cada página aporta su propio `<main>`.
+- Los destinos principales están definidos una sola vez en `components/layout/secciones.ts`: Inicio, Analizar (también activa en `/resultados/:id`), Historial, Glosario y Perfil. La barra superior muestra Inicio, Analizar e Historial desde `md`; Glosario, Perfil (con el nombre), Administración (solo el administrador), el interruptor del tema y Cerrar sesión van a la derecha. La sección actual lleva `aria-current="page"`.
+
+### Tema claro y oscuro
+
+- Los colores son **tokens** (variables CSS en canales RGB) definidos en `src/index.css` para `:root` (claro) y `.dark` (oscuro), y expuestos en `tailwind.config.js` como `fondo`, `superficie`, `superficie-2`, `texto`, `texto-2`, `texto-3`, `borde`, `borde-fuerte`, `marca` (`hover`, `texto`, `suave`, `suave-texto`, `borde`), `riesgo` (`alto`, `medio`, `bajo` y sus `-solido`) y `juri`. Con `rgb(var(--…) / <alpha-value>)` admiten opacidad (`bg-riesgo-alto/10`). **No usar la paleta fija de Tailwind** (`gray-*`, `blue-*`…): cada clase de token funciona en ambos modos sin escribir variantes `dark:`.
+- Todos los pares de texto y fondo cumplen el contraste AA (4.5:1). El nivel de riesgo nunca se comunica solo con color: lleva texto e icono.
+- `TemaProvider` (`context/TemaContext.tsx`) guarda la preferencia en `localStorage` (`privapp-tema`: `claro` u `oscuro`; sin valor, sigue `prefers-color-scheme` del dispositivo y sus cambios) y pone o quita la clase `dark` en `<html>`. Un script en línea de `index.html` aplica el tema antes del primer pintado para evitar un destello claro; usa la misma clave. `BotonTema` (sol/luna, `aria-pressed`) alterna el modo.
+- La fuente Figtree se sirve desde el propio sitio (`public/fonts/`, licencia en `OFL.txt`) y no desde Google Fonts, para no enviar a un tercero la IP de cada visitante.
+
+### Componentes comunes (`components/common/`)
+
+| Componente | Uso |
+|---|---|
+| `Button` | Variantes `primary`, `secondary`, `ghost` y `danger`; `type="button"` por defecto |
+| `Input`, `CampoSeleccion`, `AreaTexto`, `Casilla` (`Campos.tsx`) | Campo con etiqueta asociada, ayuda (`aria-describedby`) y error (`aria-invalid`) |
+| `Aviso` | Mensaje de error (`role="alert"`), éxito o información (`role="status"`) |
+| `Cargando`, `Spinner` | Tarjeta de carga con mensaje; el spinner solo es accesible si lleva `etiqueta` |
+| `EstadoVacio` | Lista o pantalla sin contenido, con una acción sugerida |
+| `EncabezadoPagina` | Título, subtítulo, botón de volver y acciones |
+| `Insignia` | Etiqueta breve con tono (`alto`, `medio`, `bajo`, `marca`, `neutro`, `juri`) |
+| `Paginacion` | Anterior / "Página X de Y" / Siguiente |
+| `DialogoConfirmacion` | `Dialog` de Headless UI con `role="alertdialog"`: retiene el foco, empieza en Cancelar y Escape cancela (salvo mientras procesa) |
+
+Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y todo elemento interactivo muestra el foco con un contorno del color de marca.
 
 ### Ingesta y vista previa
 

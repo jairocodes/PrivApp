@@ -34,7 +34,7 @@ PrivApp es un sistema web que analiza automáticamente políticas de privacidad 
 | Sesiones | JWT + Redis (lista de revocación) |
 | LLM | OpenAI (`gpt-4o-mini`) |
 | Embeddings | Sentence Transformers (`paraphrase-multilingual-mpnet-base-v2`, local) |
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, recharts |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS (modo claro y oscuro), Headless UI, recharts |
 | Pruebas | pytest (backend), Vitest + Testing Library (frontend) |
 | Infraestructura | Docker, Docker Compose |
 
