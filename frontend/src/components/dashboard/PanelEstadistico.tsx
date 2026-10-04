@@ -19,16 +19,16 @@ export default function PanelEstadistico() {
 
   return (
     <section aria-labelledby="titulo-estadisticas" className="card space-y-4">
-      <h2 id="titulo-estadisticas" className="font-semibold text-gray-900">
+      <h2 id="titulo-estadisticas" className="font-semibold text-texto">
         Mis estadísticas
       </h2>
 
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-riesgo-alto">
           {error}
         </p>
       )}
-      {!error && !datos && <p className="text-sm text-gray-500">Cargando estadísticas...</p>}
+      {!error && !datos && <p className="text-sm text-texto-2">Cargando estadísticas...</p>}
 
       {datos && (
         <>
@@ -41,7 +41,7 @@ export default function PanelEstadistico() {
           </div>
 
           {datos.total === 0 ? (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-texto-2">
               Aún no tienes análisis. Cuando analices una política, aquí verás cuántas son de riesgo bajo, medio o alto.
             </p>
           ) : (
@@ -50,7 +50,7 @@ export default function PanelEstadistico() {
             </Suspense>
           )}
 
-          <ul aria-label="Análisis por nivel de riesgo" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+          <ul aria-label="Análisis por nivel de riesgo" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-texto-2">
             <li>
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-bajo mr-1.5" aria-hidden="true" />
               Bajo: {datos.por_nivel.bajo}
@@ -72,9 +72,9 @@ export default function PanelEstadistico() {
 
 function Indicador({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2 text-center">
-      <p className="text-xl font-bold text-gray-900">{valor}</p>
-      <p className="text-xs text-gray-500 leading-tight mt-0.5">{etiqueta}</p>
+    <div className="rounded-lg bg-superficie-2 px-3 py-2 text-center">
+      <p className="text-xl font-bold text-texto">{valor}</p>
+      <p className="text-xs text-texto-2 leading-tight mt-0.5">{etiqueta}</p>
     </div>
   )
 }

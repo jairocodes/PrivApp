@@ -51,6 +51,12 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   idéntico analizado con la misma configuración (`analysis_temp.text_hash`);
   configuración de cada análisis en `resultado.metadatos_analisis`; script
   `medir_consistencia.py`.
+- **Interfaz:** tokens de color con modo claro y oscuro (preferencia guardada; por
+  defecto la del dispositivo) e interruptor sol/luna; fuente Figtree servida desde
+  el propio sitio; barra superior y pestañas inferiores en el celular con la sección
+  actual marcada; enlace para saltar al contenido; componentes comunes (avisos,
+  carga, estado vacío, encabezado, insignias, paginación y campos); diálogo de
+  confirmación con Headless UI (foco retenido); favicon.
 - Migraciones 0005 a 0011.
 
 ### Changed

@@ -1,5 +1,6 @@
 import Button from '@/components/common/Button'
 import type { IngestaResponse } from '@/types/ingesta'
+import Aviso from '@/components/common/Aviso'
 
 interface Props {
   resultado: IngestaResponse
@@ -27,42 +28,40 @@ export default function VistaPreviaTexto({
   return (
     <section aria-labelledby="titulo-vista-previa" className="space-y-4">
       <div>
-        <h3 id="titulo-vista-previa" className="text-lg font-semibold text-gray-800">
+        <h3 id="titulo-vista-previa" className="text-lg font-semibold text-texto">
           Revisa el texto antes de analizarlo
         </h3>
-        <p className="text-sm text-gray-500 mt-1">
+        <p className="text-sm text-texto-2 mt-1">
           Confirma que corresponde a la política que quieres evaluar.
         </p>
       </div>
 
       <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-1">
-          <dt className="text-gray-500">Origen:</dt>
-          <dd className="text-gray-800 break-all">{describirFuente(resultado.fuente)}</dd>
+          <dt className="text-texto-2">Origen:</dt>
+          <dd className="text-texto break-all">{describirFuente(resultado.fuente)}</dd>
         </div>
         <div className="flex gap-1">
-          <dt className="text-gray-500">Caracteres:</dt>
-          <dd className="text-gray-800">{resultado.caracteres.toLocaleString('es-GT')}</dd>
+          <dt className="text-texto-2">Caracteres:</dt>
+          <dd className="text-texto">{resultado.caracteres.toLocaleString('es-GT')}</dd>
         </div>
         <div className="flex gap-1">
-          <dt className="text-gray-500">Palabras:</dt>
-          <dd className="text-gray-800">{resultado.palabras.toLocaleString('es-GT')}</dd>
+          <dt className="text-texto-2">Palabras:</dt>
+          <dd className="text-texto">{resultado.palabras.toLocaleString('es-GT')}</dd>
         </div>
       </dl>
 
       <div
         tabIndex={0}
         aria-label="Texto que se analizará"
-        className="max-h-80 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3
-                   text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+        className="max-h-80 overflow-y-auto rounded-lg border border-borde bg-superficie-2 p-3
+                   text-sm text-texto-2 leading-relaxed whitespace-pre-wrap"
       >
         {resultado.texto_procesado}
       </div>
 
       {error && (
-        <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-          {error}
-        </div>
+        <Aviso tipo="error">{error}</Aviso>
       )}
 
       <div className="flex flex-wrap gap-2">

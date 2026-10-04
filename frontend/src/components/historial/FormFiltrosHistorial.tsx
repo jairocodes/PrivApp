@@ -38,7 +38,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
   return (
     <form onSubmit={aplicar} noValidate role="search" aria-label="Filtros del historial" className="card space-y-3">
       <div>
-        <label htmlFor="filtro-texto" className="text-sm font-medium text-gray-700">
+        <label htmlFor="filtro-texto" className="text-sm font-medium text-texto-2">
           Buscar
         </label>
         <input
@@ -54,7 +54,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label htmlFor="filtro-nivel" className="text-sm font-medium text-gray-700">
+          <label htmlFor="filtro-nivel" className="text-sm font-medium text-texto-2">
             Nivel de riesgo
           </label>
           <select
@@ -72,7 +72,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
           </select>
         </div>
         <div>
-          <label htmlFor="filtro-desde" className="text-sm font-medium text-gray-700">
+          <label htmlFor="filtro-desde" className="text-sm font-medium text-texto-2">
             Desde
           </label>
           <input
@@ -85,7 +85,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
           />
         </div>
         <div>
-          <label htmlFor="filtro-hasta" className="text-sm font-medium text-gray-700">
+          <label htmlFor="filtro-hasta" className="text-sm font-medium text-texto-2">
             Hasta
           </label>
           <input
@@ -100,7 +100,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-riesgo-alto">
           {error}
         </p>
       )}

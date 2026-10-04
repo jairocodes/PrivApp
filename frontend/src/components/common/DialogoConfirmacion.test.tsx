@@ -49,6 +49,23 @@ describe('DialogoConfirmacion', () => {
     expect(onCancelar).toHaveBeenCalled()
   })
 
+  it('el foco no sale del diálogo al recorrerlo con Tab', async () => {
+    renderDialogo()
+    const cancelar = screen.getByRole('button', { name: 'Cancelar' })
+    const eliminar = screen.getByRole('button', { name: 'Eliminar' })
+
+    await userEvent.tab()
+    expect(eliminar).toHaveFocus()
+    await userEvent.tab()
+    expect(cancelar).toHaveFocus()
+  })
+
+  it('mientras procesa, Escape no cierra el diálogo', async () => {
+    const { onCancelar } = renderDialogo({ procesando: true })
+    await userEvent.keyboard('{Escape}')
+    expect(onCancelar).not.toHaveBeenCalled()
+  })
+
   it('bloquea los botones mientras procesa y muestra errores', () => {
     renderDialogo({ procesando: true, error: 'Algo falló.' })
     expect(screen.getByRole('button', { name: 'Procesando...' })).toBeDisabled()

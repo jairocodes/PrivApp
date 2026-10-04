@@ -17,7 +17,7 @@ export default function FiltroHallazgos({ filtro, onCambiar, visibles, total }: 
     <div role="group" aria-label="Filtrar hallazgos" className="card space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label htmlFor="filtro-hallazgos-nivel" className="text-sm font-medium text-gray-700">
+          <label htmlFor="filtro-hallazgos-nivel" className="text-sm font-medium text-texto-2">
             Nivel de riesgo
           </label>
           <select
@@ -35,7 +35,7 @@ export default function FiltroHallazgos({ filtro, onCambiar, visibles, total }: 
           </select>
         </div>
         <div>
-          <label htmlFor="filtro-hallazgos-jurisdiccion" className="text-sm font-medium text-gray-700">
+          <label htmlFor="filtro-hallazgos-jurisdiccion" className="text-sm font-medium text-texto-2">
             Jurisdicción de la cita
           </label>
           <select
@@ -55,14 +55,14 @@ export default function FiltroHallazgos({ filtro, onCambiar, visibles, total }: 
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-gray-500" aria-live="polite">
+        <p className="text-xs text-texto-2" aria-live="polite">
           Mostrando {visibles} de {total} hallazgos
         </p>
         {hayFiltroActivo(filtro) && (
           <button
             type="button"
             onClick={() => onCambiar(SIN_FILTRO)}
-            className="text-xs font-medium text-blue-600 hover:underline"
+            className="text-xs font-medium text-marca-texto hover:underline"
           >
             Limpiar filtros
           </button>

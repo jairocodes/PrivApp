@@ -24,7 +24,7 @@ export default function AyudaGlosario({ termino }: Props) {
         aria-expanded={abierta}
         aria-controls={idPanel}
         aria-label={`Qué significa «${entrada.termino}»`}
-        className="text-gray-400 hover:text-blue-600 transition-colors"
+        className="text-texto-3 hover:text-marca-texto transition-colors"
       >
         <HelpCircle size={14} aria-hidden="true" />
       </button>
@@ -32,13 +32,13 @@ export default function AyudaGlosario({ termino }: Props) {
         <span
           id={idPanel}
           role="note"
-          className="absolute left-0 top-5 z-20 w-64 rounded-lg border border-gray-200 bg-white p-3
-                     text-left text-xs font-normal normal-case text-gray-700 shadow-lg"
+          className="absolute left-0 top-5 z-20 w-64 rounded-lg border border-borde bg-superficie p-3
+                     text-left text-xs font-normal normal-case text-texto-2 shadow-lg"
         >
-          <span className="block font-semibold text-gray-900 mb-1">{entrada.termino}</span>
+          <span className="block font-semibold text-texto mb-1">{entrada.termino}</span>
           <span className="block leading-relaxed">{entrada.definicion}</span>
           {/* Enlace normal (no del router) para que el navegador baje hasta el término. */}
-          <a href={`/glosario#${entrada.id}`} className="mt-2 inline-block text-blue-600 hover:underline">
+          <a href={`/glosario#${entrada.id}`} className="mt-2 inline-block text-marca-texto hover:underline">
             Ver en el glosario
           </a>
         </span>

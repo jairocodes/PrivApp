@@ -1,4 +1,3 @@
-import Navbar from '@/components/common/Navbar'
 import {
   INTRODUCCION,
   SECCIONES_AVISO,
@@ -12,7 +11,7 @@ function EnlaceExterno({ enlace }: { enlace: Enlace }) {
   return (
     <>
       {' '}
-      <a href={enlace.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+      <a href={enlace.url} target="_blank" rel="noopener noreferrer" className="text-marca-texto hover:underline">
         {enlace.texto}
       </a>
       .
@@ -24,7 +23,7 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
   if (bloque.tipo === 'parrafo') {
     return (
       <p>
-        {bloque.etiqueta && <strong className="font-semibold text-gray-900">{bloque.etiqueta} </strong>}
+        {bloque.etiqueta && <strong className="font-semibold text-texto">{bloque.etiqueta} </strong>}
         {bloque.texto}
         {bloque.enlace && <EnlaceExterno enlace={bloque.enlace} />}
       </p>
@@ -36,7 +35,7 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
       <ul className="list-disc pl-5 space-y-2">
         {bloque.elementos.map((elemento, i) => (
           <li key={i}>
-            {elemento.etiqueta && <strong className="font-semibold text-gray-900">{elemento.etiqueta} </strong>}
+            {elemento.etiqueta && <strong className="font-semibold text-texto">{elemento.etiqueta} </strong>}
             {elemento.texto}
             {elemento.enlace && <EnlaceExterno enlace={elemento.enlace} />}
           </li>
@@ -49,9 +48,9 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="border-b border-gray-200">
+          <tr className="border-b border-borde">
             {bloque.encabezados.map((encabezado) => (
-              <th key={encabezado} scope="col" className="py-2 pr-4 font-semibold text-gray-900">
+              <th key={encabezado} scope="col" className="py-2 pr-4 font-semibold text-texto">
                 {encabezado}
               </th>
             ))}
@@ -59,8 +58,8 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
         </thead>
         <tbody>
           {bloque.filas.map(([dato, tiempo]) => (
-            <tr key={dato} className="border-b border-gray-100 align-top">
-              <th scope="row" className="py-2 pr-4 font-normal text-gray-800">
+            <tr key={dato} className="border-b border-borde align-top">
+              <th scope="row" className="py-2 pr-4 font-normal text-texto">
                 {dato}
               </th>
               <td className="py-2">{tiempo}</td>
@@ -74,18 +73,17 @@ function BloqueAviso({ bloque }: { bloque: Bloque }) {
 
 export default function AvisoPrivacidad() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <>
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
-        <h1 className="text-xl font-bold text-gray-900">{TITULO_AVISO}</h1>
-        <p className="text-xs text-gray-500 mt-1 mb-4">Última actualización: {ULTIMA_ACTUALIZACION}</p>
+        <h1 className="text-xl font-bold text-texto">{TITULO_AVISO}</h1>
+        <p className="text-xs text-texto-2 mt-1 mb-4">Última actualización: {ULTIMA_ACTUALIZACION}</p>
 
-        <article className="card text-sm text-gray-700 leading-relaxed space-y-6">
+        <article className="card text-sm text-texto-2 leading-relaxed space-y-6">
           <p>{INTRODUCCION}</p>
           {SECCIONES_AVISO.map((seccion) => (
             <section key={seccion.id} id={seccion.id} aria-labelledby={`titulo-${seccion.id}`} className="space-y-3">
-              <h2 id={`titulo-${seccion.id}`} className="text-base font-semibold text-gray-900">
+              <h2 id={`titulo-${seccion.id}`} className="text-base font-semibold text-texto">
                 {seccion.titulo}
               </h2>
               {seccion.bloques.map((bloque, i) => (
@@ -95,6 +93,6 @@ export default function AvisoPrivacidad() {
           ))}
         </article>
       </main>
-    </div>
+    </>
   )
 }

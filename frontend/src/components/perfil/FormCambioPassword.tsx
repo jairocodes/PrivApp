@@ -4,6 +4,7 @@ import Input from '@/components/common/Input'
 import { useAuth } from '@/hooks/useAuth'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
+import Aviso from '@/components/common/Aviso'
 
 interface Campos {
   actual: string
@@ -76,12 +77,10 @@ export default function FormCambioPassword() {
 
   return (
     <form onSubmit={enviar} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-gray-800">Cambiar contraseña</h2>
+      <h2 className="text-base font-semibold text-texto">Cambiar contraseña</h2>
 
       {errores.general && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          {errores.general}
-        </div>
+        <Aviso tipo="error">{errores.general}</Aviso>
       )}
 
       <Input
@@ -103,7 +102,7 @@ export default function FormCambioPassword() {
           onChange={actualizar('nueva')}
           error={errores.nueva}
         />
-        <p className="text-xs text-gray-400 mt-0.5">Mínimo 8 caracteres, una mayúscula y un número.</p>
+        <p className="text-xs text-texto-3 mt-0.5">Mínimo 8 caracteres, una mayúscula y un número.</p>
       </div>
       <Input
         label="Confirmar nueva contraseña"

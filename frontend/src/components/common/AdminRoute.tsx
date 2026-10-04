@@ -9,7 +9,7 @@ export default function AdminRoute() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Cargando...</p>
+        <p className="text-texto-2">Cargando...</p>
       </div>
     )
   }
