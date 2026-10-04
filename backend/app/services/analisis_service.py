@@ -629,6 +629,23 @@ def _generar_recomendaciones(secciones: list[SeccionAnalizada]) -> list[str]:
 # Orquestador principal
 # ---------------------------------------------------------------------------
 
+# Red de seguridad (RN-18): si casi ninguna sección cumple un criterio de la
+# rúbrica, el texto no trata del uso de datos personales y no se le asigna
+# puntuación; el análisis termina con el motivo "no_es_politica".
+MOTIVO_NO_ES_POLITICA = "no_es_politica"
+_MIN_HALLAZGOS_POLITICA = 3
+_MIN_PROPORCION_SECCIONES_CON_HALLAZGOS = 0.2
+
+
+def _no_parece_politica(secciones: list[SeccionAnalizada]) -> bool:
+    analizadas = [s for s in secciones if s.analizada]
+    if not analizadas:
+        return False
+    total = sum(len(s.hallazgos) for s in analizadas)
+    con_hallazgos = sum(1 for s in analizadas if s.hallazgos)
+    return total < _MIN_HALLAZGOS_POLITICA and con_hallazgos / len(analizadas) < _MIN_PROPORCION_SECCIONES_CON_HALLAZGOS
+
+
 def _crear_adaptador_llm() -> LLMAdapter:
     """Selecciona el adaptador del modelo de lenguaje según LLM_PROVIDER en el .env."""
     if settings.llm_provider == "openai":
@@ -781,6 +798,13 @@ async def ejecutar_analisis_background(analisis_id: int, texto: str) -> None:
             secciones_analizadas = list(await asyncio.gather(
                 *(procesar(idx, seccion) for idx, seccion in enumerate(secciones, 1))
             ))
+
+            if _no_parece_politica(secciones_analizadas):
+                registro.estado = "error"
+                registro.resultado = {"motivo_error": MOTIVO_NO_ES_POLITICA}
+                await db.commit()
+                logger.info("Análisis %s: el texto no parece una política de privacidad.", analisis_id)
+                return
 
             resumen = _calcular_resumen(secciones_analizadas)
             recomendaciones = await _generar_recomendaciones_practicas(llm, secciones_analizadas, analisis_id)
@@ -1008,10 +1032,12 @@ async def obtener_estado_analisis(
     if registro is None:
         raise AnalisisNoEncontradoError()
 
+    motivo = (registro.resultado or {}).get("motivo_error") if registro.estado == "error" else None
     return AnalisisEstadoResponse(
         estado=registro.estado,
         seccion_actual=registro.seccion_actual,
         secciones_total=registro.secciones_total,
+        motivo=motivo,
     )
 
 

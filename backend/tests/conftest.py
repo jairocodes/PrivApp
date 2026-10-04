@@ -98,6 +98,21 @@ def version_corpus_fija(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def detectar_politica_aceptada(monkeypatch):
+    # Las pruebas usan textos de relleno; la detección real (embeddings) se
+    # prueba en test_deteccion_politica.py, que sustituye esta respuesta.
+    from app.services.deteccion_politica import Deteccion
+
+    def _politica(texto):
+        return Deteccion(resultado="politica", temas_encontrados=["datos personales"], temas_total=10,
+                         cobertura=1.0, voz_responsable=5)
+
+    monkeypatch.setattr("app.api.v1.ingesta.detectar_politica", _politica)
+    monkeypatch.setattr("app.api.v1.analisis.detectar_politica", _politica)
+    return _politica
+
+
+@pytest.fixture(autouse=True)
 def reset_rate_limiter():
     # El limiter (slowapi) es un singleton en memoria compartido por toda la
     # sesión de pytest; sin este reset, las pruebas que llaman a endpoints

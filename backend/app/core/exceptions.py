@@ -123,6 +123,28 @@ class TextoDemasiadoCortoError(HTTPException):
         )
 
 
+class TextoNoEsPoliticaError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "El texto no parece una política de privacidad: no explica qué datos personales "
+                "se recopilan, para qué se usan ni con quién se comparten."
+            ),
+        )
+
+
+class ConfirmacionPoliticaRequeridaError(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "No es seguro que el texto sea una política de privacidad. "
+                "Confirma que lo es para analizarlo."
+            ),
+        )
+
+
 class TextoDemasiadoLargoError(HTTPException):
     def __init__(self):
         super().__init__(
