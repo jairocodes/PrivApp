@@ -863,12 +863,14 @@ La clave de API se lee solo de la configuración y nunca se escribe en los regis
 - `LayoutPublico` (`/login`, `/registro`): contenido, interruptor del tema y pie de página.
 - `AppLayout` (todas las demás): enlace "Saltar al contenido", barra superior (`Navbar`), la página, el pie de página y, **con sesión**, las pestañas inferiores del celular (`BarraPestanas`, ocultas desde `md`). Cada página aporta su propio `<main>`.
 - Los destinos principales están definidos una sola vez en `components/layout/secciones.ts`: Inicio, Analizar (también activa en `/resultados/:id`), Historial, Glosario y Perfil. La barra superior muestra Inicio, Analizar e Historial desde `md`; Glosario, Perfil (con el nombre), Administración (solo el administrador), el interruptor del tema y Cerrar sesión van a la derecha. La sección actual lleva `aria-current="page"`.
+- Cualquier ruta que no existe muestra `NoEncontrada` ("Página no encontrada", con enlaces al inicio y al glosario) dentro de `AppLayout`.
+- Inicio de sesión y registro abren con `Bienvenida` (logotipo, título y subtítulo).
 
 ### Tema claro y oscuro
 
 - Los colores son **tokens** (variables CSS en canales RGB) definidos en `src/index.css` para `:root` (claro) y `.dark` (oscuro), y expuestos en `tailwind.config.js` como `fondo`, `superficie`, `superficie-2`, `texto`, `texto-2`, `texto-3`, `borde`, `borde-fuerte`, `marca` (`hover`, `texto`, `suave`, `suave-texto`, `borde`), `riesgo` (`alto`, `medio`, `bajo` y sus `-solido`) y `juri`. Con `rgb(var(--…) / <alpha-value>)` admiten opacidad (`bg-riesgo-alto/10`). **No usar la paleta fija de Tailwind** (`gray-*`, `blue-*`…): cada clase de token funciona en ambos modos sin escribir variantes `dark:`.
 - Todos los pares de texto y fondo cumplen el contraste AA (4.5:1). El nivel de riesgo nunca se comunica solo con color: lleva texto e icono.
-- `TemaProvider` (`context/TemaContext.tsx`) guarda la preferencia en `localStorage` (`privapp-tema`: `claro` u `oscuro`; sin valor, sigue `prefers-color-scheme` del dispositivo y sus cambios) y pone o quita la clase `dark` en `<html>`. Un script en línea de `index.html` aplica el tema antes del primer pintado para evitar un destello claro; usa la misma clave. `BotonTema` (sol/luna, `aria-pressed`) alterna el modo.
+- `TemaProvider` (`context/TemaContext.tsx`) guarda la preferencia en `localStorage` (`privapp-tema`: `claro` u `oscuro`; sin valor, sigue `prefers-color-scheme` del dispositivo y sus cambios) y pone o quita la clase `dark` en `<html>`. Un script en línea de `index.html` aplica el tema antes del primer pintado para evitar un destello claro; usa la misma clave. `BotonTema` (sol/luna, `aria-pressed`) alterna el modo. En Mi perfil, `Apariencia` ofrece Claro, Oscuro o Automático (este último borra la preferencia guardada).
 - La fuente Figtree se sirve desde el propio sitio (`public/fonts/`, licencia en `OFL.txt`) y no desde Google Fonts, para no enviar a un tercero la IP de cada visitante.
 
 ### Componentes comunes (`components/common/`)
@@ -889,7 +891,7 @@ Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y to
 
 ### Ingesta y vista previa
 
-`IngestaForm` tiene tres pestañas (pegar texto, desde URL, desde archivo). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 300,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar). Si la detección considera el texto dudoso, la vista previa muestra los temas encontrados y el botón de analizar se habilita solo al marcar "Confirmo que este texto es una política de privacidad..."; entonces envía `confirma_politica: true`. Si el análisis termina con el motivo `no_es_politica`, la pantalla de resultados lo explica en lugar de mostrar un error genérico.
+`IngestaForm` muestra los pasos del análisis ("Pega o sube", "Revisa el texto", "Resultados"; el actual con `aria-current="step"`) y tres pestañas (pegar texto, desde URL, desde archivo; el archivo se elige en una zona de carga). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 300,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar). Si la detección considera el texto dudoso, la vista previa muestra los temas encontrados y el botón de analizar se habilita solo al marcar "Confirmo que este texto es una política de privacidad..."; entonces envía `confirma_politica: true`. Si el análisis termina con el motivo `no_es_politica`, la pantalla de resultados lo explica en lugar de mostrar un error genérico.
 
 ### Progreso y resultados
 
@@ -908,15 +910,16 @@ Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y to
 
 ### Historial
 
-`FormFiltrosHistorial`: texto, nivel y rango de fechas. Las fechas se eligen como días locales y `limiteDelDia` (`api/analisis.ts`) las convierte en el instante UTC de inicio (00:00:00.000) o de fin (23:59:59.999) de ese día antes de enviarlas. La búsqueda no distingue acentos. Cada análisis puede eliminarse con confirmación.
+Los análisis se muestran como tarjetas agrupadas por día ("Hoy", "Ayer" o la fecha), con un anillo de la puntuación y el nivel con texto. `FormFiltrosHistorial`: texto, nivel y rango de fechas. Las fechas se eligen como días locales y `limiteDelDia` (`api/analisis.ts`) las convierte en el instante UTC de inicio (00:00:00.000) o de fin (23:59:59.999) de ese día antes de enviarlas. La búsqueda no distingue acentos. Cada análisis puede eliminarse con confirmación.
 
 ### Panel estadístico
 
-`PanelEstadistico` (en `/dashboard`) consulta `GET /api/analisis/estadisticas` y muestra el total de análisis, la puntuación de riesgo promedio y la distribución por nivel. El gráfico (`GraficoDistribucion`, con **recharts**) se carga de forma diferida con `React.lazy` + `Suspense` y solo cuando hay análisis que graficar, de modo que recharts queda en un archivo aparte y no se descarga en el resto de las pantallas.
+El inicio (`/dashboard`) da la bienvenida y ofrece accesos a Analizar política, Mis análisis y Glosario. `PanelEstadistico` consulta `GET /api/analisis/estadisticas` y muestra el total de análisis, la puntuación de riesgo promedio y la distribución por nivel. El gráfico (`GraficoDistribucion`, con **recharts**) se carga de forma diferida con `React.lazy` + `Suspense` y solo cuando hay análisis que graficar, de modo que recharts queda en un archivo aparte y no se descarga en el resto de las pantallas.
 
 ### Glosario y aviso de privacidad
 
-- Contenido del glosario (22 términos aprobados): `frontend/src/data/glosario.ts`.
+- Contenido del glosario (22 términos aprobados): `frontend/src/data/glosario.ts`. La página los muestra como tarjetas en columnas (una, dos o tres según el ancho) con buscador; cada tarjeta conserva el `id` del término para los enlaces `/glosario#termino`.
+- El aviso de privacidad tiene un índice de sus apartados al inicio.
 - Contenido del aviso de privacidad: `frontend/src/data/avisoPrivacidad.ts`. La función `datosPendientes()` lista los marcadores entre corchetes (`[...]`) que aún faltan por completar. Si cambia el funcionamiento del sistema (datos tratados, proveedores, plazos), hay que revisar el aviso.
 
 ### Autenticación en el cliente
