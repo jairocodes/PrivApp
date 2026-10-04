@@ -296,6 +296,20 @@ Requiere una cuenta promovida a administrador (Paso 4).
 4. Hacer clic en **Desactivar** en un documento y confirmar. Resultado esperado: sus
    fragmentos dejan de usarse en los análisis nuevos; los análisis ya realizados no cambian.
 
+### CP-16: Texto que no es una política de privacidad
+
+1. En **Analizar**, pegar un texto de más de 40 palabras que no sea una política (por ejemplo,
+   una receta o un fragmento de un cuento) y enviarlo.
+2. **Resultado esperado:** el sistema lo rechaza con el mensaje "El texto no parece una política
+   de privacidad..." y no inicia ningún análisis.
+3. Pegar un artículo que hable sobre la privacidad sin ser una política (por ejemplo, el de
+   Wikipedia "Privacidad").
+4. **Resultado esperado:** la vista previa avisa que no parece una política típica, muestra los
+   temas encontrados y el botón **Confirmar y analizar** queda deshabilitado hasta marcar la
+   confirmación.
+5. Pegar una política real (por ejemplo, la de Spotify).
+6. **Resultado esperado:** pasa a la vista previa sin aviso ni confirmación adicional.
+
 ### CP-15: Visualización en teléfono
 
 1. Abrir las herramientas de desarrollador del navegador (F12).

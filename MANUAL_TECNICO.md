@@ -419,7 +419,21 @@ SlowAPI, por dirección IP, con contador en memoria del proceso. Al superarlos l
 | `POST` | `/url` | Descarga la página y extrae el texto (`{url}`) |
 | `POST` | `/archivo` | Formulario multipart con el campo `archivo` (PDF o TXT) |
 
-Las tres rutas devuelven `IngestaResponse` (`texto_procesado`, `caracteres`, `palabras`, `fuente`) y **no inician el análisis**: el cliente muestra una vista previa obligatoria y solo al confirmarla llama a `/api/analisis/iniciar`.
+Las tres rutas devuelven `IngestaResponse` (`texto_procesado`, `caracteres`, `palabras`, `fuente`, `deteccion`) y **no inician el análisis**: el cliente muestra una vista previa obligatoria y solo al confirmarla llama a `/api/analisis/iniciar`.
+
+**¿Es una política de privacidad? (RN-18, `services/deteccion_politica.py`)** — tras la regla de longitud, cada vía de ingesta y de nuevo `/api/analisis/iniciar` evalúan si el texto es una política de privacidad o un documento que explica el tratamiento de datos personales. Son tres señales deterministas, sin llamar al modelo de lenguaje:
+
+| Señal | Qué mide |
+|---|---|
+| Temas | Cuántos de 10 temas típicos aparecen (datos personales, privacidad, finalidad, terceros, conservación, derechos, cookies, seguridad, contacto del responsable, cambios), en español o inglés, sin distinguir tildes |
+| Cobertura | Fracción de fragmentos de 80 palabras (hasta 40, repartidos por el texto) cuya semejanza con 12 cláusulas típicas, según el modelo de embeddings del corpus, es ≥ 0.45 |
+| Voz del responsable | Expresiones con las que el responsable describe sus prácticas: "recopilamos", "compartimos", "nuestros servicios", "we collect"... o en tercera persona ("la empresa utilizará") |
+
+Decisión: **`politica`** si hay ≥ 5 temas, cobertura ≥ 0.30 y ≥ 3 expresiones de voz; **`no_politica`** si hay ≤ 2 temas y cobertura < 0.25 (422 "El texto no parece una política de privacidad..."); **`dudosa`** en los demás casos. Un texto dudoso pasa a la vista previa con un aviso, y `/api/analisis/iniciar` exige `confirma_politica: true` (si no, 422). Sin voz del responsable un texto nunca pasa solo, pero tampoco se rechaza por eso: hay políticas redactadas de forma impersonal. El resultado de los últimos 16 textos se recuerda para no recalcular los embeddings entre la ingesta y el inicio.
+
+Umbrales calibrados con `scripts/evaluar_deteccion.py` sobre 22 textos (03/10/2026): 7 de 7 políticas reales y 5 de 5 documentos parecidos (términos de servicio, política de cookies, una política impersonal, un artículo sobre protección de datos) pasan o quedan dudosos; de 10 textos que no son políticas (artículos de Wikipedia, una receta, una tarea, un cuento), 9 se rechazan y 1 (un artículo enciclopédico sobre privacidad) queda dudoso. **Ninguno pasa sin confirmación.**
+
+**Red de seguridad después del análisis** — si casi ninguna sección cumple un criterio de la rúbrica (menos de 3 hallazgos y menos del 20 % de las secciones analizadas con hallazgos), el análisis termina con `estado = error` y `resultado = {"motivo_error": "no_es_politica"}`: no recibe puntuación, no aparece en el historial ni en las estadísticas, y `GET /{id}/estado` devuelve `motivo: "no_es_politica"` para que el cliente lo explique.
 
 **Regla única de longitud (RN-01, `utils/validacion_texto.py`)** — se aplica siempre sobre el texto ya limpio, en las tres vías y de nuevo en `/api/analisis/iniciar`:
 - Mínimo **200 caracteres y 40 palabras**; máximo **200,000 caracteres**.
@@ -447,8 +461,8 @@ Solo se descargan sitios web públicos (`validar_url_publica`), para que el serv
 
 | Método | Endpoint | Descripción |
 |---|---|---|
-| `POST` | `/iniciar` | Crea el análisis y lo procesa en segundo plano → 202 `{id_analisis, estado: "procesando"}` |
-| `GET` | `/{id}/estado` | Progreso: `estado` (`procesando`/`completado`/`error`), `seccion_actual`, `secciones_total` |
+| `POST` | `/iniciar` | `{texto, confirma_politica}`: crea el análisis y lo procesa en segundo plano → 202 `{id_analisis, estado: "procesando"}` |
+| `GET` | `/{id}/estado` | Progreso: `estado` (`procesando`/`completado`/`error`), `seccion_actual`, `secciones_total` y `motivo` (`no_es_politica` o `null`) |
 | `GET` | `/{id}` | Resultado completo (solo si está `completado`; si está en curso o terminó con error, 409) |
 | `GET` | `` (raíz) | Historial paginado con filtros |
 | `GET` | `/estadisticas` | Totales del usuario para el panel |
@@ -546,6 +560,8 @@ El listado de usuarios expone solo datos de la cuenta (`id`, `nombre`, `email`, 
 | `CuentaConAnalisisEnCursoError` | 409 | Eliminar la cuenta con un análisis en curso |
 | `TextoDemasiadoCortoError` | 422 | < 200 caracteres o < 40 palabras |
 | `TextoDemasiadoLargoError` | 422 | > 200,000 caracteres |
+| `TextoNoEsPoliticaError` | 422 | El texto claramente no es una política de privacidad (RN-18) |
+| `ConfirmacionPoliticaRequeridaError` | 422 | Texto dudoso sin `confirma_politica: true` |
 | `ExtraccionURLError` | 422 | URL que no es de un sitio web público, no accesible, con demasiadas redirecciones, no HTML o sin texto |
 | `ArchivoNoPermitidoError` | 415 | Archivo que no es PDF o TXT |
 | `ArchivoDemasiadoGrandeError` | 413 | Archivo > 5 MB |
@@ -873,7 +889,7 @@ Los botones, enlaces de navegación y campos tienen al menos 44 px de alto, y to
 
 ### Ingesta y vista previa
 
-`IngestaForm` tiene tres pestañas (pegar texto, desde URL, desde archivo). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 200,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar).
+`IngestaForm` tiene tres pestañas (pegar texto, desde URL, desde archivo). Aplica en el cliente la misma regla RN-01 (`utils/validators.ts`: 200 caracteres, 40 palabras, máx. 200,000) y la validación de archivo (.pdf/.txt, ≤ 5 MB, no vacío), pero la regla definitiva la aplica el servidor. Tras la ingesta se muestra `VistaPreviaTexto` con el texto extraído, caracteres y palabras; el análisis **solo se inicia al confirmar** la vista previa (también se puede corregir o cancelar). Si la detección considera el texto dudoso, la vista previa muestra los temas encontrados y el botón de analizar se habilita solo al marcar "Confirmo que este texto es una política de privacidad..."; entonces envía `confirma_politica: true`. Si el análisis termina con el motivo `no_es_politica`, la pantalla de resultados lo explica en lugar de mostrar un error genérico.
 
 ### Progreso y resultados
 
@@ -1134,6 +1150,12 @@ docker compose exec -e PRIVAPP_CORREO -e PRIVAPP_PASSWORD backend \
     python scripts/medir_consistencia.py --archivo /tmp/politica.txt --repeticiones 5 --sin-reutilizacion --salida /tmp/medicion.json
 ```
 Analiza varias veces el mismo texto mediante la API (respetando el límite de 5 análisis por minuto) y compara puntuación (promedio, desviación y rango), nivel general, hallazgos que cuentan por nivel, secciones con los mismos niveles en todas las ejecuciones y similitud de las recomendaciones. Con `--sin-reutilizacion` elimina cada análisis al terminar para que el siguiente se calcule de nuevo y así medir al modelo; sin esa opción, a partir de la segunda ejecución se reutiliza el resultado. Cada ejecución consume llamadas reales a OpenAI. `--repeticiones 0` solo descarga y guarda el texto.
+
+**Detección de políticas — `evaluar_deteccion.py`**
+```bash
+docker compose exec backend python scripts/evaluar_deteccion.py /tmp/conjunto
+```
+Evalúa la detección de políticas de privacidad (RN-18) con una carpeta de textos `.txt` cuyo nombre empieza por la etiqueta esperada: `politica_*` (deben pasar), `parecido_*` (términos de servicio, avisos de cookies: no deben rechazarse) y `no_politica_*` (deben rechazarse). Muestra por archivo los temas, la cobertura semántica, la voz del responsable y la decisión, y los aciertos por grupo. Sirve para recalibrar los umbrales de `services/deteccion_politica.py` si se cambian los temas o los prototipos.
 
 ### Comandos útiles
 

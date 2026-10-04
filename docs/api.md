@@ -301,11 +301,22 @@ Las redirecciones se siguen una a una (máximo 5) y cada destino se valida con l
   "texto_procesado": "Texto normalizado listo para análisis...",
   "caracteres": 8230,
   "palabras": 1250,
-  "fuente": "texto_directo"
+  "fuente": "texto_directo",
+  "deteccion": {
+    "resultado": "politica",
+    "temas_encontrados": ["datos personales", "privacidad", "finalidad", "terceros", "derechos"],
+    "temas_total": 10,
+    "cobertura": 0.92,
+    "voz_responsable": 48
+  }
 }
 ```
 
 `fuente` vale `"texto_directo"`, la URL indicada o el nombre del archivo, según la vía.
+
+`deteccion` indica si el texto parece una política de privacidad (RN-18): `politica`, o
+`dudosa` si no es seguro (el cliente debe pedir confirmación antes de analizarlo). Un texto
+que claramente no lo es se rechaza con 422 y no llega a esta respuesta.
 
 **Errores:**
 
@@ -315,6 +326,7 @@ Las redirecciones se siguen una a una (máximo 5) y cada destino se valida con l
 | 415 | archivo | "Solo se aceptan archivos PDF (.pdf) o de texto plano (.txt)." |
 | 422 | todas | "El texto debe tener al menos 200 caracteres y 40 palabras." |
 | 422 | todas | "El texto no puede exceder los 200,000 caracteres." |
+| 422 | todas | "El texto no parece una política de privacidad: no explica qué datos personales se recopilan, para qué se usan ni con quién se comparten." |
 | 422 | archivo | "No se encontró texto en el PDF. Si es un documento escaneado, el sistema no puede leerlo: copia el texto de la política y pégalo directamente." |
 | 422 | url | "La dirección debe comenzar con http:// o https://." |
 | 422 | url | "La dirección indicada no es un sitio web público." (puerto no estándar, credenciales en la URL o IP no pública) |
@@ -356,9 +368,13 @@ arrancar, el servidor marca como `error` todos los que quedaron en `procesando`.
 **Body:**
 ```json
 {
-  "texto": "Texto limpio de la política (el texto_procesado de la ingesta)..."
+  "texto": "Texto limpio de la política (el texto_procesado de la ingesta)...",
+  "confirma_politica": false
 }
 ```
+
+`confirma_politica` (opcional, `false` por defecto) es obligatorio en `true` cuando el texto es
+dudoso: la persona confirmó en la vista previa que es una política de privacidad.
 
 Se aplica la misma regla de longitud que en la ingesta (200 caracteres y 40 palabras como mínimo,
 200,000 caracteres como máximo). El análisis usa el texto completo; en la base solo se conservan los
@@ -378,7 +394,9 @@ luego pedir `GET /api/analisis/{id}`.
 > El procesamiento tarda de unos segundos a un par de minutos según el número de secciones y la
 > latencia del modelo de lenguaje (OpenAI).
 
-**Errores:** 422 por la regla de longitud (mismos mensajes que la ingesta); 429 por límite de
+**Errores:** 422 por la regla de longitud o porque el texto no parece una política (mismos
+mensajes que la ingesta); 422 "No es seguro que el texto sea una política de privacidad. Confirma
+que lo es para analizarlo." si es dudoso y no se envió `confirma_politica: true`; 429 por límite de
 solicitudes.
 
 #### `GET /api/analisis/{id}/estado` — HTTP 200
@@ -387,11 +405,14 @@ solicitudes.
 {
   "estado": "procesando",
   "seccion_actual": 3,
-  "secciones_total": 14
+  "secciones_total": 14,
+  "motivo": null
 }
 ```
 
 - `estado`: `procesando`, `completado` o `error`.
+- `motivo`: `"no_es_politica"` si el análisis terminó con error porque casi ninguna sección
+  trata del uso de datos personales (el texto no recibe puntuación); `null` en los demás casos.
 - `seccion_actual`: secciones ya analizadas.
 - `secciones_total`: total de secciones; `null` mientras aún no se ha dividido el texto.
 

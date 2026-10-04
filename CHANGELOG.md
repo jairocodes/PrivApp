@@ -57,6 +57,13 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   actual marcada; enlace para saltar al contenido; componentes comunes (avisos,
   carga, estado vacío, encabezado, insignias, paginación y campos); diálogo de
   confirmación con Headless UI (foco retenido); favicon.
+- **Validación del contenido (RN-18):** cada vía de ingesta y el inicio del análisis
+  detectan si el texto es una política de privacidad con vocabulario por temas,
+  semejanza semántica (embeddings del corpus) y la voz del responsable; los textos que
+  claramente no lo son se rechazan, y los dudosos exigen confirmación en la vista
+  previa. Un análisis en el que casi ninguna sección trata de datos personales termina
+  sin puntuación (`motivo: no_es_politica`). Script `evaluar_deteccion.py`. El modelo de
+  embeddings se carga desde la caché local sin consultar en línea.
 - Migraciones 0005 a 0011.
 
 ### Changed
