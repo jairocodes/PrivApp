@@ -95,7 +95,9 @@ export default function IngestaForm() {
     setIniciando(true)
     setErrorInicio(null)
     try {
-      const { data: iniciado } = await analisisApi.iniciar(vistaPrevia.texto_procesado)
+      // Con un texto dudoso, el botón solo se habilita tras marcar la confirmación (RN-18).
+      const confirmaPolitica = vistaPrevia.deteccion?.resultado === 'dudosa'
+      const { data: iniciado } = await analisisApi.iniciar(vistaPrevia.texto_procesado, confirmaPolitica)
       navigate(`/resultados/${iniciado.id_analisis}`)
     } catch (err: unknown) {
       setErrorInicio(mensajeDeError(err))

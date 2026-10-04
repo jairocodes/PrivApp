@@ -68,6 +68,8 @@ export interface AnalisisEstado {
   estado: EstadoAnalisis
   seccion_actual: number
   secciones_total: number | null
+  /** Por qué terminó con error, si se sabe (RN-18). */
+  motivo?: 'no_es_politica' | null
 }
 
 /** Filtros del historial tal como los ingresa la persona (fechas AAAA-MM-DD locales). */
