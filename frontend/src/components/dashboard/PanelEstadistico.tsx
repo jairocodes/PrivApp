@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { analisisApi } from '@/api/analisis'
+import Aviso from '@/components/common/Aviso'
 import type { EstadisticasPersonales } from '@/types/analisis'
 
 // recharts se descarga aparte y solo cuando hay datos que graficar, para no
@@ -19,15 +20,11 @@ export default function PanelEstadistico() {
 
   return (
     <section aria-labelledby="titulo-estadisticas" className="card space-y-4">
-      <h2 id="titulo-estadisticas" className="font-semibold text-texto">
+      <h2 id="titulo-estadisticas" className="text-lg font-bold text-texto">
         Mis estadísticas
       </h2>
 
-      {error && (
-        <p role="alert" className="text-sm text-riesgo-alto">
-          {error}
-        </p>
-      )}
+      {error && <Aviso tipo="error">{error}</Aviso>}
       {!error && !datos && <p className="text-sm text-texto-2">Cargando estadísticas...</p>}
 
       {datos && (
@@ -52,15 +49,15 @@ export default function PanelEstadistico() {
 
           <ul aria-label="Análisis por nivel de riesgo" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-texto-2">
             <li>
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-bajo mr-1.5" aria-hidden="true" />
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-bajo-solido mr-1.5" aria-hidden="true" />
               Bajo: {datos.por_nivel.bajo}
             </li>
             <li>
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-medio mr-1.5" aria-hidden="true" />
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-medio-solido mr-1.5" aria-hidden="true" />
               Medio: {datos.por_nivel.medio}
             </li>
             <li>
-              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-alto mr-1.5" aria-hidden="true" />
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-riesgo-alto-solido mr-1.5" aria-hidden="true" />
               Alto: {datos.por_nivel.alto}
             </li>
           </ul>
@@ -72,9 +69,9 @@ export default function PanelEstadistico() {
 
 function Indicador({ etiqueta, valor }: { etiqueta: string; valor: string }) {
   return (
-    <div className="rounded-lg bg-superficie-2 px-3 py-2 text-center">
-      <p className="text-xl font-bold text-texto">{valor}</p>
-      <p className="text-xs text-texto-2 leading-tight mt-0.5">{etiqueta}</p>
+    <div className="rounded-2xl bg-superficie-2 px-3 py-3 text-center">
+      <p className="text-2xl font-extrabold text-texto">{valor}</p>
+      <p className="mt-0.5 text-sm leading-tight text-texto-2">{etiqueta}</p>
     </div>
   )
 }

@@ -1,8 +1,13 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { DistribucionNiveles } from '@/types/analisis'
 
-// Mismos colores que la paleta riesgo.* de tailwind.config.js.
-const COLOR_NIVEL = { bajo: '#22c55e', medio: '#f59e0b', alto: '#ef4444' } as const
+// Colores del tema (modo claro y oscuro): recharts escribe el color como
+// atributo del SVG, y una clase de CSS tiene prioridad sobre él.
+const CLASE_NIVEL = {
+  bajo: 'fill-riesgo-bajo-solido',
+  medio: 'fill-riesgo-medio-solido',
+  alto: 'fill-riesgo-alto-solido',
+} as const
 
 interface Props {
   distribucion: DistribucionNiveles
@@ -17,15 +22,25 @@ export default function GraficoDistribucion({ distribucion }: Props) {
   const resumen = datos.map((d) => `${d.cantidad} de riesgo ${d.nivel}`).join(', ')
 
   return (
-    <div role="img" aria-label={`Distribución por nivel de riesgo: ${resumen}`} className="h-44 w-full">
+    // Los ejes toman el color del texto (currentColor).
+    <div role="img" aria-label={`Distribución por nivel de riesgo: ${resumen}`} className="h-44 w-full text-texto-2">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={datos} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-          <XAxis dataKey="etiqueta" tickLine={false} axisLine={false} fontSize={12} />
-          <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} />
-          <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} formatter={(valor) => [valor, 'Análisis']} />
+          <XAxis dataKey="etiqueta" tickLine={false} axisLine={false} fontSize={12} tick={{ fill: 'currentColor' }} />
+          <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={12} tick={{ fill: 'currentColor' }} />
+          <Tooltip
+            cursor={{ fill: 'currentColor', opacity: 0.08 }}
+            contentStyle={{
+              backgroundColor: 'rgb(var(--superficie))',
+              borderColor: 'rgb(var(--borde))',
+              borderRadius: 12,
+              color: 'rgb(var(--texto))',
+            }}
+            formatter={(valor) => [valor, 'Análisis']}
+          />
           <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
             {datos.map((d) => (
-              <Cell key={d.nivel} fill={COLOR_NIVEL[d.nivel]} />
+              <Cell key={d.nivel} className={CLASE_NIVEL[d.nivel]} />
             ))}
           </Bar>
         </BarChart>
