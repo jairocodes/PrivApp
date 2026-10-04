@@ -146,10 +146,17 @@ class ConfirmacionPoliticaRequeridaError(HTTPException):
 
 
 class TextoDemasiadoLargoError(HTTPException):
-    def __init__(self):
+    def __init__(self, caracteres: int | None = None):
+        from app.utils.validacion_texto import MAX_CARACTERES
+
+        medida = f"Esta política tiene {caracteres:,} caracteres y el máximo es" if caracteres else "El máximo es"
         super().__init__(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="El texto no puede exceder los 200,000 caracteres.",
+            detail=(
+                f"{medida} {MAX_CARACTERES:,}. Las políticas muy extensas suelen tener una sección "
+                "por cada producto o servicio: copia solo la parte general o la del servicio que usas "
+                "y pégala en «Pegar texto»."
+            ),
         )
 
 
