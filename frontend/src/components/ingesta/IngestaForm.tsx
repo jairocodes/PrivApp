@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FileUp, Lightbulb } from 'lucide-react'
 import { analisisApi } from '@/api/analisis'
 import { ingestaApi } from '@/api/ingesta'
+import Aviso from '@/components/common/Aviso'
 import Button from '@/components/common/Button'
 import VistaPreviaTexto from '@/components/ingesta/VistaPreviaTexto'
 import type { IngestaResponse } from '@/types/ingesta'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { MAX_TEXTO, MIN_TEXTO, validarArchivo, validarTextoPolítica } from '@/utils/validators'
-import Aviso from '@/components/common/Aviso'
 
 type Pestana = 'texto' | 'url' | 'archivo'
 
@@ -16,6 +17,8 @@ const ETIQUETA_PESTANA: Record<Pestana, string> = {
   url: 'Desde URL',
   archivo: 'Desde archivo',
 }
+
+const PASOS = ['Pega o sube', 'Revisa el texto', 'Resultados']
 
 const MIN_CHARS = MIN_TEXTO
 const MAX_CHARS = MAX_TEXTO
@@ -26,6 +29,25 @@ function mensajeDeError(err: unknown): string {
   const detalle = (err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
   if (esLimiteDeSolicitudes(err)) return MENSAJE_LIMITE_SOLICITUDES
   return typeof detalle === 'string' ? detalle : 'Ocurrió un error. Intenta de nuevo.'
+}
+
+/** Pasos del análisis: el actual se marca con color y aria-current. */
+function Pasos({ actual }: { actual: number }) {
+  return (
+    <ol aria-label="Pasos del análisis" className="mb-4 grid grid-cols-3 gap-2">
+      {PASOS.map((paso, i) => {
+        const hecho = i <= actual
+        return (
+          <li key={paso} aria-current={i === actual ? 'step' : undefined} className="flex flex-col gap-1.5">
+            <span className={`h-1.5 rounded-full ${hecho ? 'bg-marca' : 'bg-borde-fuerte'}`} />
+            <span className={`text-xs ${hecho ? 'font-bold text-marca-texto' : 'font-semibold text-texto-2'}`}>
+              {i + 1} · {paso}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 export default function IngestaForm() {
@@ -43,12 +65,7 @@ export default function IngestaForm() {
   const [errorInicio, setErrorInicio] = useState<string | null>(null)
 
   const chars = texto.length
-  const charColor =
-    chars > 0 && chars < MIN_CHARS
-      ? 'text-riesgo-alto'
-      : chars > MAX_CHARS
-      ? 'text-riesgo-alto'
-      : 'text-texto-2'
+  const charColor = (chars > 0 && chars < MIN_CHARS) || chars > MAX_CHARS ? 'text-riesgo-alto' : 'text-texto-2'
 
   // Paso 1: obtener y normalizar el texto; el análisis aún no se inicia.
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,126 +137,139 @@ export default function IngestaForm() {
 
   if (vistaPrevia) {
     return (
-      <div className="card max-w-2xl mx-auto">
-        <VistaPreviaTexto
-          resultado={vistaPrevia}
-          iniciando={iniciando}
-          error={errorInicio}
-          onConfirmar={confirmar}
-          onCorregir={corregir}
-          onCancelar={cancelar}
-        />
-      </div>
+      <>
+        <Pasos actual={1} />
+        <div className="card">
+          <VistaPreviaTexto
+            resultado={vistaPrevia}
+            iniciando={iniciando}
+            error={errorInicio}
+            onConfirmar={confirmar}
+            onCorregir={corregir}
+            onCancelar={cancelar}
+          />
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="card max-w-2xl mx-auto">
-      <h2 className="text-xl font-bold text-texto mb-4">
-        Analizar política de privacidad
-      </h2>
-
-      {/* Pestañas */}
-      <div className="flex border-b border-borde mb-6" role="tablist">
-        {(['texto', 'url', 'archivo'] as Pestana[]).map((tab) => (
-          <button
-            key={tab}
-            role="tab"
-            aria-selected={pestana === tab}
-            onClick={() => { setPestana(tab); setError(null) }}
-            className={`px-5 py-2 text-sm font-medium capitalize transition-colors
-              ${pestana === tab
-                ? 'border-b-2 border-marca text-marca-texto'
-                : 'text-texto-2 hover:text-texto-2'
+    <>
+      <Pasos actual={0} />
+      <div className="card space-y-5 p-4 sm:p-6">
+        <div
+          role="tablist"
+          aria-label="Cómo quieres ingresar la política"
+          className="grid grid-cols-3 gap-1 rounded-2xl bg-superficie-2 p-1"
+        >
+          {(['texto', 'url', 'archivo'] as Pestana[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={pestana === tab}
+              onClick={() => { setPestana(tab); setError(null) }}
+              className={`min-h-[44px] rounded-xl px-2 text-sm font-bold transition-colors ${
+                pestana === tab ? 'bg-superficie text-texto shadow-sm dark:bg-borde' : 'text-texto-2 hover:text-texto'
               }`}
+            >
+              {ETIQUETA_PESTANA[tab]}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {pestana === 'texto' ? (
+            <div className="space-y-1.5">
+              <label htmlFor="texto-politica" className="text-sm font-semibold text-texto">
+                Texto de la política
+              </label>
+              <textarea
+                id="texto-politica"
+                value={texto}
+                onChange={(e) => { setTexto(e.target.value); if (error) setError(null) }}
+                rows={10}
+                placeholder="Pega aquí el texto completo de la política de privacidad..."
+                className="input-field min-h-[220px] resize-y leading-relaxed"
+                disabled={loading}
+              />
+              <p className={`text-right text-sm ${charColor}`}>
+                {chars.toLocaleString()} / {MAX_CHARS.toLocaleString()} caracteres
+                {chars > 0 && chars < MIN_CHARS && <span className="ml-2">(mínimo {MIN_CHARS})</span>}
+              </p>
+            </div>
+          ) : pestana === 'archivo' ? (
+            <div className="space-y-1.5">
+              <label
+                htmlFor="archivo-politica"
+                className="flex cursor-pointer flex-col items-center gap-2.5 rounded-2xl border-2 border-dashed border-marca-borde bg-marca-suave/40 px-4 py-8 text-center focus-within:ring-2 focus-within:ring-marca"
+              >
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-marca-suave text-marca-texto">
+                  <FileUp size={24} aria-hidden="true" />
+                </span>
+                <span className="text-base font-bold text-texto">Archivo de la política (PDF o TXT, máximo 5 MB)</span>
+                <span className="text-sm text-texto-2">
+                  {archivo
+                    ? `${archivo.name} · ${(archivo.size / 1024).toFixed(0)} KB`
+                    : 'Toca para elegirlo. Solo guardamos el texto, no el archivo.'}
+                </span>
+                <input
+                  key={claveArchivo}
+                  id="archivo-politica"
+                  type="file"
+                  accept=".pdf,.txt,application/pdf,text/plain"
+                  onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); if (error) setError(null) }}
+                  className="sr-only"
+                  disabled={loading}
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="url-politica" className="text-sm font-semibold text-texto">
+                Enlace de la política de privacidad
+              </label>
+              <input
+                id="url-politica"
+                type="url"
+                inputMode="url"
+                value={url}
+                onChange={(e) => { setUrl(e.target.value); if (error) setError(null) }}
+                placeholder="https://ejemplo.com/politica-de-privacidad"
+                className="input-field"
+                disabled={loading}
+              />
+              <p className="text-sm text-texto-2">
+                Busca «Política de privacidad» al pie de la página de la app o del sitio y copia ese enlace.
+              </p>
+            </div>
+          )}
+
+          {error && <Aviso tipo="error">{error}</Aviso>}
+          {loading && <Aviso tipo="info">Procesando texto...</Aviso>}
+
+          <Button
+            type="submit"
+            isLoading={loading}
+            disabled={pestana === 'texto' && (chars < MIN_CHARS || chars > MAX_CHARS)}
+            className="w-full"
           >
-            {ETIQUETA_PESTANA[tab]}
-          </button>
-        ))}
+            Revisar texto
+          </Button>
+        </form>
       </div>
 
-      <form onSubmit={handleSubmit} noValidate>
-        {pestana === 'texto' ? (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-texto-2 mb-1">
-              Pega el contenido de la política de privacidad
-            </label>
-            <textarea
-              value={texto}
-              onChange={(e) => { setTexto(e.target.value); if (error) setError(null) }}
-              rows={12}
-              placeholder="Pega aquí el texto completo de la política de privacidad..."
-              className="w-full border border-borde-fuerte rounded-lg p-3 text-sm
-                         focus:ring-2 focus:ring-marca focus:border-transparent resize-y"
-              disabled={loading}
-            />
-            <p className={`text-xs mt-1 text-right ${charColor}`}>
-              {chars.toLocaleString()} / {MAX_CHARS.toLocaleString()} caracteres
-              {chars > 0 && chars < MIN_CHARS && (
-                <span className="ml-2">(mínimo {MIN_CHARS})</span>
-              )}
-            </p>
-          </div>
-        ) : pestana === 'archivo' ? (
-          <div className="mb-4">
-            <label htmlFor="archivo-politica" className="block text-sm font-medium text-texto-2 mb-1">
-              Archivo de la política (PDF o TXT, máximo 5 MB)
-            </label>
-            <input
-              key={claveArchivo}
-              id="archivo-politica"
-              type="file"
-              accept=".pdf,.txt,application/pdf,text/plain"
-              onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); if (error) setError(null) }}
-              className="w-full text-sm text-texto-2 file:mr-3 file:rounded-lg file:border-0
-                         file:bg-marca-suave file:px-4 file:py-2 file:text-marca-texto hover:file:bg-marca-suave"
-              disabled={loading}
-            />
-            <p className="text-xs text-texto-2 mt-1">
-              {archivo
-                ? `${archivo.name} · ${(archivo.size / 1024).toFixed(0)} KB`
-                : 'El sistema extraerá el texto y descartará el archivo; no se guarda.'}
-            </p>
-          </div>
-        ) : (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-texto-2 mb-1">
-              URL de la política de privacidad
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => { setUrl(e.target.value); if (error) setError(null) }}
-              placeholder="https://ejemplo.com/politica-de-privacidad"
-              className="w-full border border-borde-fuerte rounded-lg p-3 text-sm
-                         focus:ring-2 focus:ring-marca focus:border-transparent"
-              disabled={loading}
-            />
-            <p className="text-xs text-texto-2 mt-1">
-              El sistema descargará y extraerá automáticamente el texto.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <Aviso tipo="error" className="mb-4">{error}</Aviso>
-        )}
-
-        {loading && (
-          <div className="mb-4 p-3 bg-marca-suave border border-marca-borde rounded-lg">
-            <p className="text-sm text-marca-texto">Procesando texto...</p>
-          </div>
-        )}
-
-        <Button
-          type="submit"
-          isLoading={loading}
-          disabled={pestana === 'texto' && (chars < MIN_CHARS || chars > MAX_CHARS)}
-          className="w-full"
-        >
-          Revisar texto
-        </Button>
-      </form>
-    </div>
+      <aside aria-label="Consejo" className="mt-4 flex items-start gap-3 rounded-2xl bg-riesgo-bajo/10 p-4">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-superficie text-riesgo-bajo">
+          <Lightbulb size={20} aria-hidden="true" />
+        </span>
+        <div>
+          <p className="font-bold text-riesgo-bajo">¡Buena decisión!</p>
+          <p className="text-sm leading-relaxed text-texto">
+            Leer qué datos pide una app antes de aceptar es la mejor forma de cuidar tu privacidad.
+          </p>
+        </div>
+      </aside>
+    </>
   )
 }

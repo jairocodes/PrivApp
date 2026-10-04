@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,6 +58,19 @@ describe('IngestaForm', () => {
     vi.mocked(analisisApi.iniciar).mockResolvedValue({
       data: { id_analisis: '5', estado: 'procesando' },
     } as Awaited<ReturnType<typeof analisisApi.iniciar>>)
+  })
+
+  it('marca el paso actual del análisis', async () => {
+    renderIngesta()
+    const pasos = screen.getByRole('list', { name: 'Pasos del análisis' })
+    expect(within(pasos).getByText('1 · Pega o sube').closest('li')).toHaveAttribute('aria-current', 'step')
+
+    escribirTexto(TEXTO_VALIDO)
+    await userEvent.click(screen.getByRole('button', REVISAR))
+    await screen.findByRole('heading', { name: 'Revisa el texto antes de analizarlo' })
+
+    const pasosVistaPrevia = screen.getByRole('list', { name: 'Pasos del análisis' })
+    expect(within(pasosVistaPrevia).getByText('2 · Revisa el texto').closest('li')).toHaveAttribute('aria-current', 'step')
   })
 
   it('no permite enviar un texto por debajo del mínimo', () => {
