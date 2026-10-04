@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Download, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import { Download, Info, ShieldPlus, Trash2 } from 'lucide-react'
 import Aviso from '@/components/common/Aviso'
+import Button from '@/components/common/Button'
 import Cargando from '@/components/common/Cargando'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
-import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
+import { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
+import InsigniaNivel from '@/components/analisis/InsigniaNivel'
+import MedidorRiesgo from '@/components/analisis/MedidorRiesgo'
+import PorQueResultado from '@/components/analisis/PorQueResultado'
+import ResumenTratamiento from '@/components/analisis/ResumenTratamiento'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
 import FiltroHallazgos from '@/components/analisis/FiltroHallazgos'
 import ListaRecomendaciones from '@/components/analisis/ListaRecomendaciones'
@@ -13,7 +19,7 @@ import VistaProgreso from '@/components/analisis/VistaProgreso'
 import { useAnalisis } from '@/hooks/useAnalisis'
 import { useProgresoAnalisis } from '@/hooks/useProgresoAnalisis'
 import { analisisApi } from '@/api/analisis'
-import type { AnalisisResult, NivelRiesgo } from '@/types/analisis'
+import type { AnalisisResult } from '@/types/analisis'
 import {
   SIN_FILTRO,
   contarHallazgos,
@@ -21,6 +27,7 @@ import {
   hayFiltroActivo,
   type FiltroHallazgos as Filtro,
 } from '@/utils/filtrosHallazgos'
+import { hallazgosQueCuentan } from '@/utils/resumenResultados'
 import {
   MENSAJE_ELIMINAR_ANALISIS,
   MENSAJE_LIMITE_SOLICITUDES,
@@ -43,57 +50,52 @@ export default function Resultados() {
     }
   }, [id, estado])
 
+  const completo = estado === 'completado' && resultado && !isLoading
+
   return (
-    <>
+    <main className={`mx-auto px-4 py-6 pb-16 ${completo ? 'max-w-6xl' : 'max-w-2xl'}`}>
+      <EncabezadoPagina
+        titulo="Resultados"
+        subtitulo={completo ? fechaLegible(resultado.fecha) : undefined}
+        volverA="/historial"
+        etiquetaVolver="Volver al historial"
+      />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
-        {/* Encabezado */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            to="/analizar"
-            className="p-2 rounded-lg hover:bg-superficie-2 text-texto-2 transition-colors"
-            aria-label="Volver a analizar"
-          >
-            <ArrowLeft size={20} />
-          </Link>
-          <h1 className="text-xl font-bold text-texto">Resultados del análisis</h1>
-        </div>
+      {/* Vista de progreso mientras el análisis está en curso (HU-13) */}
+      {estado === 'procesando' && (
+        <VistaProgreso seccionActual={seccionActual} seccionesTotal={seccionesTotal} />
+      )}
+      {estado === 'error' && (
+        <EstadoError
+          mensaje={
+            motivo === 'no_es_politica'
+              ? MENSAJE_NO_ES_POLITICA
+              : 'Ocurrió un error durante el análisis. Intenta nuevamente.'
+          }
+        />
+      )}
 
-        {/* Vista de progreso mientras el análisis está en curso (HU-13) */}
-        {estado === 'procesando' && (
-          <VistaProgreso seccionActual={seccionActual} seccionesTotal={seccionesTotal} />
-        )}
-        {estado === 'error' && (
-          <EstadoError
-            mensaje={
-              motivo === 'no_es_politica'
-                ? MENSAJE_NO_ES_POLITICA
-                : 'Ocurrió un error durante el análisis. Intenta nuevamente.'
-            }
-          />
-        )}
-
-        {/* Resultado ya completado */}
-        {estado === 'completado' && isLoading && <Cargando mensaje="Cargando análisis..." />}
-        {estado === 'completado' && error && !isLoading && <EstadoError mensaje={error} />}
-        {estado === 'completado' && resultado && !isLoading && (
-          <PanelResultados datos={resultado} />
-        )}
-      </main>
-    </>
+      {/* Resultado ya completado */}
+      {estado === 'completado' && isLoading && <Cargando mensaje="Cargando análisis..." />}
+      {estado === 'completado' && error && !isLoading && <EstadoError mensaje={error} />}
+      {completo && <PanelResultados datos={resultado} />}
+    </main>
   )
 }
 
+function fechaLegible(fecha: string): string {
+  return new Date(fecha).toLocaleString('es-GT', {
+    day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 /* --------------------------------------------------------------------------
-   Panel principal con todos los bloques
+   Panel de resultados: en el celular, todo en una columna; desde lg, el
+   resumen fijo a la izquierda y el detalle a la derecha.
    -------------------------------------------------------------------------- */
 
 function PanelResultados({ datos }: { datos: AnalisisResult }) {
-  const { resumen_general, secciones_analizadas, recomendaciones, fecha, id_analisis } = datos
-  const fechaFormateada = new Date(fecha).toLocaleString('es-GT', {
-    day: '2-digit', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  const { resumen_general, secciones_analizadas, recomendaciones, id_analisis } = datos
 
   const [descargando, setDescargando] = useState(false)
   const [filtro, setFiltro] = useState<Filtro>(SIN_FILTRO)
@@ -104,6 +106,19 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
   const [confirmandoEliminar, setConfirmandoEliminar] = useState(false)
   const [eliminando, setEliminando] = useState(false)
   const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+  const listaHallazgos = useRef<HTMLElement>(null)
+
+  const cuentan = useMemo(() => hallazgosQueCuentan(secciones_analizadas), [secciones_analizadas])
+  const tratamientos = useMemo(
+    () => [...new Set(secciones_analizadas.flatMap((s) => s.hallazgos).map((h) => h.tipo_tratamiento).filter(Boolean))]
+      .sort() as string[],
+    [secciones_analizadas],
+  )
+
+  const verHallazgos = (nuevo: Filtro) => {
+    setFiltro(nuevo)
+    listaHallazgos.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
 
   const eliminar = async () => {
     setEliminando(true)
@@ -141,134 +156,106 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
     }
   }
 
-  const totalHallazgosAltos = secciones_analizadas
-    .flatMap((s) => s.hallazgos)
-    .filter((h) => h.nivel === 'alto').length
-
   return (
-    <div className="space-y-5">
-
-      {/* ── Resumen ejecutivo ─────────────────────────────────────────── */}
-      <div className="card space-y-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-bold text-texto">Resumen ejecutivo</h2>
-            <p className="text-xs text-texto-3 mt-0.5">{fechaFormateada}</p>
-          </div>
-          {/* Puntaje visual */}
-          <PuntajeCircular puntaje={resumen_general.puntaje} nivel={resumen_general.nivel_riesgo_global} />
-        </div>
-
-        <IndicadorSemaforo nivel={resumen_general.nivel_riesgo_global} size="lg" mostrarTexto />
-
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-texto-2">
-          <span className="inline-flex items-center gap-1">
-            Nivel de riesgo <AyudaGlosario termino="Nivel de riesgo" />
-          </span>
-          <span className="inline-flex items-center gap-1">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start">
+      {/* ── Columna del resumen ──────────────────────────────────────── */}
+      <div className="space-y-4 lg:sticky lg:top-24">
+        <section aria-labelledby="titulo-puntuacion" className="card flex flex-col items-center gap-4 text-center">
+          <h2 id="titulo-puntuacion" className="inline-flex items-center gap-1 text-sm font-semibold text-texto-2">
             Puntuación de riesgo <AyudaGlosario termino="Puntuación de riesgo" />
-          </span>
-        </p>
+          </h2>
+          <MedidorRiesgo puntaje={resumen_general.puntaje} nivel={resumen_general.nivel_riesgo_global} />
+          <div className="inline-flex items-center gap-1">
+            <InsigniaNivel nivel={resumen_general.nivel_riesgo_global} grande />
+            <AyudaGlosario termino="Nivel de riesgo" />
+          </div>
+          <p className="max-w-xs text-base leading-relaxed text-texto">
+            {CONFIG_RIESGO[resumen_general.nivel_riesgo_global].descripcion}
+          </p>
+          <p className="text-sm text-texto-2">{resumen_general.comentario_breve}</p>
+        </section>
 
-        <p className="text-sm text-texto-2 leading-relaxed">{resumen_general.comentario_breve}</p>
+        <PorQueResultado resumen={resumen_general} secciones={secciones_analizadas} />
 
-        {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-3 gap-3 pt-1">
-          <Stat label="Secciones" valor={secciones_analizadas.length} />
-          <Stat
-            label="Hallazgos críticos"
-            valor={totalHallazgosAltos}
-            color={totalHallazgosAltos > 0 ? 'text-riesgo-alto' : 'text-riesgo-bajo'}
-          />
-          <Stat label="Recomendaciones" valor={recomendaciones.length} />
+        <div className="space-y-2">
+          <Button onClick={descargarPDF} disabled={descargando} className="w-full">
+            <Download size={18} aria-hidden="true" />
+            {descargando ? 'Generando PDF...' : 'Descargar PDF'}
+          </Button>
+          {errorDescarga && <Aviso tipo="error">{errorDescarga}</Aviso>}
+          <div className="grid grid-cols-2 gap-2">
+            <Link to="/analizar" className="btn-secondary text-sm">
+              <ShieldPlus size={18} aria-hidden="true" />
+              Analizar otra
+            </Link>
+            <Button
+              variant="danger"
+              className="text-sm"
+              onClick={() => {
+                setErrorEliminar(null)
+                setConfirmandoEliminar(true)
+              }}
+            >
+              <Trash2 size={18} aria-hidden="true" />
+              Eliminar análisis
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* ── Secciones analizadas ──────────────────────────────────────── */}
-      <div>
-        <h2 className="text-base font-semibold text-texto-2 mb-3 px-1">
-          Secciones analizadas
-        </h2>
-        <div className="mb-3">
+      {/* ── Columna del detalle ──────────────────────────────────────── */}
+      <div className="min-w-0 space-y-6">
+        <ResumenTratamiento
+          hallazgos={cuentan}
+          onVerTratamiento={(tratamiento) => verHallazgos({ ...SIN_FILTRO, tratamiento })}
+          onVerTodos={() => verHallazgos(SIN_FILTRO)}
+        />
+
+        <section ref={listaHallazgos} aria-labelledby="titulo-hallazgos" className="scroll-mt-24 space-y-3">
+          <h2 id="titulo-hallazgos" className="px-1 text-lg font-bold text-texto">
+            Hallazgos por sección
+          </h2>
           <FiltroHallazgos
             filtro={filtro}
             onCambiar={setFiltro}
             visibles={contarHallazgos(seccionesVisibles.map((s) => s.seccion))}
             total={contarHallazgos(secciones_analizadas)}
+            tratamientos={tratamientos}
           />
-        </div>
-        {seccionesVisibles.length === 0 ? (
-          <div className="card text-center py-8 space-y-2">
-            <p className="text-sm text-texto-2">Ningún hallazgo coincide con los filtros.</p>
-            <button
-              type="button"
-              onClick={() => setFiltro(SIN_FILTRO)}
-              className="text-sm font-medium text-marca-texto hover:underline"
-            >
-              Mostrar todos los hallazgos
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {seccionesVisibles.map(({ seccion, indice }, posicion) => (
-              <TarjetaSeccion
-                // La clave cambia con el filtro para que las secciones se abran al filtrar.
-                key={`${indice}-${filtro.nivel}-${filtro.jurisdiccion}`}
-                seccion={seccion}
-                indice={indice}
-                inicialmenteExpandida={filtroActivo || posicion === 0}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          {seccionesVisibles.length === 0 ? (
+            <div className="card space-y-2 py-8 text-center">
+              <p className="text-sm text-texto-2">Ningún hallazgo coincide con los filtros.</p>
+              <button
+                type="button"
+                onClick={() => setFiltro(SIN_FILTRO)}
+                className="inline-flex min-h-[44px] items-center px-2 text-sm font-semibold text-marca-texto hover:underline"
+              >
+                Mostrar todos los hallazgos
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {seccionesVisibles.map(({ seccion, indice }, posicion) => (
+                <TarjetaSeccion
+                  // La clave cambia con el filtro para que las secciones se abran al filtrar.
+                  key={`${indice}-${filtro.nivel}-${filtro.jurisdiccion}-${filtro.tratamiento ?? ''}`}
+                  seccion={seccion}
+                  indice={indice}
+                  inicialmenteExpandida={filtroActivo || posicion === 0}
+                />
+              ))}
+            </div>
+          )}
+        </section>
 
-      {/* ── Recomendaciones ───────────────────────────────────────────── */}
-      <ListaRecomendaciones recomendaciones={recomendaciones} />
+        <ListaRecomendaciones recomendaciones={recomendaciones} />
 
-      {/* ── Aviso académico ───────────────────────────────────────────── */}
-      <div className="rounded-xl border border-marca-borde bg-marca-suave p-4">
-        <div className="flex items-start gap-2">
-          <ShieldAlert size={16} className="text-marca-texto shrink-0 mt-0.5" />
-          <p className="text-xs text-marca-texto leading-relaxed">
-            Este análisis es orientativo y no constituye asesoría legal. Las referencias
-            internacionales (RGPD, Principios OEA, etc.) son buenas prácticas, no normativa
-            vigente en Guatemala. Para dudas legales, consulta a un profesional.
-          </p>
-        </div>
-      </div>
-
-      {/* ── Acciones finales ──────────────────────────────────────────── */}
-      <div className="text-center pt-2 space-y-3">
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <button
-            onClick={descargarPDF}
-            disabled={descargando}
-            className="inline-flex items-center gap-2 btn-primary text-sm disabled:opacity-60"
-          >
-            <Download size={16} />
-            {descargando ? 'Generando PDF...' : 'Descargar PDF'}
-          </button>
-          <Link
-            to="/analizar"
-            className="inline-flex items-center gap-2 btn-primary text-sm"
-          >
-            <ShieldCheck size={16} />
-            Analizar otra política
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setErrorEliminar(null)
-              setConfirmandoEliminar(true)
-            }}
-            className="inline-flex items-center gap-2 btn-secondary text-sm text-riesgo-alto"
-          >
-            <Trash2 size={16} aria-hidden="true" />
-            Eliminar análisis
-          </button>
-        </div>
-        {errorDescarga && <p className="text-xs text-riesgo-alto">{errorDescarga}</p>}
+        <p className="flex items-start gap-2 rounded-2xl border border-marca-borde bg-marca-suave px-4 py-3 text-sm leading-relaxed text-marca-suave-texto">
+          <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
+          Este análisis es orientativo y no constituye asesoría legal. Las referencias internacionales (RGPD,
+          Principios OEA, etc.) son buenas prácticas, no normativa vigente en Guatemala. Para dudas legales,
+          consulta a un profesional.
+        </p>
       </div>
 
       <DialogoConfirmacion
@@ -281,41 +268,6 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
         onConfirmar={eliminar}
         onCancelar={() => setConfirmandoEliminar(false)}
       />
-
-    </div>
-  )
-}
-
-/* --------------------------------------------------------------------------
-   Componentes auxiliares de UI
-   -------------------------------------------------------------------------- */
-
-function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: NivelRiesgo }) {
-  const colorArc: Record<NivelRiesgo, string> = {
-    bajo: 'text-riesgo-bajo',
-    medio: 'text-riesgo-medio',
-    alto: 'text-riesgo-alto',
-  }
-  return (
-    <div
-      role="img"
-      aria-label={`Puntuación de riesgo: ${puntaje} de 100, ${CONFIG_RIESGO[nivel].label}`}
-      className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4
-                    border-borde bg-superficie shadow-sm shrink-0"
-    >
-      <span className={`text-xl font-black leading-none ${colorArc[nivel] ?? 'text-texto-2'}`} aria-hidden="true">
-        {puntaje}
-      </span>
-      <span className="text-xs text-texto-3 leading-none" aria-hidden="true">/100</span>
-    </div>
-  )
-}
-
-function Stat({ label, valor, color = 'text-texto' }: { label: string; valor: number; color?: string }) {
-  return (
-    <div className="rounded-lg bg-superficie-2 px-3 py-2 text-center">
-      <p className={`text-xl font-bold ${color}`}>{valor}</p>
-      <p className="text-xs text-texto-2 leading-tight mt-0.5">{label}</p>
     </div>
   )
 }

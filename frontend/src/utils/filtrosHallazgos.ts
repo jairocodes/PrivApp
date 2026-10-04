@@ -4,9 +4,11 @@ import { jurisdiccionDeFuente } from '@/utils/jurisdiccion'
 export interface FiltroHallazgos {
   nivel: NivelRiesgo | ''
   jurisdiccion: Jurisdiccion | ''
+  /** Tipo de tratamiento de datos (RN-08); vacío o ausente = todos. */
+  tratamiento?: string
 }
 
-export const SIN_FILTRO: FiltroHallazgos = { nivel: '', jurisdiccion: '' }
+export const SIN_FILTRO: FiltroHallazgos = { nivel: '', jurisdiccion: '', tratamiento: '' }
 
 export interface SeccionFiltrada {
   seccion: SeccionAnalizada
@@ -15,12 +17,13 @@ export interface SeccionFiltrada {
 }
 
 export function hayFiltroActivo(filtro: FiltroHallazgos): boolean {
-  return filtro.nivel !== '' || filtro.jurisdiccion !== ''
+  return filtro.nivel !== '' || filtro.jurisdiccion !== '' || Boolean(filtro.tratamiento)
 }
 
 /** Un hallazgo coincide si tiene el nivel elegido y alguna cita de la jurisdicción elegida. */
 export function hallazgoCoincide(hallazgo: Hallazgo, filtro: FiltroHallazgos): boolean {
   if (filtro.nivel && hallazgo.nivel !== filtro.nivel) return false
+  if (filtro.tratamiento && hallazgo.tipo_tratamiento !== filtro.tratamiento) return false
   if (filtro.jurisdiccion) {
     return hallazgo.fuentes_normativas.some(
       (fuente) => jurisdiccionDeFuente(fuente) === filtro.jurisdiccion,

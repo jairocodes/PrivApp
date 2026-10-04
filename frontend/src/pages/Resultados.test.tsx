@@ -172,6 +172,16 @@ describe('Resultados', () => {
       vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisConVarios, isLoading: false, error: null, obtener })
     })
 
+    it('una ficha de "Qué hace con tus datos" filtra por su tipo de tratamiento', async () => {
+      renderResultados()
+
+      await userEvent.click(screen.getByRole('button', { name: /^Transferencia de datos a terceros/ }))
+
+      expect(screen.getByText('Mostrando 1 de 3 hallazgos')).toBeInTheDocument()
+      expect(screen.getByLabelText('Tipo de tratamiento')).toHaveValue('Transferencia de datos a terceros')
+      expect(screen.queryByText('Conserva los datos sin plazo.')).not.toBeInTheDocument()
+    })
+
     it('por nivel reduce la lista de hallazgos', async () => {
       renderResultados()
       expect(screen.getByText('Mostrando 3 de 3 hallazgos')).toBeInTheDocument()
