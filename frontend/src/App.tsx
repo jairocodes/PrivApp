@@ -17,6 +17,7 @@ import AdminCorpus from '@/pages/AdminCorpus'
 import AvisoPrivacidad from '@/pages/AvisoPrivacidad'
 import Glosario from '@/pages/Glosario'
 import Perfil from '@/pages/Perfil'
+import NoEncontrada from '@/pages/NoEncontrada'
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
                 <Route path="/admin/usuarios" element={<AdminUsuarios />} />
                 <Route path="/admin/corpus" element={<AdminCorpus />} />
               </Route>
+              <Route path="*" element={<NoEncontrada />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
