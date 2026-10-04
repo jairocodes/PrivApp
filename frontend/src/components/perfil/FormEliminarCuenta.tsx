@@ -52,9 +52,9 @@ export default function FormEliminarCuenta() {
   }
 
   return (
-    <form onSubmit={solicitar} noValidate className="card flex flex-col gap-4 border border-red-100">
-      <h2 className="text-base font-semibold text-gray-800">Eliminar mi cuenta</h2>
-      <p className="text-sm text-gray-600 leading-relaxed">
+    <form onSubmit={solicitar} noValidate className="card flex flex-col gap-4 border border-riesgo-alto/20">
+      <h2 className="text-base font-semibold text-texto">Eliminar mi cuenta</h2>
+      <p className="text-sm text-texto-2 leading-relaxed">
         Se eliminarán de forma definitiva tu cuenta y todos tus análisis. Esta acción no se puede
         deshacer.
       </p>
@@ -70,7 +70,7 @@ export default function FormEliminarCuenta() {
         }}
         error={errorPassword ?? undefined}
       />
-      <button type="submit" className="btn-secondary text-sm self-start text-red-700">
+      <button type="submit" className="btn-secondary text-sm self-start text-riesgo-alto">
         Eliminar mi cuenta
       </button>
 

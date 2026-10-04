@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import FormCargaDocumento from '@/components/admin/FormCargaDocumento'
+import Aviso from '@/components/common/Aviso'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
-import Navbar from '@/components/common/Navbar'
 import type { DocumentoCargado, DocumentoCorpus } from '@/types/admin'
 
 export const ETIQUETA_JURISDICCION: Record<string, string> = {
@@ -67,31 +67,28 @@ export default function AdminCorpus() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <>
 
       <main className="max-w-3xl mx-auto px-4 py-6 pb-16 space-y-5">
         <div className="flex items-center gap-3">
           <Link
             to="/admin"
-            className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 transition-colors"
+            className="p-2 rounded-lg hover:bg-superficie-2 text-texto-2 transition-colors"
             aria-label="Volver a administración"
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Corpus normativo</h1>
+          <h1 className="text-xl font-bold text-texto">Corpus normativo</h1>
         </div>
 
         <FormCargaDocumento onCargado={agregarCargado} />
 
-        {cargando && <p className="text-sm text-gray-500 text-center py-10">Cargando documentos...</p>}
+        {cargando && <p className="text-sm text-texto-2 text-center py-10">Cargando documentos...</p>}
         {error && !cargando && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-            {error}
-          </p>
+          <Aviso tipo="error">{error}</Aviso>
         )}
         {!cargando && !error && documentos.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-10">El corpus no tiene documentos cargados.</p>
+          <p className="text-sm text-texto-2 text-center py-10">El corpus no tiene documentos cargados.</p>
         )}
 
         {!cargando && !error && documentos.length > 0 && (
@@ -128,7 +125,7 @@ export default function AdminCorpus() {
         onConfirmar={confirmarCambio}
         onCancelar={() => setPendiente(null)}
       />
-    </div>
+    </>
   )
 }
 
@@ -148,8 +145,8 @@ function FilaDocumento({
   return (
     <li className="card flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="font-medium text-gray-900 break-words">{documento.documento_fuente}</p>
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="font-medium text-texto break-words">{documento.documento_fuente}</p>
+        <p className="text-xs text-texto-2 mt-1">
           {ETIQUETA_JURISDICCION[documento.jurisdiccion] ?? documento.jurisdiccion} ·{' '}
           {documento.fragmentos.toLocaleString('es-GT')} fragmentos · Cargado el {fecha}
         </p>
@@ -157,7 +154,7 @@ function FilaDocumento({
       <div className="flex flex-col items-end gap-2 shrink-0">
         <span
           className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-            documento.activo ? 'bg-riesgo-bajo/15 text-riesgo-bajo' : 'bg-gray-100 text-gray-600'
+            documento.activo ? 'bg-riesgo-bajo/15 text-riesgo-bajo' : 'bg-superficie-2 text-texto-2'
           }`}
         >
           {documento.activo ? 'Activo' : 'Desactivado'}
@@ -166,7 +163,7 @@ function FilaDocumento({
           type="button"
           onClick={onCambiarEstado}
           aria-label={`${documento.activo ? 'Desactivar' : 'Activar'} ${documento.documento_fuente}`}
-          className="text-xs font-medium text-blue-600 hover:underline"
+          className="text-xs font-medium text-marca-texto hover:underline"
         >
           {documento.activo ? 'Desactivar' : 'Activar'}
         </button>

@@ -3,6 +3,7 @@ import { adminApi } from '@/api/admin'
 import Button from '@/components/common/Button'
 import type { DocumentoCargado, Jurisdiccion } from '@/types/admin'
 import { validarArchivo } from '@/utils/validators'
+import Aviso from '@/components/common/Aviso'
 
 interface Props {
   onCargado: (documento: DocumentoCargado) => void
@@ -56,10 +57,10 @@ export default function FormCargaDocumento({ onCargado }: Props) {
 
   return (
     <form onSubmit={enviar} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-gray-800">Cargar documento normativo</h2>
+      <h2 className="text-base font-semibold text-texto">Cargar documento normativo</h2>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="documento-normativo" className="text-sm font-medium text-gray-700">
+        <label htmlFor="documento-normativo" className="text-sm font-medium text-texto-2">
           Archivo (PDF o TXT, máximo 5 MB)
         </label>
         <input
@@ -72,16 +73,16 @@ export default function FormCargaDocumento({ onCargado }: Props) {
             setError(null)
           }}
           disabled={cargando}
-          className="w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0
-                     file:bg-blue-50 file:px-4 file:py-2 file:text-blue-700 hover:file:bg-blue-100"
+          className="w-full text-sm text-texto-2 file:mr-3 file:rounded-lg file:border-0
+                     file:bg-marca-suave file:px-4 file:py-2 file:text-marca-texto hover:file:bg-marca-suave"
         />
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-texto-3">
           El nombre del archivo identificará al documento en el corpus. Solo se guardan sus fragmentos de texto.
         </p>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="jurisdiccion" className="text-sm font-medium text-gray-700">
+        <label htmlFor="jurisdiccion" className="text-sm font-medium text-texto-2">
           Jurisdicción
         </label>
         <select
@@ -104,12 +105,10 @@ export default function FormCargaDocumento({ onCargado }: Props) {
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-          {error}
-        </p>
+        <Aviso tipo="error">{error}</Aviso>
       )}
       {cargando && (
-        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-3">
+        <p className="text-sm text-marca-texto bg-marca-suave border border-marca-borde rounded-lg p-3">
           Procesando el documento. Generar sus representaciones puede tardar varios minutos.
         </p>
       )}

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import Navbar from '@/components/common/Navbar'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import FormCambioPassword from '@/components/perfil/FormCambioPassword'
@@ -45,25 +44,24 @@ export default function Perfil() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <>
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16 space-y-5">
-        <h1 className="text-xl font-bold text-gray-900">Mi perfil</h1>
+        <h1 className="text-xl font-bold text-texto">Mi perfil</h1>
 
         <section className="card space-y-3">
-          <h2 className="text-base font-semibold text-gray-800">Datos de la cuenta</h2>
+          <h2 className="text-base font-semibold text-texto">Datos de la cuenta</h2>
           <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-gray-500">Correo electrónico</dt>
-            <dd className="text-gray-900 break-all">{user.email}</dd>
-            <dt className="text-gray-500">Rol</dt>
-            <dd className="text-gray-900">{user.role === 'administrador' ? 'Administrador' : 'Usuario'}</dd>
+            <dt className="text-texto-2">Correo electrónico</dt>
+            <dd className="text-texto break-all">{user.email}</dd>
+            <dt className="text-texto-2">Rol</dt>
+            <dd className="text-texto">{user.role === 'administrador' ? 'Administrador' : 'Usuario'}</dd>
           </dl>
-          <p className="text-xs text-gray-400">El correo electrónico no se puede modificar.</p>
+          <p className="text-xs text-texto-3">El correo electrónico no se puede modificar.</p>
         </section>
 
         <form onSubmit={guardar} noValidate className="card flex flex-col gap-4">
-          <h2 className="text-base font-semibold text-gray-800">Editar nombre</h2>
+          <h2 className="text-base font-semibold text-texto">Editar nombre</h2>
           <Input
             label="Nombre completo"
             id="nombre"
@@ -90,6 +88,6 @@ export default function Perfil() {
 
         <FormEliminarCuenta />
       </main>
-    </div>
+    </>
   )
 }

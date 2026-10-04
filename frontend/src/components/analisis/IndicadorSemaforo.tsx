@@ -43,7 +43,7 @@ export default function IndicadorSemaforo({ nivel, size = 'md', mostrarTexto = f
     return (
       <div className={`inline-flex items-start gap-3 px-4 py-3 rounded-xl border ${cfg.bg}`}>
         <span
-          className={`${DOT_SIZE[size]} ${cfg.dot} rounded-full shrink-0 mt-0.5 ring-4 ring-white`}
+          className={`${DOT_SIZE[size]} ${cfg.dot} rounded-full shrink-0 mt-0.5 ring-4 ring-superficie`}
           aria-hidden="true"
         />
         <div>
@@ -57,7 +57,7 @@ export default function IndicadorSemaforo({ nivel, size = 'md', mostrarTexto = f
   return (
     <div className="flex items-center gap-2">
       <span
-        className={`${DOT_SIZE[size]} ${cfg.dot} rounded-full ring-2 ring-white`}
+        className={`${DOT_SIZE[size]} ${cfg.dot} rounded-full ring-2 ring-superficie`}
         aria-hidden="true"
       />
       <span className={`font-medium text-sm ${cfg.text}`}>{cfg.label}</span>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Download, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react'
+import Aviso from '@/components/common/Aviso'
+import Cargando from '@/components/common/Cargando'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
-import Navbar from '@/components/common/Navbar'
 import IndicadorSemaforo, { CONFIG as CONFIG_RIESGO } from '@/components/analisis/IndicadorSemaforo'
 import TarjetaSeccion from '@/components/analisis/TarjetaSeccion'
 import FiltroHallazgos from '@/components/analisis/FiltroHallazgos'
@@ -42,20 +43,19 @@ export default function Resultados() {
   }, [id, estado])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <>
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
         {/* Encabezado */}
         <div className="flex items-center gap-3 mb-6">
           <Link
             to="/analizar"
-            className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 transition-colors"
+            className="p-2 rounded-lg hover:bg-superficie-2 text-texto-2 transition-colors"
             aria-label="Volver a analizar"
           >
             <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Resultados del análisis</h1>
+          <h1 className="text-xl font-bold text-texto">Resultados del análisis</h1>
         </div>
 
         {/* Vista de progreso mientras el análisis está en curso (HU-13) */}
@@ -67,13 +67,13 @@ export default function Resultados() {
         )}
 
         {/* Resultado ya completado */}
-        {estado === 'completado' && isLoading && <EstadoCargando />}
+        {estado === 'completado' && isLoading && <Cargando mensaje="Cargando análisis..." />}
         {estado === 'completado' && error && !isLoading && <EstadoError mensaje={error} />}
         {estado === 'completado' && resultado && !isLoading && (
           <PanelResultados datos={resultado} />
         )}
       </main>
-    </div>
+    </>
   )
 }
 
@@ -145,8 +145,8 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
       <div className="card space-y-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Resumen ejecutivo</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{fechaFormateada}</p>
+            <h2 className="text-lg font-bold text-texto">Resumen ejecutivo</h2>
+            <p className="text-xs text-texto-3 mt-0.5">{fechaFormateada}</p>
           </div>
           {/* Puntaje visual */}
           <PuntajeCircular puntaje={resumen_general.puntaje} nivel={resumen_general.nivel_riesgo_global} />
@@ -154,7 +154,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
 
         <IndicadorSemaforo nivel={resumen_general.nivel_riesgo_global} size="lg" mostrarTexto />
 
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-texto-2">
           <span className="inline-flex items-center gap-1">
             Nivel de riesgo <AyudaGlosario termino="Nivel de riesgo" />
           </span>
@@ -163,7 +163,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
           </span>
         </p>
 
-        <p className="text-sm text-gray-700 leading-relaxed">{resumen_general.comentario_breve}</p>
+        <p className="text-sm text-texto-2 leading-relaxed">{resumen_general.comentario_breve}</p>
 
         {/* Estadísticas rápidas */}
         <div className="grid grid-cols-3 gap-3 pt-1">
@@ -179,7 +179,7 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
 
       {/* ── Secciones analizadas ──────────────────────────────────────── */}
       <div>
-        <h2 className="text-base font-semibold text-gray-700 mb-3 px-1">
+        <h2 className="text-base font-semibold text-texto-2 mb-3 px-1">
           Secciones analizadas
         </h2>
         <div className="mb-3">
@@ -192,11 +192,11 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
         </div>
         {seccionesVisibles.length === 0 ? (
           <div className="card text-center py-8 space-y-2">
-            <p className="text-sm text-gray-500">Ningún hallazgo coincide con los filtros.</p>
+            <p className="text-sm text-texto-2">Ningún hallazgo coincide con los filtros.</p>
             <button
               type="button"
               onClick={() => setFiltro(SIN_FILTRO)}
-              className="text-sm font-medium text-blue-600 hover:underline"
+              className="text-sm font-medium text-marca-texto hover:underline"
             >
               Mostrar todos los hallazgos
             </button>
@@ -220,10 +220,10 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
       <ListaRecomendaciones recomendaciones={recomendaciones} />
 
       {/* ── Aviso académico ───────────────────────────────────────────── */}
-      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+      <div className="rounded-xl border border-marca-borde bg-marca-suave p-4">
         <div className="flex items-start gap-2">
-          <ShieldAlert size={16} className="text-blue-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-blue-700 leading-relaxed">
+          <ShieldAlert size={16} className="text-marca-texto shrink-0 mt-0.5" />
+          <p className="text-xs text-marca-texto leading-relaxed">
             Este análisis es orientativo y no constituye asesoría legal. Las referencias
             internacionales (RGPD, Principios OEA, etc.) son buenas prácticas, no normativa
             vigente en Guatemala. Para dudas legales, consulta a un profesional.
@@ -255,13 +255,13 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
               setErrorEliminar(null)
               setConfirmandoEliminar(true)
             }}
-            className="inline-flex items-center gap-2 btn-secondary text-sm text-red-700"
+            className="inline-flex items-center gap-2 btn-secondary text-sm text-riesgo-alto"
           >
             <Trash2 size={16} aria-hidden="true" />
             Eliminar análisis
           </button>
         </div>
-        {errorDescarga && <p className="text-xs text-red-600">{errorDescarga}</p>}
+        {errorDescarga && <p className="text-xs text-riesgo-alto">{errorDescarga}</p>}
       </div>
 
       <DialogoConfirmacion
@@ -294,41 +294,30 @@ function PuntajeCircular({ puntaje, nivel }: { puntaje: number; nivel: NivelRies
       role="img"
       aria-label={`Puntuación de riesgo: ${puntaje} de 100, ${CONFIG_RIESGO[nivel].label}`}
       className="flex flex-col items-center justify-center w-16 h-16 rounded-full border-4
-                    border-gray-100 bg-white shadow-sm shrink-0"
+                    border-borde bg-superficie shadow-sm shrink-0"
     >
-      <span className={`text-xl font-black leading-none ${colorArc[nivel] ?? 'text-gray-500'}`} aria-hidden="true">
+      <span className={`text-xl font-black leading-none ${colorArc[nivel] ?? 'text-texto-2'}`} aria-hidden="true">
         {puntaje}
       </span>
-      <span className="text-xs text-gray-400 leading-none" aria-hidden="true">/100</span>
+      <span className="text-xs text-texto-3 leading-none" aria-hidden="true">/100</span>
     </div>
   )
 }
 
-function Stat({ label, valor, color = 'text-gray-900' }: { label: string; valor: number; color?: string }) {
+function Stat({ label, valor, color = 'text-texto' }: { label: string; valor: number; color?: string }) {
   return (
-    <div className="rounded-lg bg-gray-50 px-3 py-2 text-center">
+    <div className="rounded-lg bg-superficie-2 px-3 py-2 text-center">
       <p className={`text-xl font-bold ${color}`}>{valor}</p>
-      <p className="text-xs text-gray-500 leading-tight mt-0.5">{label}</p>
-    </div>
-  )
-}
-
-function EstadoCargando() {
-  return (
-    <div className="card text-center py-16 space-y-3">
-      <div className="inline-flex w-12 h-12 rounded-full border-4 border-blue-200 border-t-blue-600
-                      animate-spin mx-auto" />
-      <p className="text-gray-500 text-sm">Cargando análisis...</p>
+      <p className="text-xs text-texto-2 leading-tight mt-0.5">{label}</p>
     </div>
   )
 }
 
 function EstadoError({ mensaje }: { mensaje: string }) {
   return (
-    <div className="card bg-red-50 border-red-200 text-center py-10 space-y-3">
-      <ShieldAlert size={32} className="text-red-400 mx-auto" />
-      <p className="text-red-700 text-sm">{mensaje}</p>
-      <Link to="/analizar" className="inline-block btn-primary text-sm mt-2">
+    <div className="card space-y-4 text-center">
+      <Aviso tipo="error" className="text-left">{mensaje}</Aviso>
+      <Link to="/analizar" className="btn-primary text-sm">
         Intentar de nuevo
       </Link>
     </div>

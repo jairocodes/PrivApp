@@ -5,6 +5,7 @@ import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
+import Aviso from '@/components/common/Aviso'
 
 interface FormState {
   nombre: string
@@ -88,12 +89,10 @@ export default function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-xl font-semibold text-gray-900">Crear cuenta</h2>
+      <h2 className="text-xl font-semibold text-texto">Crear cuenta</h2>
 
       {errors.general && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          {errors.general}
-        </div>
+        <Aviso tipo="error">{errors.general}</Aviso>
       )}
 
       <Input
@@ -129,7 +128,7 @@ export default function RegisterForm() {
           error={errors.password}
           placeholder="Mínimo 8 caracteres, 1 mayúscula, 1 número"
         />
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-texto-3 mt-0.5">
           Mínimo 8 caracteres, una mayúscula y un número.
         </p>
       </div>
@@ -146,7 +145,7 @@ export default function RegisterForm() {
       />
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="aceptaAviso" className="flex items-start gap-2 text-sm text-gray-700">
+        <label htmlFor="aceptaAviso" className="flex items-start gap-2 text-sm text-texto-2">
           <input
             type="checkbox"
             id="aceptaAviso"
@@ -161,19 +160,19 @@ export default function RegisterForm() {
               to="/aviso-privacidad"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline font-medium"
+              className="text-marca-texto hover:underline font-medium"
             >
               aviso de privacidad
             </Link>
           </span>
         </label>
-        {errors.aceptaAviso && <p className="text-sm text-red-600">{errors.aceptaAviso}</p>}
+        {errors.aceptaAviso && <p className="text-sm text-riesgo-alto">{errors.aceptaAviso}</p>}
       </div>
 
       {/* El contrato de servicios de OpenAI exige el consentimiento de la madre,
           el padre o la persona encargada para que menores usen sus servicios. */}
       <div className="flex flex-col gap-1">
-        <label htmlFor="declaraEdad" className="flex items-start gap-2 text-sm text-gray-700">
+        <label htmlFor="declaraEdad" className="flex items-start gap-2 text-sm text-texto-2">
           <input
             type="checkbox"
             id="declaraEdad"
@@ -187,16 +186,16 @@ export default function RegisterForm() {
             encargada para usar PrivApp
           </span>
         </label>
-        {errors.declaraEdad && <p className="text-sm text-red-600">{errors.declaraEdad}</p>}
+        {errors.declaraEdad && <p className="text-sm text-riesgo-alto">{errors.declaraEdad}</p>}
       </div>
 
       <Button type="submit" isLoading={isLoading} className="w-full mt-2">
         Crear cuenta
       </Button>
 
-      <p className="text-sm text-center text-gray-500">
+      <p className="text-sm text-center text-texto-2">
         ¿Ya tienes cuenta?{' '}
-        <Link to="/login" className="text-blue-600 hover:underline font-medium">
+        <Link to="/login" className="text-marca-texto hover:underline font-medium">
           Inicia sesión
         </Link>
       </p>

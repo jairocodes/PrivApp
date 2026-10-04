@@ -7,6 +7,7 @@ import VistaPreviaTexto from '@/components/ingesta/VistaPreviaTexto'
 import type { IngestaResponse } from '@/types/ingesta'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { MAX_TEXTO, MIN_TEXTO, validarArchivo, validarTextoPolítica } from '@/utils/validators'
+import Aviso from '@/components/common/Aviso'
 
 type Pestana = 'texto' | 'url' | 'archivo'
 
@@ -44,10 +45,10 @@ export default function IngestaForm() {
   const chars = texto.length
   const charColor =
     chars > 0 && chars < MIN_CHARS
-      ? 'text-red-500'
+      ? 'text-riesgo-alto'
       : chars > MAX_CHARS
-      ? 'text-red-500'
-      : 'text-gray-500'
+      ? 'text-riesgo-alto'
+      : 'text-texto-2'
 
   // Paso 1: obtener y normalizar el texto; el análisis aún no se inicia.
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,12 +133,12 @@ export default function IngestaForm() {
 
   return (
     <div className="card max-w-2xl mx-auto">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">
+      <h2 className="text-xl font-bold text-texto mb-4">
         Analizar política de privacidad
       </h2>
 
       {/* Pestañas */}
-      <div className="flex border-b border-gray-200 mb-6" role="tablist">
+      <div className="flex border-b border-borde mb-6" role="tablist">
         {(['texto', 'url', 'archivo'] as Pestana[]).map((tab) => (
           <button
             key={tab}
@@ -146,8 +147,8 @@ export default function IngestaForm() {
             onClick={() => { setPestana(tab); setError(null) }}
             className={`px-5 py-2 text-sm font-medium capitalize transition-colors
               ${pestana === tab
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'border-b-2 border-marca text-marca-texto'
+                : 'text-texto-2 hover:text-texto-2'
               }`}
           >
             {ETIQUETA_PESTANA[tab]}
@@ -158,7 +159,7 @@ export default function IngestaForm() {
       <form onSubmit={handleSubmit} noValidate>
         {pestana === 'texto' ? (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-texto-2 mb-1">
               Pega el contenido de la política de privacidad
             </label>
             <textarea
@@ -166,8 +167,8 @@ export default function IngestaForm() {
               onChange={(e) => { setTexto(e.target.value); if (error) setError(null) }}
               rows={12}
               placeholder="Pega aquí el texto completo de la política de privacidad..."
-              className="w-full border border-gray-300 rounded-lg p-3 text-sm
-                         focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+              className="w-full border border-borde-fuerte rounded-lg p-3 text-sm
+                         focus:ring-2 focus:ring-marca focus:border-transparent resize-y"
               disabled={loading}
             />
             <p className={`text-xs mt-1 text-right ${charColor}`}>
@@ -179,7 +180,7 @@ export default function IngestaForm() {
           </div>
         ) : pestana === 'archivo' ? (
           <div className="mb-4">
-            <label htmlFor="archivo-politica" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="archivo-politica" className="block text-sm font-medium text-texto-2 mb-1">
               Archivo de la política (PDF o TXT, máximo 5 MB)
             </label>
             <input
@@ -188,11 +189,11 @@ export default function IngestaForm() {
               type="file"
               accept=".pdf,.txt,application/pdf,text/plain"
               onChange={(e) => { setArchivo(e.target.files?.[0] ?? null); if (error) setError(null) }}
-              className="w-full text-sm text-gray-700 file:mr-3 file:rounded-lg file:border-0
-                         file:bg-blue-50 file:px-4 file:py-2 file:text-blue-700 hover:file:bg-blue-100"
+              className="w-full text-sm text-texto-2 file:mr-3 file:rounded-lg file:border-0
+                         file:bg-marca-suave file:px-4 file:py-2 file:text-marca-texto hover:file:bg-marca-suave"
               disabled={loading}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-texto-2 mt-1">
               {archivo
                 ? `${archivo.name} · ${(archivo.size / 1024).toFixed(0)} KB`
                 : 'El sistema extraerá el texto y descartará el archivo; no se guarda.'}
@@ -200,7 +201,7 @@ export default function IngestaForm() {
           </div>
         ) : (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-texto-2 mb-1">
               URL de la política de privacidad
             </label>
             <input
@@ -208,25 +209,23 @@ export default function IngestaForm() {
               value={url}
               onChange={(e) => { setUrl(e.target.value); if (error) setError(null) }}
               placeholder="https://ejemplo.com/politica-de-privacidad"
-              className="w-full border border-gray-300 rounded-lg p-3 text-sm
-                         focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full border border-borde-fuerte rounded-lg p-3 text-sm
+                         focus:ring-2 focus:ring-marca focus:border-transparent"
               disabled={loading}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-texto-2 mt-1">
               El sistema descargará y extraerá automáticamente el texto.
             </p>
           </div>
         )}
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
+          <Aviso tipo="error" className="mb-4">{error}</Aviso>
         )}
 
         {loading && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700">Procesando texto...</p>
+          <div className="mb-4 p-3 bg-marca-suave border border-marca-borde rounded-lg">
+            <p className="text-sm text-marca-texto">Procesando texto...</p>
           </div>
         )}
 
