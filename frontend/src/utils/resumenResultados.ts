@@ -21,6 +21,20 @@ export function hallazgosSinRespaldo(secciones: SeccionAnalizada[]): number {
   return secciones.flatMap((s) => s.hallazgos).filter((h) => h.sin_respaldo).length
 }
 
+/** Franja del medidor en la que cae la puntuación (RN-05): bajo < 25, medio < 75, alto. */
+export function franjaDePuntuacion(puntaje: number): NivelRiesgo {
+  if (puntaje >= 75) return 'alto'
+  if (puntaje >= 25) return 'medio'
+  return 'bajo'
+}
+
+/** Aviso para cuando el nivel general no coincide con la franja de la puntuación
+ *  (por ejemplo, 73 en la franja media con nivel alto por sus cláusulas). */
+export function aclaracionNivel(resumen: ResumenGeneral): string | null {
+  if (franjaDePuntuacion(resumen.puntaje) === resumen.nivel_riesgo_global) return null
+  return 'El nivel se decide por los hallazgos, no solo por la puntuación. Mira «¿Por qué este resultado?».'
+}
+
 /** Por qué el nivel general es el que es, con la misma regla del servidor (RN-05). */
 export function explicarNivel(resumen: ResumenGeneral, conteo: ConteoNiveles): string {
   const { nivel_riesgo_global: nivel, puntaje } = resumen

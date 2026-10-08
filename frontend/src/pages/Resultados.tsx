@@ -27,7 +27,7 @@ import {
   hayFiltroActivo,
   type FiltroHallazgos as Filtro,
 } from '@/utils/filtrosHallazgos'
-import { hallazgosQueCuentan } from '@/utils/resumenResultados'
+import { aclaracionNivel, hallazgosQueCuentan } from '@/utils/resumenResultados'
 import {
   MENSAJE_ELIMINAR_ANALISIS,
   MENSAJE_LIMITE_SOLICITUDES,
@@ -96,6 +96,7 @@ function fechaLegible(fecha: string): string {
 
 function PanelResultados({ datos }: { datos: AnalisisResult }) {
   const { resumen_general, secciones_analizadas, recomendaciones, id_analisis } = datos
+  const aclaracion = aclaracionNivel(resumen_general)
 
   const [descargando, setDescargando] = useState(false)
   const [filtro, setFiltro] = useState<Filtro>(SIN_FILTRO)
@@ -169,6 +170,12 @@ function PanelResultados({ datos }: { datos: AnalisisResult }) {
             <InsigniaNivel nivel={resumen_general.nivel_riesgo_global} grande />
             <AyudaGlosario termino="Nivel de riesgo" />
           </div>
+          {aclaracion && (
+            <p className="inline-flex max-w-xs items-start gap-1.5 text-left text-sm text-texto-2">
+              <Info size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-marca-texto" />
+              {aclaracion}
+            </p>
+          )}
           <p className="max-w-xs text-base leading-relaxed text-texto">
             {CONFIG_RIESGO[resumen_general.nivel_riesgo_global].descripcion}
           </p>

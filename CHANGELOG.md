@@ -63,6 +63,8 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   nivel, fichas de "Qué hace con tus datos" por tipo de tratamiento que filtran la
   lista, "Por qué" de cada hallazgo según su criterio, normas desplegables,
   recomendaciones como tarjetas de acción y dos columnas en escritorio.
+- Aclaración en los resultados cuando el nivel general no coincide con la franja de
+  la puntuación: el nivel se decide por los hallazgos, no solo por la puntuación.
 - **Resto de pantallas rediseñadas:** bienvenida en inicio de sesión y registro;
   inicio con accesos directos; análisis con pasos visibles y zona de carga de archivos;
   historial en tarjetas agrupadas por día; glosario en cuadrícula; perfil con selector
