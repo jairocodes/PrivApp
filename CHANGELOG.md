@@ -85,6 +85,10 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
 - "Puntaje de riesgo" pasa a llamarse "Puntuación de riesgo".
 - Arranque con `lifespan`; `--reload` solo en desarrollo; cabeceras de reenvío del
   proxy de Railway.
+- Imagen del backend lista para Railway: incluye el modelo de embeddings, escucha en
+  el puerto `PORT` y acepta la URL de la base como la entrega la plataforma
+  (`postgresql://`).
+- Aviso de privacidad con el correo de contacto.
 - Imagen de producción del frontend: los archivos estáticos se construyen con
   `VITE_API_URL` y los sirve nginx; el servidor de Vite queda solo para desarrollo.
 - Repositorios separados para usuarios, análisis y corpus.

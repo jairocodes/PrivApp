@@ -43,7 +43,7 @@ export interface SeccionAviso {
 
 export const TITULO_AVISO = 'Aviso de privacidad de PrivApp'
 export const ULTIMA_ACTUALIZACION = '[fecha]'
-export const CORREO_CONTACTO = '[correo de contacto]'
+export const CORREO_CONTACTO = 'jairocastillo.code@gmail.com'
 
 export const INTRODUCCION =
   'PrivApp es un sistema web que analiza políticas de privacidad para ayudarle a entender qué hacen ' +

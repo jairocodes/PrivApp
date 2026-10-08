@@ -64,9 +64,14 @@ describe('AvisoPrivacidad', () => {
 
 describe('datosPendientes', () => {
   it('lista, sin repetir, los datos entre corchetes que faltan por completar', () => {
-    const pendientes = datosPendientes()
-    expect(pendientes).toContain('[correo de contacto]')
-    expect(pendientes.filter((p) => p === '[correo de contacto]')).toHaveLength(1)
+    const pendientes = datosPendientes([
+      { id: 'x', titulo: 'X', bloques: [{ tipo: 'parrafo', texto: 'Escriba a [correo] o a [correo].' }] },
+    ])
+    expect(pendientes.filter((p) => p === '[correo]')).toHaveLength(1)
+  })
+
+  it('el aviso ya tiene el correo de contacto', () => {
+    expect(datosPendientes()).not.toContain('[correo de contacto]')
   })
 
   it('encuentra marcadores en párrafos, listas y tablas', () => {

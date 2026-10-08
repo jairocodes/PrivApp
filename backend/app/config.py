@@ -1,6 +1,19 @@
 """Configuración centralizada de la aplicación mediante variables de entorno."""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def normalizar_url_bd(url: str) -> str:
+    """Usa el controlador asíncrono (asyncpg) aunque la URL llegue sin él.
+
+    Railway entrega la conexión como ``postgresql://`` (o ``postgres://``), y
+    SQLAlchemy asíncrono necesita ``postgresql+asyncpg://``.
+    """
+    for prefijo in ("postgresql://", "postgres://"):
+        if url.startswith(prefijo):
+            return "postgresql+asyncpg://" + url[len(prefijo):]
+    return url
 
 
 class Settings(BaseSettings):
@@ -34,6 +47,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Registrar cada consulta SQL con sus parámetros: solo para depurar en local.
     sql_echo: bool = False
+
+    @field_validator("database_url")
+    @classmethod
+    def _url_asincrona(cls, valor: str) -> str:
+        return normalizar_url_bd(valor)
 
     @property
     def cors_origins_list(self) -> list[str]:
