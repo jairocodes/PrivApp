@@ -44,4 +44,12 @@ describe('App', () => {
     const pie = screen.getByRole('navigation', { name: 'Enlaces del pie de página' })
     expect(within(pie).getByRole('link', { name: 'Glosario' })).toHaveAttribute('href', '/glosario')
   })
+
+  it('una dirección que no existe muestra la página 404 con salidas', async () => {
+    window.history.pushState({}, '', '/no-existe')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Página no encontrada' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ir al inicio' })).toHaveAttribute('href', '/dashboard')
+  })
 })

@@ -77,7 +77,7 @@ export default function FormCambioPassword() {
 
   return (
     <form onSubmit={enviar} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-base font-semibold text-texto">Cambiar contraseña</h2>
+      <h2 className="text-lg font-bold text-texto">Cambiar contraseña</h2>
 
       {errores.general && (
         <Aviso tipo="error">{errores.general}</Aviso>

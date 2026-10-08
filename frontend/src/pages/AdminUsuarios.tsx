@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Search } from 'lucide-react'
+import { Search, Users } from 'lucide-react'
 import { adminApi } from '@/api/admin'
 import Aviso from '@/components/common/Aviso'
+import Cargando from '@/components/common/Cargando'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
+import EstadoVacio from '@/components/common/EstadoVacio'
+import Insignia from '@/components/common/Insignia'
 import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
 import Paginacion from '@/components/common/Paginacion'
 import { useAuth } from '@/hooks/useAuth'
@@ -52,17 +55,13 @@ export default function AdminUsuarios() {
   return (
     <>
 
-      <main className="max-w-3xl mx-auto px-4 py-6 pb-16">
-        <div className="flex items-center gap-3 mb-6">
-          <Link
-            to="/admin"
-            className="p-2 rounded-lg hover:bg-superficie-2 text-texto-2 transition-colors"
-            aria-label="Volver a administración"
-          >
-            <ArrowLeft size={20} />
-          </Link>
-          <h1 className="text-xl font-bold text-texto">Usuarios</h1>
-        </div>
+      <main className="mx-auto max-w-3xl px-4 py-6 pb-16">
+        <EncabezadoPagina
+          titulo="Usuarios"
+          subtitulo="Cuentas registradas. No se muestra el contenido de sus análisis."
+          volverA="/admin"
+          etiquetaVolver="Volver a administración"
+        />
 
         <form onSubmit={buscar} role="search" className="flex gap-2 mb-5">
           <label htmlFor="busqueda-usuarios" className="sr-only">
@@ -82,12 +81,12 @@ export default function AdminUsuarios() {
           </button>
         </form>
 
-        {isLoading && <p className="text-sm text-texto-2 text-center py-10">Cargando usuarios...</p>}
+        {isLoading && <Cargando mensaje="Cargando usuarios..." />}
         {error && !isLoading && (
           <Aviso tipo="error">{error}</Aviso>
         )}
         {!isLoading && !error && items.length === 0 && (
-          <p className="text-sm text-texto-2 text-center py-10">No se encontraron usuarios.</p>
+          <EstadoVacio icono={Users} mensaje="No se encontraron usuarios." />
         )}
 
         {!isLoading && !error && items.length > 0 && (
@@ -144,22 +143,16 @@ function FilaUsuario({
   })
 
   return (
-    <li className="card flex items-center justify-between gap-3">
+    <li className="flex items-center justify-between gap-3 rounded-2xl border border-borde bg-superficie p-4">
       <div className="min-w-0">
-        <p className="font-medium text-texto truncate">{usuario.nombre}</p>
+        <p className="truncate font-bold text-texto">{usuario.nombre}</p>
         <p className="text-sm text-texto-2 truncate">{usuario.email}</p>
         <p className="text-xs text-texto-3 mt-1">
           {usuario.role === 'administrador' ? 'Administrador' : 'Usuario'} · Registrado el {fecha}
         </p>
       </div>
       <div className="flex flex-col items-end gap-2 shrink-0">
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-            usuario.is_active ? 'bg-riesgo-bajo/15 text-riesgo-bajo' : 'bg-superficie-2 text-texto-2'
-          }`}
-        >
-          {usuario.is_active ? 'Activa' : 'Desactivada'}
-        </span>
+        <Insignia tono={usuario.is_active ? 'bajo' : 'neutro'}>{usuario.is_active ? 'Activa' : 'Desactivada'}</Insignia>
         {esCuentaPropia ? (
           <span className="text-xs text-texto-3">Tu cuenta</span>
         ) : (
@@ -167,7 +160,11 @@ function FilaUsuario({
             type="button"
             onClick={onCambiarEstado}
             aria-label={`${usuario.is_active ? 'Desactivar' : 'Activar'} la cuenta de ${usuario.nombre}`}
-            className="text-xs font-medium text-marca-texto hover:underline"
+            className={`inline-flex min-h-[40px] items-center rounded-xl border px-3 text-sm font-semibold transition-colors ${
+              usuario.is_active
+                ? 'border-riesgo-alto/30 text-riesgo-alto hover:bg-riesgo-alto/10'
+                : 'border-marca-borde text-marca-texto hover:bg-marca-suave'
+            }`}
           >
             {usuario.is_active ? 'Desactivar' : 'Activar'}
           </button>

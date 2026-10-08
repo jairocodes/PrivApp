@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '@/context/AuthContext'
+import { TemaProvider } from '@/context/TemaContext'
 import { crearAuthValue, usuarioComun } from '@/test/fixtures'
 import type { AuthContextValue } from '@/types/auth'
 import Perfil from './Perfil'
@@ -11,11 +12,13 @@ vi.mock('@/components/common/Navbar', () => ({ default: () => null }))
 
 function renderPerfil(auth: AuthContextValue) {
   render(
-    <AuthContext.Provider value={auth}>
-      <MemoryRouter>
-        <Perfil />
-      </MemoryRouter>
-    </AuthContext.Provider>,
+    <TemaProvider>
+      <AuthContext.Provider value={auth}>
+        <MemoryRouter>
+          <Perfil />
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </TemaProvider>,
   )
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
+import Aviso from '@/components/common/Aviso'
 import type { FiltrosHistorial, NivelRiesgo } from '@/types/analisis'
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 const VACIO: FiltrosHistorial = { texto: '', nivel: '', desde: '', hasta: '' }
+const ETIQUETA = 'text-sm font-semibold text-texto'
 
 export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false }: Props) {
   const [valores, setValores] = useState<FiltrosHistorial>(VACIO)
@@ -36,33 +38,35 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
   }
 
   return (
-    <form onSubmit={aplicar} noValidate role="search" aria-label="Filtros del historial" className="card space-y-3">
+    <form onSubmit={aplicar} noValidate role="search" aria-label="Filtros del historial" className="card space-y-4 p-4">
       <div>
-        <label htmlFor="filtro-texto" className="text-sm font-medium text-texto-2">
+        <label htmlFor="filtro-texto" className="sr-only">
           Buscar
         </label>
-        <input
-          id="filtro-texto"
-          type="search"
-          value={valores.texto}
-          onChange={cambiar('texto')}
-          placeholder="Texto de la política o del resumen"
-          maxLength={100}
-          className="input-field w-full mt-1"
-        />
+        <div className="relative">
+          <Search
+            size={20}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-texto-2"
+          />
+          <input
+            id="filtro-texto"
+            type="search"
+            value={valores.texto}
+            onChange={cambiar('texto')}
+            placeholder="Buscar en la política o en el resumen"
+            maxLength={100}
+            className="input-field pl-10"
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
-          <label htmlFor="filtro-nivel" className="text-sm font-medium text-texto-2">
+          <label htmlFor="filtro-nivel" className={ETIQUETA}>
             Nivel de riesgo
           </label>
-          <select
-            id="filtro-nivel"
-            value={valores.nivel}
-            onChange={cambiar('nivel')}
-            className="input-field w-full mt-1"
-          >
+          <select id="filtro-nivel" value={valores.nivel} onChange={cambiar('nivel')} className="input-field mt-1.5">
             <option value="">Todos</option>
             {(['bajo', 'medio', 'alto'] as NivelRiesgo[]).map((nivel) => (
               <option key={nivel} value={nivel}>
@@ -72,7 +76,7 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
           </select>
         </div>
         <div>
-          <label htmlFor="filtro-desde" className="text-sm font-medium text-texto-2">
+          <label htmlFor="filtro-desde" className={ETIQUETA}>
             Desde
           </label>
           <input
@@ -81,11 +85,11 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
             value={valores.desde}
             max={valores.hasta || undefined}
             onChange={cambiar('desde')}
-            className="input-field w-full mt-1"
+            className="input-field mt-1.5"
           />
         </div>
         <div>
-          <label htmlFor="filtro-hasta" className="text-sm font-medium text-texto-2">
+          <label htmlFor="filtro-hasta" className={ETIQUETA}>
             Hasta
           </label>
           <input
@@ -94,23 +98,15 @@ export default function FormFiltrosHistorial({ onAplicar, deshabilitado = false 
             value={valores.hasta}
             min={valores.desde || undefined}
             onChange={cambiar('hasta')}
-            className="input-field w-full mt-1"
+            className="input-field mt-1.5"
           />
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-riesgo-alto">
-          {error}
-        </p>
-      )}
+      {error && <Aviso tipo="error">{error}</Aviso>}
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={deshabilitado}
-          className="btn-primary inline-flex items-center gap-1 text-sm"
-        >
+      <div className="grid grid-cols-2 gap-2 sm:flex">
+        <button type="submit" disabled={deshabilitado} className="btn-primary text-sm">
           <Search size={16} aria-hidden="true" />
           Aplicar filtros
         </button>

@@ -1,38 +1,49 @@
 import { Link } from 'react-router-dom'
-import { Library, Users } from 'lucide-react'
+import { ArrowRight, Library, Users } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
+
+const OPCIONES: { ruta: string; titulo: string; descripcion: string; icono: LucideIcon }[] = [
+  {
+    ruta: '/admin/usuarios',
+    titulo: 'Usuarios',
+    descripcion: 'Consultar las cuentas y activarlas o desactivarlas.',
+    icono: Users,
+  },
+  {
+    ruta: '/admin/corpus',
+    titulo: 'Corpus normativo',
+    descripcion: 'Consultar, cargar y activar o desactivar documentos normativos.',
+    icono: Library,
+  },
+]
 
 export default function Admin() {
   return (
-    <>
+    <main className="mx-auto max-w-3xl px-4 py-6 pb-16">
+      <EncabezadoPagina
+        titulo="Administración"
+        subtitulo="Desde aquí se accede a la gestión de usuarios y del corpus normativo."
+      />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
-        <h1 className="text-xl font-bold text-texto mb-2">Administración</h1>
-        <p className="text-sm text-texto-2 mb-6">
-          Desde aquí se accede a la gestión de usuarios y del corpus normativo.
-        </p>
-
-        <Link
-          to="/admin/usuarios"
-          className="card flex items-center gap-3 hover:border-marca-borde hover:shadow-md transition-all"
-        >
-          <Users size={22} className="text-marca-texto shrink-0" aria-hidden="true" />
-          <div>
-            <p className="font-semibold text-texto">Usuarios</p>
-            <p className="text-sm text-texto-2">Consultar las cuentas y activarlas o desactivarlas.</p>
-          </div>
-        </Link>
-
-        <Link
-          to="/admin/corpus"
-          className="card flex items-center gap-3 mt-3 hover:border-marca-borde hover:shadow-md transition-all"
-        >
-          <Library size={22} className="text-marca-texto shrink-0" aria-hidden="true" />
-          <div>
-            <p className="font-semibold text-texto">Corpus normativo</p>
-            <p className="text-sm text-texto-2">Consultar, cargar y activar o desactivar documentos normativos.</p>
-          </div>
-        </Link>
-      </main>
-    </>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {OPCIONES.map(({ ruta, titulo, descripcion, icono: Icono }) => (
+          <Link
+            key={ruta}
+            to={ruta}
+            className="flex items-center gap-4 rounded-2xl border border-borde bg-superficie p-5 transition-colors hover:border-marca-borde"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-marca-suave text-marca-texto">
+              <Icono size={24} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-texto">{titulo}</span>
+              <span className="block text-sm text-texto-2">{descripcion}</span>
+            </span>
+            <ArrowRight size={20} aria-hidden="true" className="shrink-0 text-texto-3" />
+          </Link>
+        ))}
+      </div>
+    </main>
   )
 }

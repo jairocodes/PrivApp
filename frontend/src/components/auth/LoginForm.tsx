@@ -57,8 +57,8 @@ export default function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-xl font-semibold text-texto">Iniciar sesión</h2>
+    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4 sm:p-8">
+      <h2 className="text-xl font-bold text-texto">Iniciar sesión</h2>
 
       {errors.general && (
         <Aviso tipo="error">{errors.general}</Aviso>
@@ -92,7 +92,7 @@ export default function LoginForm() {
 
       <p className="text-sm text-center text-texto-2">
         ¿No tienes cuenta?{' '}
-        <Link to="/registro" className="text-marca-texto hover:underline font-medium">
+        <Link to="/registro" className="font-semibold text-marca-texto hover:underline">
           Regístrate aquí
         </Link>
       </p>

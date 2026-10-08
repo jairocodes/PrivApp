@@ -6,6 +6,7 @@ import Input from '@/components/common/Input'
 import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
 import Aviso from '@/components/common/Aviso'
+import { Casilla } from '@/components/common/Campos'
 
 interface FormState {
   nombre: string
@@ -88,8 +89,8 @@ export default function RegisterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-xl font-semibold text-texto">Crear cuenta</h2>
+    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4 sm:p-8">
+      <h2 className="text-xl font-bold text-texto">Crear cuenta</h2>
 
       {errors.general && (
         <Aviso tipo="error">{errors.general}</Aviso>
@@ -117,21 +118,16 @@ export default function RegisterForm() {
         placeholder="tucorreo@ejemplo.com"
       />
 
-      <div className="flex flex-col gap-1">
-        <Input
-          label="Contraseña"
-          type="password"
-          id="password"
-          autoComplete="new-password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          error={errors.password}
-          placeholder="Mínimo 8 caracteres, 1 mayúscula, 1 número"
-        />
-        <p className="text-xs text-texto-3 mt-0.5">
-          Mínimo 8 caracteres, una mayúscula y un número.
-        </p>
-      </div>
+      <Input
+        label="Contraseña"
+        type="password"
+        id="password"
+        autoComplete="new-password"
+        value={form.password}
+        onChange={(e) => setForm({ ...form, password: e.target.value })}
+        error={errors.password}
+        ayuda="Mínimo 8 caracteres, una mayúscula y un número."
+      />
 
       <Input
         label="Confirmar contraseña"
@@ -144,50 +140,34 @@ export default function RegisterForm() {
         placeholder="Repite tu contraseña"
       />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="aceptaAviso" className="flex items-start gap-2 text-sm text-texto-2">
-          <input
-            type="checkbox"
-            id="aceptaAviso"
-            checked={form.aceptaAviso}
-            onChange={(e) => setForm({ ...form, aceptaAviso: e.target.checked })}
-            aria-invalid={Boolean(errors.aceptaAviso)}
-            className="mt-0.5"
-          />
-          <span>
-            He leído y acepto el{' '}
-            <Link
-              to="/aviso-privacidad"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-marca-texto hover:underline font-medium"
-            >
-              aviso de privacidad
-            </Link>
-          </span>
-        </label>
-        {errors.aceptaAviso && <p className="text-sm text-riesgo-alto">{errors.aceptaAviso}</p>}
-      </div>
+      <Casilla
+        id="aceptaAviso"
+        checked={form.aceptaAviso}
+        onChange={(e) => setForm({ ...form, aceptaAviso: e.target.checked })}
+        error={errors.aceptaAviso}
+      >
+        He leído y acepto el{' '}
+        <Link
+          to="/aviso-privacidad"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-marca-texto hover:underline"
+        >
+          aviso de privacidad
+        </Link>
+      </Casilla>
 
       {/* El contrato de servicios de OpenAI exige el consentimiento de la madre,
           el padre o la persona encargada para que menores usen sus servicios. */}
-      <div className="flex flex-col gap-1">
-        <label htmlFor="declaraEdad" className="flex items-start gap-2 text-sm text-texto-2">
-          <input
-            type="checkbox"
-            id="declaraEdad"
-            checked={form.declaraEdad}
-            onChange={(e) => setForm({ ...form, declaraEdad: e.target.checked })}
-            aria-invalid={Boolean(errors.declaraEdad)}
-            className="mt-0.5"
-          />
-          <span>
-            Soy mayor de 18 años o cuento con el consentimiento de mi madre, padre o persona
-            encargada para usar PrivApp
-          </span>
-        </label>
-        {errors.declaraEdad && <p className="text-sm text-riesgo-alto">{errors.declaraEdad}</p>}
-      </div>
+      <Casilla
+        id="declaraEdad"
+        checked={form.declaraEdad}
+        onChange={(e) => setForm({ ...form, declaraEdad: e.target.checked })}
+        error={errors.declaraEdad}
+      >
+        Soy mayor de 18 años o cuento con el consentimiento de mi madre, padre o persona encargada para usar
+        PrivApp
+      </Casilla>
 
       <Button type="submit" isLoading={isLoading} className="w-full mt-2">
         Crear cuenta

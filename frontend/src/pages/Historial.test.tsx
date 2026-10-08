@@ -41,6 +41,15 @@ describe('Historial', () => {
     expect(analisisApi.listar).toHaveBeenCalledWith(1, 10, {})
   })
 
+  it('agrupa los análisis por día, con los de hoy primero', async () => {
+    const hoy = { ...ITEM, id_analisis: '20', fecha: new Date().toISOString(), comentario_breve: 'Análisis de hoy.' }
+    responderListado({ items: [hoy, ITEM], total: 2 })
+    renderHistorial()
+
+    expect(await screen.findByRole('heading', { name: 'Hoy' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '1 de septiembre de 2026' })).toBeInTheDocument()
+  })
+
   it('lista los análisis con su nivel de riesgo y enlace al detalle', async () => {
     responderListado({ items: [ITEM], total: 1 })
     renderHistorial()

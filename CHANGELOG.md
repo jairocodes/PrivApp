@@ -63,6 +63,11 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
   nivel, fichas de "Qué hace con tus datos" por tipo de tratamiento que filtran la
   lista, "Por qué" de cada hallazgo según su criterio, normas desplegables,
   recomendaciones como tarjetas de acción y dos columnas en escritorio.
+- **Resto de pantallas rediseñadas:** bienvenida en inicio de sesión y registro;
+  inicio con accesos directos; análisis con pasos visibles y zona de carga de archivos;
+  historial en tarjetas agrupadas por día; glosario en cuadrícula; perfil con selector
+  de apariencia (claro, oscuro o automático); índice en el aviso de privacidad;
+  administración en tarjetas; página "Página no encontrada" para rutas inexistentes.
 - **Validación del contenido (RN-18):** cada vía de ingesta y el inicio del análisis
   detectan si el texto es una política de privacidad con vocabulario por temas,
   semejanza semántica (embeddings del corpus) y la voz del responsable; los textos que
