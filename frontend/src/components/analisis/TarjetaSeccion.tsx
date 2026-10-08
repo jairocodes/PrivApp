@@ -1,19 +1,16 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { BookOpen, ChevronDown, ListChecks } from 'lucide-react'
 import CitaNormativa from './CitaNormativa'
 import IndicadorSemaforo from './IndicadorSemaforo'
-import type { NivelRiesgo, SeccionAnalizada } from '@/types/analisis'
+import InsigniaNivel from './InsigniaNivel'
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
+import { porQueDelCriterio } from '@/data/criterios'
+import type { Hallazgo, NivelRiesgo, SeccionAnalizada } from '@/types/analisis'
 
 interface Props {
   seccion: SeccionAnalizada
   indice: number
   inicialmenteExpandida?: boolean
-}
-
-const TIPO_ICONO: Record<string, string> = {
-  riesgo: '⚠️',
-  transparencia: '✅',
-  neutral: 'ℹ️',
 }
 
 function nivelMaximo(seccion: SeccionAnalizada): NivelRiesgo {
@@ -29,82 +26,50 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
   const hayHallazgos = seccion.hallazgos.length > 0
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-      {/* Cabecera — siempre visible */}
+    <div className="overflow-hidden rounded-2xl border border-borde bg-superficie">
       <button
-        className="w-full flex items-center justify-between gap-3 px-4 py-4 text-left hover:bg-gray-50 transition-colors"
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-superficie-2"
         onClick={() => setExpandida((v) => !v)}
         aria-expanded={expandida}
       >
-        <div className="flex items-start gap-3 min-w-0">
-          <span className="text-xs font-bold text-gray-400 mt-0.5 shrink-0 w-5 text-right">
-            {indice}
-          </span>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 w-6 shrink-0 text-right text-sm font-bold text-texto-3">{indice}</span>
           <div className="min-w-0">
-            <p className="font-semibold text-gray-900 text-base leading-snug">{seccion.titulo}</p>
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{seccion.categoria_opp115}</p>
+            <p className="text-base font-bold leading-snug text-texto">{seccion.titulo}</p>
+            <p className="mt-0.5 truncate text-xs text-texto-2">{seccion.categoria_opp115}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex shrink-0 items-center gap-3">
           {hayHallazgos && <IndicadorSemaforo nivel={nivel} size="sm" />}
-          <span className="text-gray-400">
-            {expandida ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </span>
+          <ChevronDown
+            size={20}
+            aria-hidden="true"
+            className={`text-texto-3 transition-transform motion-reduce:transition-none ${expandida ? 'rotate-180' : ''}`}
+          />
         </div>
       </button>
 
-      {/* Contenido expandible */}
       {expandida && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-4">
-          {/* Texto original (extracto) */}
-          {seccion.texto_original && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                Fragmento analizado
-              </p>
-              <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">
-                {seccion.texto_original}
-              </p>
-            </div>
-          )}
-
-          {/* Hallazgos */}
+        <div className="space-y-4 border-t border-borde px-4 pb-4 pt-4">
           {hayHallazgos ? (
             <div className="space-y-3">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <p className="text-xs font-semibold uppercase tracking-wide text-texto-2">
                 Hallazgos ({seccion.hallazgos.length})
               </p>
               {seccion.hallazgos.map((hallazgo, i) => (
-                <div key={i} className="rounded-lg border border-gray-100 p-3 space-y-2">
-                  <div className="flex items-start gap-2">
-                    <span className="shrink-0 text-base" role="img" aria-label={hallazgo.tipo}>
-                      {TIPO_ICONO[hallazgo.tipo] ?? 'ℹ️'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <NivelChip nivel={hallazgo.nivel} />
-                        <span className="text-xs text-gray-500 capitalize">{hallazgo.tipo}</span>
-                      </div>
-                      <p className="text-sm text-gray-800 leading-relaxed">{hallazgo.descripcion}</p>
-                    </div>
-                  </div>
-
-                  {/* Fuentes normativas */}
-                  {hallazgo.fuentes_normativas.length > 0 && (
-                    <div className="space-y-2 mt-2 pl-7">
-                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-                        Fuentes normativas
-                      </p>
-                      {hallazgo.fuentes_normativas.map((fn, j) => (
-                        <CitaNormativa key={j} fuente={fn} />
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <TarjetaHallazgo key={i} hallazgo={hallazgo} />
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 italic">No se identificaron hallazgos en esta sección.</p>
+            <p className="text-sm italic text-texto-2">No se identificaron hallazgos en esta sección.</p>
+          )}
+
+          {seccion.texto_original && (
+            <details className="rounded-xl bg-superficie-2 px-4 py-3">
+              <summary className="cursor-pointer text-sm font-semibold text-texto-2">Ver el fragmento analizado</summary>
+              <p className="mt-2 text-sm leading-relaxed text-texto-2">{seccion.texto_original}</p>
+            </details>
           )}
         </div>
       )}
@@ -112,16 +77,60 @@ export default function TarjetaSeccion({ seccion, indice, inicialmenteExpandida 
   )
 }
 
-function NivelChip({ nivel }: { nivel: string }) {
-  const cfg: Record<string, string> = {
-    alto: 'bg-riesgo-alto/15 text-riesgo-alto',
-    medio: 'bg-riesgo-medio/15 text-riesgo-medio',
-    bajo: 'bg-riesgo-bajo/15 text-riesgo-bajo',
-    neutral: 'bg-gray-100 text-gray-600',
-  }
+function TarjetaHallazgo({ hallazgo }: { hallazgo: Hallazgo }) {
+  const porQue = porQueDelCriterio(hallazgo.criterio)
+  const fuentes = hallazgo.fuentes_normativas
+
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${cfg[nivel] ?? cfg.neutral}`}>
-      {nivel}
-    </span>
+    <article className="space-y-3 rounded-xl border border-borde p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <InsigniaNivel nivel={hallazgo.nivel} tipo={hallazgo.tipo} />
+        {hallazgo.tipo_tratamiento && (
+          <span className="inline-flex items-center gap-1">
+            <span
+              className="rounded-full bg-marca-suave px-2.5 py-1 text-xs font-semibold text-marca-suave-texto"
+              title="Tipo de tratamiento de datos"
+            >
+              <span className="sr-only">Tipo de tratamiento: </span>
+              {hallazgo.tipo_tratamiento}
+            </span>
+            <AyudaGlosario termino={hallazgo.tipo_tratamiento} />
+          </span>
+        )}
+      </div>
+
+      <p className="text-base leading-relaxed text-texto">{hallazgo.descripcion}</p>
+
+      {porQue && (
+        <p className="flex items-start gap-2 rounded-xl bg-superficie-2 px-3 py-2.5 text-sm text-texto">
+          <ListChecks size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-texto-2" />
+          <span>
+            <strong>Por qué: </strong>
+            {porQue}
+          </span>
+        </p>
+      )}
+
+      {hallazgo.sin_respaldo && (
+        <p className="flex items-center gap-1 text-xs text-texto-2">
+          Sin respaldo en el corpus normativo: no se cita ninguna norma y no suma a la puntuación de riesgo.
+          <AyudaGlosario termino="Sin respaldo en el corpus normativo" />
+        </p>
+      )}
+
+      {fuentes.length > 0 && (
+        <details className="border-t border-borde pt-3">
+          <summary className="flex min-h-[32px] cursor-pointer items-center gap-2 text-sm font-semibold text-marca-texto">
+            <BookOpen size={16} aria-hidden="true" />
+            {fuentes.length === 1 ? 'Ver la norma que lo respalda' : `Ver las ${fuentes.length} normas que lo respaldan`}
+          </summary>
+          <div className="mt-2 space-y-2">
+            {fuentes.map((fuente, j) => (
+              <CitaNormativa key={j} fuente={fuente} />
+            ))}
+          </div>
+        </details>
+      )}
+    </article>
   )
 }

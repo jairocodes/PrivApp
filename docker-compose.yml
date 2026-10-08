@@ -49,9 +49,12 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0}
+      OPENAI_SEED: ${OPENAI_SEED:-20261003}
       ENVIRONMENT: ${ENVIRONMENT}
       CORS_ORIGINS: ${CORS_ORIGINS}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SQL_ECHO: ${SQL_ECHO:-false}
     volumes:
       - ./corpus_normativo:/app/corpus_normativo:ro
       - ./backend:/app
@@ -69,6 +72,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Servidor de Vite; la imagen de producción es la etapa final del Dockerfile.
+      target: desarrollo
     restart: unless-stopped
     environment:
       VITE_API_URL: http://localhost:8000

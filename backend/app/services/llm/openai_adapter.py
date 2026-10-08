@@ -35,10 +35,25 @@ def _es_error_reintentable(exc: BaseException) -> bool:
 class OpenAIAdapter(LLMAdapter):
     """Adaptador concreto para OpenAI API (gpt-4o-mini, gpt-4o, etc.)."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        temperature: float = 0.0,
+        seed: int | None = None,
+    ) -> None:
         self._client = AsyncOpenAI(api_key=api_key)
         self._model_name = model
+        self.temperatura = temperature
+        self.semilla = seed
+        # Configuraciones del servidor de OpenAI que atendieron las llamadas
+        # (system_fingerprint): si cambian, la misma semilla puede dar otra respuesta.
+        self.huellas_sistema: set[str] = set()
         logger.info("OpenAIAdapter inicializado con modelo '%s'.", model)
+
+    @property
+    def modelo(self) -> str:
+        return self._model_name
 
     @retry(
         retry=retry_if_exception(_es_error_reintentable),
@@ -51,11 +66,14 @@ class OpenAIAdapter(LLMAdapter):
         system_prompt: str,
         texto_seccion: str,
         contexto_normativo: str,
+        esquema: dict | None = None,
     ) -> str:
         """Envía el prompt a OpenAI y retorna el texto generado.
 
         texto_seccion se usa como mensaje de usuario completo (pre-construido por el caller).
         contexto_normativo se ignora cuando ya está embebido en texto_seccion.
+        Con `esquema`, la respuesta se genera con salidas estructuradas estrictas:
+        OpenAI garantiza que cumple el esquema (campos, tipos y listas cerradas).
         """
         prompt_usuario = (
             texto_seccion
@@ -75,9 +93,16 @@ class OpenAIAdapter(LLMAdapter):
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt_usuario},
                 ],
-                temperature=0.2,
-                response_format={"type": "json_object"},
+                temperature=self.temperatura,
+                seed=self.semilla,
+                response_format=(
+                    {"type": "json_schema", "json_schema": {**esquema, "strict": True}}
+                    if esquema
+                    else {"type": "json_object"}
+                ),
             )
+            if response.system_fingerprint:
+                self.huellas_sistema.add(response.system_fingerprint)
             texto = response.choices[0].message.content.strip()
             logger.info(
                 "OpenAI respondió [modelo=%s, chars_respuesta=%d].",

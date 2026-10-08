@@ -1,23 +1,26 @@
 import { useState } from 'react'
 import { analisisApi } from '@/api/analisis'
-import type { AnalisisHistorialItem } from '@/types/analisis'
+import type { AnalisisHistorialItem, FiltrosHistorial } from '@/types/analisis'
 
 export function useHistorial() {
   const [items, setItems] = useState<AnalisisHistorialItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [pageSize] = useState(10)
+  const [filtros, setFiltros] = useState<FiltrosHistorial>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const cargar = async (paginaSolicitada = 1): Promise<void> => {
+  // Sin filtros explícitos se conservan los vigentes (p. ej. al cambiar de página).
+  const cargar = async (paginaSolicitada = 1, nuevosFiltros: FiltrosHistorial = filtros): Promise<void> => {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await analisisApi.listar(paginaSolicitada, pageSize)
+      const res = await analisisApi.listar(paginaSolicitada, pageSize, nuevosFiltros)
       setItems(res.data.items)
       setTotal(res.data.total)
       setPage(res.data.page)
+      setFiltros(nuevosFiltros)
     } catch {
       setError('No fue posible cargar el historial de análisis.')
     } finally {
@@ -25,5 +28,5 @@ export function useHistorial() {
     }
   }
 
-  return { items, total, page, pageSize, isLoading, error, cargar }
+  return { items, total, page, pageSize, filtros, isLoading, error, cargar }
 }

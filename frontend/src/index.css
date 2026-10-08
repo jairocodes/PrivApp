@@ -2,38 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Figtree (SIL Open Font License, public/fonts/OFL.txt). Se sirve desde el propio
+   sitio: cargarla de un servicio externo le enviaría a ese tercero la IP de cada
+   visitante. */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('/fonts/figtree-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('/fonts/figtree-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Tokens de color (canales RGB, para admitir opacidad en Tailwind). Todos los
+   pares de texto y fondo cumplen el contraste AA de WCAG 2.2 en ambos modos. */
 @layer base {
+  :root {
+    color-scheme: light;
+    --fondo: 244 246 251;
+    --superficie: 255 255 255;
+    --superficie-2: 244 246 251;
+    --texto: 17 26 46;
+    --texto-2: 74 85 104;
+    --texto-3: 107 116 136;
+    --borde: 227 231 240;
+    --borde-fuerte: 213 219 232;
+    --marca: 46 79 216;
+    --marca-hover: 31 58 168;
+    --marca-texto: 46 79 216;
+    --marca-suave: 232 237 255;
+    --marca-suave-texto: 35 57 158;
+    --marca-borde: 201 211 245;
+    --riesgo-alto: 163 32 15;
+    --riesgo-medio: 138 75 0;
+    --riesgo-bajo: 17 103 59;
+    --riesgo-alto-solido: 199 54 31;
+    --riesgo-medio-solido: 217 138 0;
+    --riesgo-bajo-solido: 46 158 98;
+    --juri-fondo: 239 231 251;
+    --juri-texto: 91 42 158;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --fondo: 14 20 36;
+    --superficie: 24 32 51;
+    --superficie-2: 34 43 64;
+    --texto: 238 241 248;
+    --texto-2: 169 179 199;
+    --texto-3: 133 144 166;
+    --borde: 44 54 77;
+    --borde-fuerte: 58 69 96;
+    --marca: 59 87 224;
+    --marca-hover: 79 106 240;
+    --marca-texto: 163 180 255;
+    --marca-suave: 36 48 90;
+    --marca-suave-texto: 201 211 255;
+    --marca-borde: 58 74 133;
+    --riesgo-alto: 255 165 151;
+    --riesgo-medio: 255 201 110;
+    --riesgo-bajo: 134 222 174;
+    --riesgo-alto-solido: 232 112 95;
+    --riesgo-medio-solido: 227 166 58;
+    --riesgo-bajo-solido: 76 196 135;
+    --juri-fondo: 46 34 70;
+    --juri-texto: 210 187 247;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply bg-fondo text-texto font-sans antialiased;
     font-size: 1rem;
     line-height: 1.6;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold leading-tight;
+    @apply font-bold leading-tight;
+  }
+
+  /* Foco visible para teclado en todo elemento interactivo. */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid rgb(var(--marca));
+    outline-offset: 2px;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700
-           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl
+           bg-marca text-white font-semibold hover:bg-marca-hover
            disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300
-           focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2
-           transition-colors;
+    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-4 py-2.5 rounded-xl
+           bg-superficie text-marca-texto font-semibold border border-marca-borde hover:bg-marca-suave
+           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
   }
 
   .input-field {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-base
-           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
-           placeholder:text-gray-400;
+    @apply w-full min-h-[44px] bg-superficie text-texto border border-borde-fuerte rounded-xl px-3 py-2.5 text-base
+           placeholder:text-texto-3
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-marca focus-visible:border-transparent;
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-superficie rounded-2xl border border-borde p-6 shadow-sm dark:shadow-none;
   }
 }

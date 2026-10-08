@@ -1,29 +1,35 @@
 import { Lightbulb } from 'lucide-react'
+import AyudaGlosario from '@/components/glosario/AyudaGlosario'
 
 interface Props {
   recomendaciones: string[]
 }
 
+/** Recomendaciones como tarjetas de acción numeradas, de la más importante a la menos. */
 export default function ListaRecomendaciones({ recomendaciones }: Props) {
   if (recomendaciones.length === 0) return null
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-4">
-        <Lightbulb size={20} className="text-yellow-500" />
-        <h2 className="text-lg font-semibold text-gray-800">Recomendaciones</h2>
+    <section aria-labelledby="titulo-recomendaciones" className="space-y-3">
+      <div className="flex items-center gap-3 px-1">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-riesgo-medio/10 text-riesgo-medio">
+          <Lightbulb size={20} aria-hidden="true" />
+        </span>
+        <h2 id="titulo-recomendaciones" className="text-lg font-bold text-texto">
+          Qué puedes hacer
+        </h2>
+        <AyudaGlosario termino="Recomendación" />
       </div>
-      <ul className="space-y-3">
+      <ol className="space-y-3">
         {recomendaciones.map((rec, i) => (
-          <li key={i} className="flex items-start gap-3 text-sm text-gray-700 leading-relaxed">
-            <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700
-                             flex items-center justify-center text-xs font-bold mt-0.5">
+          <li key={i} className="flex items-start gap-3 rounded-2xl border border-borde bg-superficie p-4">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-marca text-sm font-extrabold text-white">
               {i + 1}
             </span>
-            {rec}
+            <span className="text-base leading-relaxed text-texto">{rec}</span>
           </li>
         ))}
-      </ul>
-    </div>
+      </ol>
+    </section>
   )
 }

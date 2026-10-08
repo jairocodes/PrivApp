@@ -7,6 +7,7 @@ debe ejecutarla en threadpool (ver app/api/v1/analisis.py).
 """
 
 import io
+import time
 from xml.sax.saxutils import escape as _esc
 
 from reportlab.lib import colors
@@ -31,11 +32,16 @@ def _inferir_jurisdiccion(documento: str) -> str:
     """Misma heurística de CitaNormativa.tsx (frontend), para que el PDF sea
     consistente con lo que el usuario ya vio en el panel de resultados."""
     d = documento.lower()
-    if any(k in d for k in ("constituci", "laip", "guatemal")):
+    if any(k in d for k in _CLAVES_GUATEMALA):
         return "guatemala"
-    if any(k in d for k in ("opp", "tosdr")):
+    if any(k in d for k in _CLAVES_ESTANDAR):
         return "estandar_tecnico"
     return "internacional"
+
+
+# Mismas claves que frontend/src/utils/jurisdiccion.ts.
+_CLAVES_GUATEMALA = ("constituci", "laip", "guatemal", "decreto 57", "57-2008", "acceso a la informaci")
+_CLAVES_ESTANDAR = ("opp", "tosdr", "tos;dr", "tos dr")
 
 
 def _estilos() -> dict[str, ParagraphStyle]:
@@ -79,7 +85,7 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
     label_nivel = _LABEL_NIVEL.get(resumen.nivel_riesgo_global, resumen.nivel_riesgo_global)
     story.append(Paragraph("Resumen ejecutivo", estilos["h2"]))
     story.append(Paragraph(
-        f'<font color="{hex_nivel}"><b>{label_nivel}</b></font> — Puntaje: {resumen.puntaje}/100',
+        f'<font color="{hex_nivel}"><b>{label_nivel}</b></font> — Puntuación de riesgo: {resumen.puntaje}/100',
         estilos["normal"],
     ))
     story.append(Paragraph(_esc(resumen.comentario_breve), estilos["normal"]))
@@ -101,14 +107,27 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
         for hallazgo in seccion.hallazgos:
             hex_h = _HEX_NIVEL.get(hallazgo.nivel, "#000000")
             label_h = _LABEL_NIVEL.get(hallazgo.nivel, hallazgo.nivel)
+            # Los análisis anteriores a la clasificación no tienen tipo de tratamiento.
+            tratamiento = (
+                f" · <i>Tipo de tratamiento: {_esc(hallazgo.tipo_tratamiento)}</i>"
+                if hallazgo.tipo_tratamiento
+                else ""
+            )
             story.append(Paragraph(
                 f'<font color="{hex_h}"><b>{label_h}</b></font> '
-                f"({_esc(hallazgo.tipo)}) — {_esc(hallazgo.descripcion)}",
+                f"({_esc(hallazgo.tipo)}){tratamiento} — {_esc(hallazgo.descripcion)}",
                 estilos["normal"],
             ))
+            if hallazgo.sin_respaldo:
+                story.append(Paragraph(
+                    "<i>Sin respaldo en el corpus normativo: no se cita ninguna norma y "
+                    "no suma a la puntuación de riesgo.</i>",
+                    estilos["cita"],
+                ))
             for fuente in hallazgo.fuentes_normativas:
+                # Los análisis anteriores no guardan la jurisdicción de la cita.
                 jurisdiccion = _LABEL_JURISDICCION.get(
-                    _inferir_jurisdiccion(fuente.documento), "Internacional"
+                    fuente.jurisdiccion or _inferir_jurisdiccion(fuente.documento), "Internacional"
                 )
                 referencia = f" — {_esc(fuente.referencia)}" if fuente.referencia else ""
                 story.append(Paragraph(
@@ -136,3 +155,32 @@ def generar_pdf_analisis(analisis: AnalisisResponse) -> bytes:
 
     doc.build(story)
     return buffer.getvalue()
+
+
+def generar_pdf_y_medir(analisis: AnalisisResponse) -> tuple[bytes, float]:
+    """Genera el PDF y devuelve también los segundos que tardó su construcción
+    (indicador de la Tabla 1). Se mide aquí, en el hilo que lo construye, para
+    no incluir la espera en la cola de hilos."""
+    inicio = time.perf_counter()
+    contenido = generar_pdf_analisis(analisis)
+    return contenido, time.perf_counter() - inicio
+
+
+def resumir_tiempos(segundos: list[float]) -> dict:
+    """Estadísticas de una lista de tiempos de generación, en segundos."""
+    if not segundos:
+        return {"mediciones": 0}
+    ordenados = sorted(segundos)
+    n = len(ordenados)
+    mitad = n // 2
+    mediana = ordenados[mitad] if n % 2 else (ordenados[mitad - 1] + ordenados[mitad]) / 2
+    # Percentil 95 por el método del rango más cercano.
+    p95 = ordenados[max(0, -(-95 * n // 100) - 1)]
+    return {
+        "mediciones": n,
+        "promedio": sum(ordenados) / n,
+        "mediana": mediana,
+        "minimo": ordenados[0],
+        "maximo": ordenados[-1],
+        "p95": p95,
+    }

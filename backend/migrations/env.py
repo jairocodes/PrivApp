@@ -7,6 +7,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.config import normalizar_url_bd
 from app.database import Base
 
 # Importar todos los modelos para que Alembic los detecte
@@ -19,7 +20,7 @@ target_metadata = Base.metadata
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", DATABASE_URL)
+    config.set_main_option("sqlalchemy.url", normalizar_url_bd(DATABASE_URL))
 
 
 def run_migrations_offline() -> None:

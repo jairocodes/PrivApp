@@ -1,5 +1,7 @@
 """Configuración global de pytest con base de datos SQLite en memoria para tests."""
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -53,6 +55,7 @@ async def seed_user(db_session: AsyncSession) -> User:
         email="test@privapp.test",
         hashed_password=hash_password("TestPass123"),
         is_active=True,
+        privacy_accepted_at=datetime.now(timezone.utc),
     )
     db_session.add(user)
     await db_session.flush()
@@ -75,6 +78,38 @@ class FakeRedis:
 @pytest.fixture(autouse=True)
 def fake_redis(monkeypatch):
     monkeypatch.setattr("app.core.token_revocation._client", FakeRedis())
+
+
+@pytest.fixture(autouse=True)
+def dns_publico(monkeypatch):
+    # Las pruebas no consultan el DNS real: todo sitio resuelve a una IP pública
+    # de documentación. Las pruebas de direcciones internas lo sustituyen.
+    monkeypatch.setattr("app.services.ingesta_service._resolver_ips", lambda host: ["93.184.216.34"])
+
+
+@pytest.fixture(autouse=True)
+def version_corpus_fija(monkeypatch):
+    # La huella del corpus consulta corpus_chunks, que no existe en SQLite; las
+    # pruebas de reutilización la cambian para simular un corpus distinto.
+    async def _version(db):
+        return "corpus-de-prueba"
+
+    monkeypatch.setattr("app.services.analisis_service._version_corpus", _version)
+
+
+@pytest.fixture(autouse=True)
+def detectar_politica_aceptada(monkeypatch):
+    # Las pruebas usan textos de relleno; la detección real (embeddings) se
+    # prueba en test_deteccion_politica.py, que sustituye esta respuesta.
+    from app.services.deteccion_politica import Deteccion
+
+    def _politica(texto):
+        return Deteccion(resultado="politica", temas_encontrados=["datos personales"], temas_total=10,
+                         cobertura=1.0, voz_responsable=5)
+
+    monkeypatch.setattr("app.api.v1.ingesta.detectar_politica", _politica)
+    monkeypatch.setattr("app.api.v1.analisis.detectar_politica", _politica)
+    return _politica
 
 
 @pytest.fixture(autouse=True)

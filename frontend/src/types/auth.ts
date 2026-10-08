@@ -1,7 +1,14 @@
+export type Rol = 'usuario' | 'administrador'
+
 export interface User {
   id: number
   nombre: string
   email: string
+  role: Rol
+}
+
+export function esAdministrador(user: User | null): boolean {
+  return user?.role === 'administrador'
 }
 
 export interface LoginRequest {
@@ -13,6 +20,14 @@ export interface RegisterRequest {
   nombre: string
   email: string
   password: string
+  acepta_aviso: boolean
+  declara_edad: boolean
+}
+
+export interface CambioPasswordRequest {
+  password_actual: string
+  password_nueva: string
+  confirmar_password: string
 }
 
 export interface TokenResponse {
@@ -25,6 +40,15 @@ export interface AuthContextValue {
   token: string | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  register: (nombre: string, email: string, password: string) => Promise<void>
+  register: (
+    nombre: string,
+    email: string,
+    password: string,
+    aceptaAviso: boolean,
+    declaraEdad: boolean,
+  ) => Promise<void>
   logout: () => void
+  actualizarPerfil: (nombre: string) => Promise<void>
+  cambiarPassword: (datos: CambioPasswordRequest) => Promise<void>
+  eliminarCuenta: (password: string) => Promise<void>
 }

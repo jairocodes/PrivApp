@@ -20,11 +20,24 @@ function renderRegistro(auth: AuthContextValue) {
   )
 }
 
-async function completar(datos: { nombre: string; email: string; password: string; confirmacion: string }) {
+async function completar(datos: {
+  nombre: string
+  email: string
+  password: string
+  confirmacion: string
+  aceptaAviso?: boolean
+  declaraEdad?: boolean
+}) {
   await userEvent.type(screen.getByLabelText('Nombre completo'), datos.nombre)
   await userEvent.type(screen.getByLabelText('Correo electrónico'), datos.email)
   await userEvent.type(screen.getByLabelText('Contraseña'), datos.password)
   await userEvent.type(screen.getByLabelText('Confirmar contraseña'), datos.confirmacion)
+  if (datos.aceptaAviso ?? true) {
+    await userEvent.click(screen.getByRole('checkbox', { name: /acepto el aviso de privacidad/ }))
+  }
+  if (datos.declaraEdad ?? true) {
+    await userEvent.click(screen.getByRole('checkbox', { name: /mayor de 18 años/ }))
+  }
   await userEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }))
 }
 
@@ -63,8 +76,38 @@ describe('RegisterForm', () => {
 
     await completar({ ...VALIDOS, nombre: '  Ana López  ' })
 
-    expect(auth.register).toHaveBeenCalledWith('Ana López', 'ana@privapp.test', 'Segura123')
+    expect(auth.register).toHaveBeenCalledWith('Ana López', 'ana@privapp.test', 'Segura123', true, true)
     expect(await screen.findByText('Panel principal')).toBeInTheDocument()
+  })
+
+  it('exige aceptar el aviso de privacidad', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ ...VALIDOS, aceptaAviso: false })
+
+    expect(screen.getByText('Debes aceptar el aviso de privacidad para registrarte.')).toBeInTheDocument()
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('exige la declaración de edad o de consentimiento', async () => {
+    const auth = crearAuthValue()
+    renderRegistro(auth)
+
+    await completar({ ...VALIDOS, declaraEdad: false })
+
+    expect(screen.getByText('Debes declarar que eres mayor de 18 años o que cuentas con el consentimiento de tu madre, padre o persona encargada.')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /mayor de 18 años/ })).toHaveAttribute('aria-invalid', 'true')
+    expect(auth.register).not.toHaveBeenCalled()
+  })
+
+  it('enlaza al aviso de privacidad desde la casilla', () => {
+    renderRegistro(crearAuthValue())
+
+    expect(screen.getByRole('link', { name: 'aviso de privacidad' })).toHaveAttribute(
+      'href',
+      '/aviso-privacidad',
+    )
   })
 
   it('avisa si el correo ya está registrado (409)', async () => {
@@ -76,5 +119,16 @@ describe('RegisterForm', () => {
     await completar(VALIDOS)
 
     expect(await screen.findByText('Este correo ya está registrado.')).toBeInTheDocument()
+  })
+
+  it('explica el límite de intentos ante un 429', async () => {
+    const auth = crearAuthValue({
+      register: vi.fn().mockRejectedValue({ response: { status: 429 } }),
+    })
+    renderRegistro(auth)
+
+    await completar(VALIDOS)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Hiciste demasiados intentos. Espera un minuto antes de volver a intentarlo.')
   })
 })

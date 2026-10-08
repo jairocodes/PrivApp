@@ -5,6 +5,112 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
 ---
 
+## [2.0.0] — 2026-10-07 — Proyecto de Graduación II
+
+Versión completa del sistema para el Capítulo VI, desplegada en Railway.
+
+### Added
+- **Cuentas y sesiones:** rol usuario/administrador validado con el rol vigente en la
+  base de datos; fecha de emisión e identificador (`jti`) en los tokens; cierre de
+  sesión con revocación en Redis; invalidación de todas las sesiones al cambiar la
+  contraseña o desactivar una cuenta (`sessions_valid_from`).
+- **Aviso de privacidad:** página pública, aceptación obligatoria al registrarse
+  (`privacy_accepted_at`) y declaración obligatoria de mayoría de edad o de
+  consentimiento de la madre, el padre o la persona encargada (`age_declaration_at`).
+- **Perfil:** edición del nombre, cambio de contraseña y eliminación definitiva de la
+  propia cuenta con todos sus análisis.
+- **Administración:** listado y búsqueda de usuarios (sin distinguir acentos),
+  activación y desactivación de cuentas; listado, carga (PDF/TXT) y activación o
+  desactivación de documentos del corpus normativo. Script `promover_admin.py`.
+- **Ingesta:** carga de archivos PDF o TXT de hasta 5 MB procesados en memoria,
+  regla única de longitud (200 caracteres y 40 palabras, máximo 300,000, con un
+  mensaje que dice cuánto mide el texto y qué hacer si lo supera) y vista
+  previa obligatoria antes de analizar.
+- **Análisis:** progreso en segundo plano; clasificación de cada hallazgo en uno de
+  ocho tipos de tratamiento de datos; análisis de la política completa, con hasta
+  cuatro secciones en paralelo; citas normativas construidas con el texto real de los
+  fragmentos del corpus; normativa guatemalteca incluida en el contexto de cada
+  sección; segunda búsqueda de respaldo con la descripción de cada hallazgo;
+  hallazgos sin respaldo marcados, que no suman a la puntuación; recomendaciones
+  prácticas redactadas a partir de los riesgos encontrados.
+- **Resultados:** filtro de hallazgos por nivel y jurisdicción, ayuda contextual del
+  glosario y eliminación del análisis desde su detalle.
+- **Historial:** filtros por nivel, rango de fechas y texto (sin distinguir acentos) y
+  eliminación definitiva con confirmación.
+- **Panel estadístico** personal con gráfico de distribución por nivel (recharts,
+  cargado de forma diferida).
+- **Glosario** público de 22 términos con búsqueda sin acentos.
+- **Reportes:** tipo de tratamiento y hallazgos sin respaldo en el PDF; registro del
+  tiempo de generación y script `tiempos_reporte.py`.
+- **Pruebas:** Vitest con jsdom en el cliente; pruebas de integración contra
+  PostgreSQL con pgvector (`PRIVAPP_TEST_PG_URL`).
+- **Consistencia del análisis:** el modelo elige el código del criterio de la rúbrica
+  (A1–A10, M1–M5, B1–B4) y el servidor deriva el nivel y el tipo del hallazgo;
+  temperatura 0, semilla fija y salidas estructuradas estrictas; un último intento
+  por sección ante errores transitorios; reutilización del resultado de un texto
+  idéntico analizado con la misma configuración (`analysis_temp.text_hash`);
+  configuración de cada análisis en `resultado.metadatos_analisis`; script
+  `medir_consistencia.py`.
+- **Interfaz:** tokens de color con modo claro y oscuro (preferencia guardada; por
+  defecto la del dispositivo) e interruptor sol/luna; fuente Figtree servida desde
+  el propio sitio; barra superior y pestañas inferiores en el celular con la sección
+  actual marcada; enlace para saltar al contenido; componentes comunes (avisos,
+  carga, estado vacío, encabezado, insignias, paginación y campos); diálogo de
+  confirmación con Headless UI (foco retenido); favicon.
+- **Pantalla de resultados rediseñada:** medidor semicircular con franjas de
+  referencia, "¿Por qué este resultado?" con las cláusulas que cuentan y la regla del
+  nivel, fichas de "Qué hace con tus datos" por tipo de tratamiento que filtran la
+  lista, "Por qué" de cada hallazgo según su criterio, normas desplegables,
+  recomendaciones como tarjetas de acción y dos columnas en escritorio.
+- Aclaración en los resultados cuando el nivel general no coincide con la franja de
+  la puntuación: el nivel se decide por los hallazgos, no solo por la puntuación.
+- **Resto de pantallas rediseñadas:** bienvenida en inicio de sesión y registro;
+  inicio con accesos directos; análisis con pasos visibles y zona de carga de archivos;
+  historial en tarjetas agrupadas por día; glosario en cuadrícula; perfil con selector
+  de apariencia (claro, oscuro o automático); índice en el aviso de privacidad;
+  administración en tarjetas; página "Página no encontrada" para rutas inexistentes.
+- **Validación del contenido (RN-18):** cada vía de ingesta y el inicio del análisis
+  detectan si el texto es una política de privacidad con vocabulario por temas,
+  semejanza semántica (embeddings del corpus) y la voz del responsable; los textos que
+  claramente no lo son se rechazan, y los dudosos exigen confirmación en la vista
+  previa. Un análisis en el que casi ninguna sección trata de datos personales termina
+  sin puntuación (`motivo: no_es_politica`). Script `evaluar_deteccion.py`. El modelo de
+  embeddings se carga desde la caché local sin consultar en línea.
+- Migraciones 0005 a 0011.
+
+### Changed
+- OpenAI es el único proveedor del modelo de lenguaje (`LLM_PROVIDER=openai`).
+- Búsqueda exacta en el corpus normativo: se elimina el índice aproximado ivfflat.
+- "Puntaje de riesgo" pasa a llamarse "Puntuación de riesgo".
+- Arranque con `lifespan`; `--reload` solo en desarrollo; cabeceras de reenvío del
+  proxy de Railway.
+- Imagen del backend lista para Railway: incluye el modelo de embeddings, escucha en
+  el puerto `PORT` y acepta la URL de la base como la entrega la plataforma
+  (`postgresql://`).
+- Aviso de privacidad completo: correo de contacto, región del servidor (este de
+  Estados Unidos, Virginia), conservación de los registros técnicos (7 días) y fecha.
+- Imagen de producción del frontend: los archivos estáticos se construyen con
+  `VITE_API_URL` y los sirve nginx; el servidor de Vite queda solo para desarrollo.
+- Repositorios separados para usuarios, análisis y corpus.
+
+### Removed
+- Adaptador de Gemini.
+- Tope de ocho secciones por análisis.
+- La cita genérica "Principios generales de protección de datos".
+
+### Fixed
+- Jurisdicción del Decreto 57-2008 (Guatemala) y de ToS;DR (estándar técnico).
+- Mensaje claro al superar el límite de solicitudes.
+- Rechazo temprano de archivos demasiado grandes.
+- Carga del corpus solo desde las carpetas de jurisdicción.
+- Política de reintentos del adaptador de OpenAI.
+
+### Security
+- Los registros del servidor no guardan correos, direcciones IP, nombres de archivos
+  cargados ni direcciones web completas; producción arranca sin registro de acceso.
+
+---
+
 ## [1.0.0-prototipo] — 2026-05-18 — Release: Prototipo funcional completo
 
 ### Summary

@@ -1,37 +1,106 @@
-import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, FileSearch, ShieldAlert } from 'lucide-react'
-import Navbar from '@/components/common/Navbar'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import { FileSearch, Plus, Trash2 } from 'lucide-react'
+import { analisisApi } from '@/api/analisis'
+import Aviso from '@/components/common/Aviso'
+import Cargando from '@/components/common/Cargando'
+import DialogoConfirmacion from '@/components/common/DialogoConfirmacion'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
+import EstadoVacio from '@/components/common/EstadoVacio'
+import Paginacion from '@/components/common/Paginacion'
 import IndicadorSemaforo from '@/components/analisis/IndicadorSemaforo'
+import FormFiltrosHistorial from '@/components/historial/FormFiltrosHistorial'
 import { useHistorial } from '@/hooks/useHistorial'
-import type { AnalisisHistorialItem } from '@/types/analisis'
+import type { AnalisisHistorialItem, FiltrosHistorial, NivelRiesgo } from '@/types/analisis'
+import { MENSAJE_ELIMINAR_ANALISIS, detalleDeError } from '@/utils/errores'
+
+const hayFiltros = (filtros: FiltrosHistorial) =>
+  Object.values(filtros).some((valor) => typeof valor === 'string' && valor.trim() !== '')
 
 export default function Historial() {
-  const { items, total, page, pageSize, isLoading, error, cargar } = useHistorial()
+  const { items, total, page, pageSize, filtros, isLoading, error, cargar } = useHistorial()
 
   useEffect(() => {
     cargar(1)
   }, [])
 
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize))
+  // Aviso que deja otra pantalla al volver (p. ej. tras eliminar desde el detalle).
+  const mensaje = (useLocation().state as { mensaje?: string } | null)?.mensaje
+
+  const [porEliminar, setPorEliminar] = useState<AnalisisHistorialItem | null>(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+
+  const confirmarEliminacion = async () => {
+    if (!porEliminar) return
+    setEliminando(true)
+    setErrorEliminar(null)
+    try {
+      await analisisApi.eliminar(porEliminar.id_analisis)
+      setPorEliminar(null)
+      // Si era el último de la página, se vuelve a la anterior.
+      await cargar(items.length === 1 && page > 1 ? page - 1 : page)
+    } catch (err: unknown) {
+      setErrorEliminar(detalleDeError(err, 'No fue posible eliminar el análisis. Intenta nuevamente.'))
+    } finally {
+      setEliminando(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
+    <>
+      <main className="mx-auto max-w-2xl px-4 py-6 pb-16">
+        <EncabezadoPagina titulo="Mis análisis" subtitulo="Tus análisis guardados. Solo tú los ves." />
 
-      <main className="max-w-2xl mx-auto px-4 py-6 pb-16">
-        <h1 className="text-xl font-bold text-gray-900 mb-6">Mis análisis</h1>
+        {mensaje && (
+          <Aviso tipo="exito" className="mb-4">
+            {mensaje}
+          </Aviso>
+        )}
 
-        {isLoading && <EstadoCargando />}
-        {error && !isLoading && <EstadoError mensaje={error} />}
+        <div className="mb-5">
+          <FormFiltrosHistorial onAplicar={(nuevos) => cargar(1, nuevos)} deshabilitado={isLoading} />
+        </div>
 
-        {!isLoading && !error && items.length === 0 && <EstadoVacio />}
+        {isLoading && <Cargando mensaje="Cargando historial..." />}
+        {error && !isLoading && <Aviso tipo="error">{error}</Aviso>}
+
+        {!isLoading && !error && items.length === 0 && (
+          hayFiltros(filtros) ? (
+            <EstadoVacio icono={FileSearch} mensaje="No hay análisis que coincidan con los filtros." />
+          ) : (
+            <EstadoVacio
+              icono={FileSearch}
+              mensaje="Aún no tienes análisis registrados."
+              accion={<Link to="/analizar" className="btn-primary text-sm">Analizar una política</Link>}
+            />
+          )
+        )}
+
+        {!isLoading && !error && items.length > 0 && hayFiltros(filtros) && (
+          <p className="text-xs text-texto-2 mb-3" aria-live="polite">
+            {total === 1 ? '1 análisis coincide con los filtros.' : `${total} análisis coinciden con los filtros.`}
+          </p>
+        )}
 
         {!isLoading && !error && items.length > 0 && (
           <>
-            <div className="space-y-3">
-              {items.map((item) => (
-                <TarjetaHistorial key={item.id_analisis} item={item} />
+            <div className="space-y-5">
+              {agruparPorDia(items).map(({ dia, analisis }) => (
+                <section key={dia} aria-label={dia} className="space-y-3">
+                  <h2 className="px-1 text-sm font-bold text-texto-2">{dia}</h2>
+                  {analisis.map((item) => (
+                    <TarjetaHistorial
+                      key={item.id_analisis}
+                      item={item}
+                      onEliminar={() => {
+                        setErrorEliminar(null)
+                        setPorEliminar(item)
+                      }}
+                    />
+                  ))}
+                </section>
               ))}
             </div>
 
@@ -41,102 +110,109 @@ export default function Historial() {
               onCambiarPagina={cargar}
               disabled={isLoading}
             />
+
+            <Link
+              to="/analizar"
+              className="mt-4 flex items-center gap-4 rounded-2xl border-2 border-dashed border-marca-borde p-4 text-marca-texto hover:bg-marca-suave/40"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-marca-suave">
+                <Plus size={22} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block font-bold">Analiza otra política</span>
+                <span className="block text-sm text-texto-2">¿Usas otra app? Revisa qué hace con tus datos.</span>
+              </span>
+            </Link>
           </>
         )}
       </main>
-    </div>
+
+      <DialogoConfirmacion
+        abierto={porEliminar !== null}
+        titulo="¿Eliminar este análisis?"
+        mensaje={MENSAJE_ELIMINAR_ANALISIS}
+        textoConfirmar="Eliminar"
+        procesando={eliminando}
+        error={errorEliminar}
+        onConfirmar={confirmarEliminacion}
+        onCancelar={() => setPorEliminar(null)}
+      />
+    </>
   )
 }
 
-function TarjetaHistorial({ item }: { item: AnalisisHistorialItem }) {
-  const fechaFormateada = new Date(item.fecha).toLocaleString('es-GT', {
+const COLOR_ANILLO: Record<NivelRiesgo, string> = {
+  alto: '--riesgo-alto-solido',
+  medio: '--riesgo-medio-solido',
+  bajo: '--riesgo-bajo-solido',
+}
+
+function etiquetaDia(fecha: Date): string {
+  const hoy = new Date()
+  const ayer = new Date(hoy)
+  ayer.setDate(hoy.getDate() - 1)
+  if (fecha.toDateString() === hoy.toDateString()) return 'Hoy'
+  if (fecha.toDateString() === ayer.toDateString()) return 'Ayer'
+  return fecha.toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/** Los análisis llegan del más reciente al más antiguo: se agrupan por día. */
+function agruparPorDia(items: AnalisisHistorialItem[]) {
+  const grupos: { dia: string; analisis: AnalisisHistorialItem[] }[] = []
+  for (const item of items) {
+    const dia = etiquetaDia(new Date(item.fecha))
+    const ultimo = grupos[grupos.length - 1]
+    if (ultimo?.dia === dia) ultimo.analisis.push(item)
+    else grupos.push({ dia, analisis: [item] })
+  }
+  return grupos
+}
+
+function AnilloPuntuacion({ puntaje, nivel }: { puntaje: number; nivel: NivelRiesgo }) {
+  const grados = Math.min(100, Math.max(0, puntaje)) * 3.6
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full"
+      style={{
+        background: `conic-gradient(rgb(var(${COLOR_ANILLO[nivel]})) ${grados}deg, rgb(var(--superficie-2)) 0deg)`,
+      }}
+    >
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-superficie text-base font-extrabold text-texto">
+        {puntaje}
+      </span>
+    </span>
+  )
+}
+
+function TarjetaHistorial({ item, onEliminar }: { item: AnalisisHistorialItem; onEliminar: () => void }) {
+  const fecha = new Date(item.fecha)
+  const fechaFormateada = fecha.toLocaleString('es-GT', {
     day: '2-digit', month: 'long', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
+  const hora = fecha.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <Link
-      to={`/resultados/${item.id_analisis}`}
-      className="card flex items-center justify-between gap-3 hover:border-blue-300 hover:shadow-md transition-all"
-    >
-      <div className="min-w-0">
-        <p className="text-xs text-gray-400">{fechaFormateada}</p>
-        <p className="text-sm text-gray-700 mt-0.5 truncate">{item.comentario_breve}</p>
-        <div className="mt-2">
-          <IndicadorSemaforo nivel={item.nivel_riesgo_global} size="sm" />
-        </div>
-      </div>
-      <div className="flex flex-col items-center justify-center w-12 h-12 rounded-full border-2 border-gray-100 bg-white shrink-0">
-        <span className="text-sm font-black leading-none text-gray-700">{item.puntaje}</span>
-        <span className="text-[10px] text-gray-400 leading-none">/100</span>
-      </div>
-    </Link>
-  )
-}
-
-function Paginacion({
-  page,
-  totalPaginas,
-  onCambiarPagina,
-  disabled,
-}: {
-  page: number
-  totalPaginas: number
-  onCambiarPagina: (pagina: number) => void
-  disabled: boolean
-}) {
-  return (
-    <div className="flex items-center justify-between mt-5">
-      <button
-        onClick={() => onCambiarPagina(page - 1)}
-        disabled={disabled || page <= 1}
-        className="flex items-center gap-1 text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:text-blue-600"
-      >
-        <ChevronLeft size={16} />
-        Anterior
-      </button>
-      <span className="text-xs text-gray-400">
-        Página {page} de {totalPaginas}
-      </span>
-      <button
-        onClick={() => onCambiarPagina(page + 1)}
-        disabled={disabled || page >= totalPaginas}
-        className="flex items-center gap-1 text-sm text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed hover:text-blue-600"
-      >
-        Siguiente
-        <ChevronRight size={16} />
-      </button>
-    </div>
-  )
-}
-
-function EstadoCargando() {
-  return (
-    <div className="card text-center py-16 space-y-3">
-      <div className="inline-flex w-12 h-12 rounded-full border-4 border-blue-200 border-t-blue-600
-                      animate-spin mx-auto" />
-      <p className="text-gray-500 text-sm">Cargando historial...</p>
-    </div>
-  )
-}
-
-function EstadoError({ mensaje }: { mensaje: string }) {
-  return (
-    <div className="card bg-red-50 border-red-200 text-center py-10 space-y-3">
-      <ShieldAlert size={32} className="text-red-400 mx-auto" />
-      <p className="text-red-700 text-sm">{mensaje}</p>
-    </div>
-  )
-}
-
-function EstadoVacio() {
-  return (
-    <div className="card text-center py-16 space-y-3">
-      <FileSearch size={32} className="text-gray-300 mx-auto" />
-      <p className="text-gray-500 text-sm">Aún no tienes análisis registrados.</p>
-      <Link to="/analizar" className="inline-block btn-primary text-sm mt-2">
-        Analizar una política
+    <div className="flex items-center gap-2 rounded-2xl border border-borde bg-superficie p-3 transition-colors hover:border-marca-borde sm:p-4">
+      <Link to={`/resultados/${item.id_analisis}`} className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+        <AnilloPuntuacion puntaje={item.puntaje} nivel={item.nivel_riesgo_global} />
+        <span className="min-w-0 flex-1 space-y-1.5">
+          <span className="block text-base leading-snug text-texto line-clamp-2">{item.comentario_breve}</span>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <IndicadorSemaforo nivel={item.nivel_riesgo_global} size="sm" />
+            <span className="text-sm text-texto-2">{hora}</span>
+          </span>
+        </span>
       </Link>
+      <button
+        type="button"
+        onClick={onEliminar}
+        aria-label={`Eliminar el análisis del ${fechaFormateada}`}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-texto-3 transition-colors hover:bg-riesgo-alto/10 hover:text-riesgo-alto"
+      >
+        <Trash2 size={18} aria-hidden="true" />
+      </button>
     </div>
   )
 }

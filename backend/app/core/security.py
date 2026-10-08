@@ -12,6 +12,7 @@ from passlib.context import CryptContext
 
 from app.config import settings
 from app.core.exceptions import TokenInvalidoError
+from app.models.user import ROL_USUARIO
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -24,9 +25,22 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=settings.jwt_expiration_hours)
-    payload = {"sub": subject, "exp": expire, "jti": str(uuid.uuid4())}
+def create_access_token(subject: str, role: str = ROL_USUARIO) -> str:
+    """Emite el token. El rol viaja como dato informativo para el cliente; la
+    autorización del servidor consulta siempre el rol vigente en la base.
+
+    'iat' se emite con fracción de segundo (NumericDate admite decimales) para
+    compararlo sin ambigüedad con users.sessions_valid_from: un token emitido
+    justo después de invalidar las sesiones no debe quedar rechazado."""
+    ahora = datetime.now(timezone.utc)
+    expire = ahora + timedelta(hours=settings.jwt_expiration_hours)
+    payload = {
+        "sub": subject,
+        "role": role,
+        "iat": ahora.timestamp(),
+        "exp": expire,
+        "jti": str(uuid.uuid4()),
+    }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 

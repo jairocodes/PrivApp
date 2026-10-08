@@ -6,6 +6,7 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
@@ -155,6 +156,7 @@ class TestEndpointHistorial:
             email="otro@privapp.test",
             hashed_password=hash_password("OtraPass123"),
             is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()
@@ -203,6 +205,7 @@ class TestEndpointPDF:
             email="otro-pdf@privapp.test",
             hashed_password=hash_password("OtraPass123"),
             is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()
@@ -256,7 +259,91 @@ class TestEndpointPDF:
             pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
         )
         assert "42/100" in texto
+        assert "Puntuación de riesgo: 42/100" in " ".join(texto.split())
         assert "Compartición con terceros" in texto
         assert "fragmento normativo verificable" in texto
         # La Constitución de Guatemala debe etiquetarse como jurisdicción "Guatemala"
         assert "Guatemala" in texto
+
+    async def test_pdf_incluye_el_tipo_de_tratamiento_de_cada_hallazgo(self, client, db_session, seed_user):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        resultado = _resultado_completo()
+        resultado["secciones_analizadas"][0]["hallazgos"][0]["tipo_tratamiento"] = (
+            "Transferencia de datos a terceros"
+        )
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=resultado)
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        texto = "".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        )
+        assert "Tipo de tratamiento: Transferencia de datos a terceros" in " ".join(texto.split())
+
+    async def test_pdf_de_un_analisis_antiguo_no_muestra_la_etiqueta(self, client, db_session, seed_user):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=_resultado_completo())
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        assert response.status_code == 200
+        texto = "".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        )
+        assert "Tipo de tratamiento" not in texto
+
+    async def test_pdf_marca_los_hallazgos_sin_respaldo_y_usa_la_jurisdiccion_guardada(
+        self, client, db_session, seed_user
+    ):
+        from io import BytesIO
+
+        from pypdf import PdfReader
+
+        resultado = _resultado_completo(documento_fuente="Documento sin nombre conocido")
+        hallazgos = resultado["secciones_analizadas"][0]["hallazgos"]
+        hallazgos[0]["fuentes_normativas"][0]["jurisdiccion"] = "guatemala"
+        hallazgos.append({
+            "tipo": "riesgo", "descripcion": "Riesgo sin norma en el corpus.", "nivel": "alto",
+            "fuentes_normativas": [], "sin_respaldo": True,
+        })
+        analisis = await _crear_analisis(db_session, seed_user.id, resultado=resultado)
+
+        token = create_access_token(str(seed_user.id))
+        response = await client.get(
+            f"/api/analisis/{analisis.id}/pdf", headers={"Authorization": f"Bearer {token}"}
+        )
+
+        texto = " ".join("".join(
+            pagina.extract_text() or "" for pagina in PdfReader(BytesIO(response.content)).pages
+        ).split())
+        assert "[Guatemala] Documento sin nombre conocido" in texto
+        assert "Sin respaldo en el corpus normativo" in texto
+
+
+class TestJurisdiccionEnElReporte:
+    @pytest.mark.parametrize("documento,esperada", [
+        ("Constitución Política de la República de Guatemala.pdf", "guatemala"),
+        ("Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala"),
+        ("Ley de Acceso a la Información Pública", "guatemala"),
+        ("El Corpus OPP-115 y su Ontología Estructural.pdf", "estandar_tecnico"),
+        ("Metodología, Casuística y Algoritmos del Proyecto ToS;DR.pdf", "estandar_tecnico"),
+        ("RGPD.pdf", "internacional"),
+        ("LOPDP España.pdf", "internacional"),
+    ])
+    def test_misma_clasificacion_que_el_panel_de_resultados(self, documento, esperada):
+        from app.services.reportes_service import _inferir_jurisdiccion
+
+        assert _inferir_jurisdiccion(documento) == esperada
+

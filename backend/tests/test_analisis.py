@@ -9,6 +9,7 @@
 
 import asyncio
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -18,19 +19,12 @@ def _respuesta_llm_valida() -> str:
     return json.dumps({
         "categoria_opp115": "First Party Collection/Use",
         "titulo": "Recopilación de datos personales",
-        "texto_original": "Recopilamos datos para operar el servicio.",
         "hallazgos": [
             {
-                "tipo": "transparencia",
+                "criterio": "B1",
                 "descripcion": "La finalidad está claramente declarada.",
-                "nivel": "bajo",
-                "fuentes_normativas": [
-                    {
-                        "documento": "Principios OEA 2021",
-                        "referencia": "Principio 2",
-                        "fragmento_relevante": "Los datos deben tener finalidad declarada."
-                    }
-                ]
+                "tipo_tratamiento": "Uso y finalidad de los datos",
+                "fragmentos": [1]
             }
         ]
     })
@@ -69,16 +63,48 @@ class TestSegmentacion:
         # Puede producir 0 o 1 según el umbral de palabras mínimas
         assert isinstance(secciones, list)
 
-    def test_limita_a_max_secciones(self):
-        from app.services.analisis_service import _MAX_SECCIONES, segmentar_politica
+    def test_analiza_todas_las_secciones_sin_tope(self):
+        from app.services.analisis_service import segmentar_politica
 
-        # 15 secciones numeradas
+        # 15 secciones numeradas: antes solo se conservaban las 8 primeras.
         bloques = []
         for i in range(1, 16):
             bloques.append(f"{i}. Sección {i}\n" + "palabra " * 50)
         texto = "\n\n".join(bloques)
         secciones = segmentar_politica(texto)
-        assert len(secciones) <= _MAX_SECCIONES
+        assert len(secciones) == 15
+        assert secciones[-1].startswith("15. Sección 15")
+
+    def test_texto_sin_encabezados_se_cubre_completo(self):
+        from app.services.analisis_service import _TAM_BLOQUE, segmentar_politica
+
+        # ~30,000 palabras corridas (una política de unos 200,000 caracteres).
+        palabras = [f"p{i}" for i in range(30_000)]
+        secciones = segmentar_politica(" ".join(palabras))
+
+        assert len(secciones) == 30_000 // _TAM_BLOQUE
+        assert " ".join(secciones).split() == palabras
+
+    def test_las_secciones_largas_se_dividen_sin_perder_texto(self):
+        from app.services.analisis_service import _MAX_PALABRAS_SECCION, segmentar_politica
+
+        larga = "1. Datos que recopilamos\n" + " ".join(f"d{i}" for i in range(1_600))
+        corta = "2. Contacto\n" + "escríbenos a privacidad@ejemplo.com para cualquier duda. " * 6
+        secciones = segmentar_politica(larga + "\n\n" + corta)
+
+        assert all(len(s.split()) <= _MAX_PALABRAS_SECCION for s in secciones)
+        assert len(secciones) == 5  # 1,604 palabras en bloques de 500 (con el resto unido) + la corta
+        assert secciones[-1].startswith("2. Contacto")
+        texto_largo = " ".join(secciones[:-1]).split()
+        assert texto_largo == larga.split()
+
+    def test_un_resto_muy_corto_se_une_al_bloque_anterior(self):
+        from app.services.analisis_service import _TAM_BLOQUE, segmentar_politica
+
+        secciones = segmentar_politica(" ".join(f"p{i}" for i in range(_TAM_BLOQUE * 2 + 5)))
+
+        assert len(secciones) == 2
+        assert len(secciones[-1].split()) == _TAM_BLOQUE + 5
 
     def test_texto_vacio_devuelve_lista_vacia(self):
         from app.services.analisis_service import segmentar_politica
@@ -96,19 +122,12 @@ class TestParseoJSON:
         return json.dumps({
             "categoria_opp115": "First Party Collection/Use",
             "titulo": "Recopilación de datos",
-            "texto_original": "Recopilamos tus datos para operar el servicio.",
             "hallazgos": [
                 {
-                    "tipo": "riesgo",
+                    "criterio": "A4",
                     "descripcion": "Se comparten datos con terceros no identificados.",
-                    "nivel": "alto",
-                    "fuentes_normativas": [
-                        {
-                            "documento": "RGPD",
-                            "referencia": "Artículo 5",
-                            "fragmento_relevante": "Los datos deben ser tratados con transparencia."
-                        }
-                    ]
+                    "tipo_tratamiento": "Transferencia de datos a terceros",
+                    "fragmentos": [1]
                 }
             ]
         })
@@ -148,13 +167,12 @@ class TestParseoJSON:
         datos = {
             "categoria_opp115": "Data Retention",
             "titulo": "Retención de datos",
-            "texto_original": "Los datos se guardan indefinidamente.",
             "hallazgos": [
                 {
-                    "tipo": "riesgo",
+                    "criterio": "M2",
                     "descripcion": "No se especifica plazo de retención.",
-                    "nivel": "medio",
-                    "fuentes_normativas": []
+                    "tipo_tratamiento": "Tiempo de conservación de los datos",
+                    "fragmentos": []
                 }
             ]
         }
@@ -224,9 +242,10 @@ class TestResumen:
 # Endpoints de análisis — integración
 # ---------------------------------------------------------------------------
 
-async def _esperar_estado_final(client, headers, analisis_id, intentos=40, espera=0.05) -> dict:
+async def _esperar_estado_final(client, headers, analisis_id, intentos=200, espera=0.05) -> dict:
     """Sondea GET /estado hasta que el análisis deje de estar 'procesando'
-    (o se agoten los intentos). Usado por los tests de integración de HU-13,
+    (o se agoten los intentos: hasta 10 s, margen para máquinas lentas; en
+    una máquina normal termina en pocas décimas de segundo). Usado por los tests de integración de HU-13,
     donde el análisis corre en una tarea de fondo real (asyncio.create_task)
     y no de forma inline como bajo ASGITransport con BackgroundTasks."""
     for _ in range(intentos):
@@ -344,7 +363,7 @@ class TestEndpointsAnalisis:
         response = await client.get("/api/analisis/1")
         assert response.status_code == 403
 
-    async def test_obtener_analisis_en_procesamiento_retorna_404(self, client, db_session, seed_user):
+    async def test_obtener_analisis_en_procesamiento_retorna_409(self, client, db_session, seed_user):
         from app.core.security import create_access_token
         from app.models.analysis import AnalysisTemp
 
@@ -358,7 +377,8 @@ class TestEndpointsAnalisis:
         response = await client.get(
             f"/api/analisis/{registro.id}", headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 404
+        assert response.status_code == 409
+        assert response.json()["detail"] == "El análisis todavía se está procesando."
 
 
 class TestEstadoYProgreso:
@@ -383,6 +403,7 @@ class TestEstadoYProgreso:
         otro_usuario = User(
             nombre="Otro Usuario", email="otro-estado@privapp.test",
             hashed_password=hash_password("OtraPass123"), is_active=True,
+            privacy_accepted_at=datetime.now(timezone.utc),
         )
         db_session.add(otro_usuario)
         await db_session.flush()
@@ -416,7 +437,7 @@ class TestEstadoYProgreso:
         )
         assert response.status_code == 200
         datos = response.json()
-        assert datos == {"estado": "procesando", "seccion_actual": 1, "secciones_total": 3}
+        assert datos == {"estado": "procesando", "seccion_actual": 1, "secciones_total": 3, "motivo": None}
 
     async def test_ejecutar_analisis_background_completa_y_persiste_resultado(
         self, db_session, seed_user
@@ -476,3 +497,563 @@ class TestEstadoYProgreso:
             estado_final = await _esperar_estado_final(client, headers, analisis_id)
 
         assert estado_final["estado"] == "completado"
+
+
+# ---------------------------------------------------------------------------
+# Tipo de tratamiento de datos por hallazgo (lista cerrada)
+# ---------------------------------------------------------------------------
+
+def _respuesta_con_tipo(tipo_tratamiento) -> str:
+    datos = json.loads(_respuesta_llm_valida())
+    if tipo_tratamiento is None:
+        datos["hallazgos"][0].pop("tipo_tratamiento")
+    else:
+        datos["hallazgos"][0]["tipo_tratamiento"] = tipo_tratamiento
+    return json.dumps(datos)
+
+
+class TestTipoTratamiento:
+    def test_la_lista_cerrada_tiene_los_textos_exactos(self):
+        from app.schemas.analysis import TIPOS_TRATAMIENTO
+
+        assert TIPOS_TRATAMIENTO == (
+            "Recopilación de datos personales",
+            "Uso y finalidad de los datos",
+            "Transferencia de datos a terceros",
+            "Tiempo de conservación de los datos",
+            "Seguridad de los datos",
+            "Derechos del usuario sobre sus datos",
+            "Cambios en la política",
+            "Otro",
+        )
+
+    def test_la_instruccion_al_modelo_incluye_toda_la_lista(self):
+        from app.schemas.analysis import TIPOS_TRATAMIENTO
+        from app.services.analisis_service import ESQUEMA_SECCION, SYSTEM_PROMPT
+
+        for tipo in TIPOS_TRATAMIENTO:
+            assert f"   - {tipo}\n" in SYSTEM_PROMPT
+        hallazgo = ESQUEMA_SECCION["schema"]["properties"]["hallazgos"]["items"]
+        assert hallazgo["properties"]["tipo_tratamiento"]["enum"] == list(TIPOS_TRATAMIENTO)
+
+    def test_categoria_valida_aceptada(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_tipo("Seguridad de los datos"))
+        assert seccion.hallazgos[0].tipo_tratamiento == "Seguridad de los datos"
+
+    def test_tolera_mayusculas_y_espacios_y_guarda_el_texto_exacto(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_tipo("  transferencia de datos   a TERCEROS "))
+        assert seccion.hallazgos[0].tipo_tratamiento == "Transferencia de datos a terceros"
+
+    @pytest.mark.parametrize("invalido", ["Publicidad", "", 3, None])
+    def test_categoria_invalida_o_ausente_se_rechaza(self, invalido):
+        from app.services.analisis_service import _parsear_seccion
+
+        with pytest.raises(ValueError, match="tipo_tratamiento"):
+            _parsear_seccion(_respuesta_con_tipo(invalido))
+
+    def test_la_seccion_de_respaldo_usa_otro(self):
+        from app.services.analisis_service import _seccion_fallback
+
+        assert _seccion_fallback("texto", 1).hallazgos[0].tipo_tratamiento == "Otro"
+
+    async def _analizar(self, db_session, seed_user, respuestas):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Recopilación\n" + "Recopilamos su nombre y correo para operar el servicio. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            llm = MockLLM.return_value
+            llm.generar_analisis = AsyncMock(side_effect=respuestas)
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+        return registro, llm.generar_analisis
+
+    async def test_categoria_invalida_activa_el_reintento(self, db_session, seed_user):
+        registro, llamadas = await self._analizar(db_session, seed_user, [
+            _respuesta_con_tipo("Publicidad"),
+            _respuesta_con_tipo("Recopilación de datos personales"),
+        ])
+
+        assert llamadas.await_count == 2
+        # El reintento repite la instrucción completa (con la sección) y el motivo.
+        segundo_prompt = llamadas.await_args_list[1].args[1]
+        assert "Recopilamos su nombre y correo" in segundo_prompt
+        assert "tipo_tratamiento fuera de la lista cerrada" in segundo_prompt
+        hallazgo = registro.resultado["secciones_analizadas"][0]["hallazgos"][0]
+        assert hallazgo["tipo_tratamiento"] == "Recopilación de datos personales"
+
+    async def test_si_el_reintento_tambien_falla_se_usa_el_respaldo(self, db_session, seed_user):
+        registro, llamadas = await self._analizar(db_session, seed_user, [
+            _respuesta_con_tipo(None),
+            _respuesta_con_tipo("Publicidad"),
+        ])
+
+        assert llamadas.await_count == 2
+        hallazgo = registro.resultado["secciones_analizadas"][0]["hallazgos"][0]
+        assert hallazgo["tipo"] == "neutral"
+        assert hallazgo["tipo_tratamiento"] == "Otro"
+
+    async def test_los_analisis_antiguos_sin_el_campo_siguen_mostrandose(
+        self, client, db_session, seed_user
+    ):
+        from app.core.security import create_access_token
+        from app.models.analysis import AnalysisTemp
+
+        resultado_antiguo = {
+            "id_analisis": "1",
+            "fecha": "2026-06-01T12:00:00Z",
+            "resumen_general": {"nivel_riesgo_global": "medio", "puntaje": 50, "comentario_breve": "c"},
+            "secciones_analizadas": [{
+                **{k: v for k, v in json.loads(_respuesta_llm_valida()).items() if k != "hallazgos"},
+                "texto_original": "Recopilamos datos para operar el servicio.",
+                "hallazgos": [{
+                    "tipo": "riesgo",
+                    "descripcion": "Hallazgo previo a la clasificación.",
+                    "nivel": "medio",
+                    "fuentes_normativas": [],
+                }],
+            }],
+            "recomendaciones": [],
+        }
+        registro = AnalysisTemp(
+            user_id=seed_user.id, texto_original="t", estado="completado", resultado=resultado_antiguo,
+        )
+        db_session.add(registro)
+        await db_session.flush()
+        headers = {"Authorization": f"Bearer {create_access_token(str(seed_user.id))}"}
+
+        r = await client.get(f"/api/analisis/{registro.id}", headers=headers)
+        pdf = await client.get(f"/api/analisis/{registro.id}/pdf", headers=headers)
+
+        assert r.status_code == 200
+        assert r.json()["secciones_analizadas"][0]["hallazgos"][0]["tipo_tratamiento"] is None
+        assert pdf.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Cobertura completa y análisis en paralelo
+# ---------------------------------------------------------------------------
+
+class TestAnalisisEnParalelo:
+    async def _analizar(self, db_session, seed_user, secciones, generar):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "\n\n".join(secciones)
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=secciones), \
+             patch("app.services.analisis_service.recuperar_contexto", return_value=[]), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = generar
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+        return registro
+
+    @staticmethod
+    def _respuesta_para(user_msg: str) -> str:
+        datos = json.loads(_respuesta_llm_valida())
+        # El título identifica a qué sección corresponde la respuesta.
+        datos["titulo"] = user_msg.split('"""')[1].strip().split()[0]
+        return json.dumps(datos)
+
+    async def test_conserva_el_orden_y_completa_el_progreso(self, db_session, seed_user):
+        secciones = [f"S{i} " + "texto de la sección " * 10 for i in range(1, 13)]
+
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
+            # Las primeras secciones tardan más: terminan en otro orden.
+            numero = int(user_msg.split('"""')[1].strip().split()[0][1:])
+            await asyncio.sleep(0.02 * (13 - numero))
+            return self._respuesta_para(user_msg)
+
+        registro = await self._analizar(db_session, seed_user, secciones, generar)
+
+        assert registro.estado == "completado"
+        assert registro.secciones_total == registro.seccion_actual == 12
+        titulos = [s["titulo"] for s in registro.resultado["secciones_analizadas"]]
+        assert titulos == [f"S{i}" for i in range(1, 13)]
+
+    async def test_no_supera_el_limite_de_llamadas_simultaneas(self, db_session, seed_user):
+        from app.services.analisis_service import _CONCURRENCIA_LLM
+
+        activas = 0
+        maximo = 0
+
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
+            nonlocal activas, maximo
+            activas += 1
+            maximo = max(maximo, activas)
+            await asyncio.sleep(0.02)
+            activas -= 1
+            return self._respuesta_para(user_msg)
+
+        secciones = [f"S{i} " + "texto " * 40 for i in range(1, 11)]
+        await self._analizar(db_session, seed_user, secciones, generar)
+
+        assert maximo == _CONCURRENCIA_LLM
+
+    async def test_una_seccion_fallida_no_afecta_a_las_demas(self, db_session, seed_user):
+        from app.core.exceptions import LLMError
+
+        async def generar(_sistema, user_msg, _contexto, **_opciones):
+            if user_msg.split('"""')[1].strip().startswith("S2 "):
+                raise LLMError("fallo simulado")
+            return self._respuesta_para(user_msg)
+
+        secciones = [f"S{i} " + "texto " * 40 for i in range(1, 4)]
+        registro = await self._analizar(db_session, seed_user, secciones, generar)
+
+        analizadas = registro.resultado["secciones_analizadas"]
+        assert [s["titulo"] for s in analizadas] == ["S1", "Sección 2", "S3"]
+        assert analizadas[1]["hallazgos"][0]["tipo"] == "neutral"
+        assert registro.seccion_actual == 3
+
+
+# ---------------------------------------------------------------------------
+# Citas construidas con los fragmentos reales del corpus (RN-06)
+# ---------------------------------------------------------------------------
+
+def _fragmento(id_, documento, jurisdiccion, texto):
+    from app.models.corpus import CorpusChunk
+
+    return CorpusChunk(
+        id=id_, documento_fuente=documento, jurisdiccion=jurisdiccion,
+        referencia=documento, categoria_tematica="general", texto_original=texto, metadatos={},
+    )
+
+
+def _respuesta_con_fragmentos(*listas) -> str:
+    datos = json.loads(_respuesta_llm_valida())
+    base = datos["hallazgos"][0]
+    datos["hallazgos"] = [{**base, "criterio": "A4", "fragmentos": f} for f in listas]
+    return json.dumps(datos)
+
+
+FRAGMENTOS = [
+    _fragmento(10, "RGPD.pdf", "internacional",
+               "Artículo 5. Los datos personales serán tratados de manera   lícita, leal y transparente."),
+    _fragmento(20, "Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala",
+               "Artículo 9. Datos personales: los relativos a cualquier información concerniente "
+               "a personas naturales. Artículo 10. Datos sensibles."),
+]
+
+
+class TestCitasDelCorpus:
+    def test_la_cita_usa_el_texto_real_del_fragmento_indicado(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([2]), FRAGMENTOS)
+
+        hallazgo = seccion.hallazgos[0]
+        assert hallazgo.sin_respaldo is False
+        [fuente] = hallazgo.fuentes_normativas
+        assert fuente.documento == "Decreto 57-2008 (Ley de Acceso a la Información Pública)"
+        assert fuente.jurisdiccion == "guatemala"
+        assert fuente.referencia == "Artículos 9 y 10"
+        assert fuente.fragmento_relevante.startswith("Artículo 9. Datos personales")
+
+    def test_varios_fragmentos_sin_repetir_y_espacios_normalizados(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([1, "2", 1]), FRAGMENTOS)
+
+        fuentes = seccion.hallazgos[0].fuentes_normativas
+        assert [f.documento for f in fuentes] == ["RGPD", FRAGMENTOS[1].documento_fuente[:-4]]
+        assert fuentes[0].referencia == "Artículo 5"
+        assert "lícita, leal y transparente" in fuentes[0].fragmento_relevante
+
+    def test_los_numeros_inexistentes_se_descartan(self):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos([0, 3, 99, "x", 1]), FRAGMENTOS)
+
+        assert [f.documento for f in seccion.hallazgos[0].fuentes_normativas] == ["RGPD"]
+
+    @pytest.mark.parametrize("fragmentos", [[], [7]])
+    def test_sin_fragmentos_validos_queda_sin_respaldo(self, fragmentos):
+        from app.services.analisis_service import _parsear_seccion
+
+        seccion = _parsear_seccion(_respuesta_con_fragmentos(fragmentos), FRAGMENTOS)
+
+        assert seccion.hallazgos[0].fuentes_normativas == []
+        assert seccion.hallazgos[0].sin_respaldo is True
+
+    @pytest.mark.parametrize("valor", [None, "1", {"n": 1}])
+    def test_fragmentos_ausentes_o_mal_formados_activan_el_reintento(self, valor):
+        from app.services.analisis_service import _parsear_seccion
+
+        datos = json.loads(_respuesta_con_fragmentos([1]))
+        if valor is None:
+            del datos["hallazgos"][0]["fragmentos"]
+        else:
+            datos["hallazgos"][0]["fragmentos"] = valor
+        with pytest.raises(ValueError, match="fragmentos"):
+            _parsear_seccion(json.dumps(datos), FRAGMENTOS)
+
+    def test_el_texto_largo_se_recorta(self):
+        from app.services.analisis_service import _LARGO_FRAGMENTO, _parsear_seccion
+
+        largo = [_fragmento(1, "RGPD.pdf", "internacional", "palabra " * 300)]
+        fuente = _parsear_seccion(_respuesta_con_fragmentos([1]), largo).hallazgos[0].fuentes_normativas[0]
+
+        assert fuente.fragmento_relevante.endswith("…")
+        assert len(fuente.fragmento_relevante) <= _LARGO_FRAGMENTO + 1
+        assert fuente.referencia == ""
+
+    def test_los_hallazgos_sin_respaldo_no_suman_al_puntaje(self):
+        from app.services.analisis_service import _calcular_resumen, _parsear_seccion
+
+        respaldado = _parsear_seccion(_respuesta_con_fragmentos([1]), FRAGMENTOS)
+        respaldado.hallazgos[0].nivel = "bajo"
+        sin_respaldo = _parsear_seccion(_respuesta_con_fragmentos([], []), FRAGMENTOS)
+
+        resumen = _calcular_resumen([respaldado, sin_respaldo])
+
+        assert resumen.nivel_riesgo_global == "bajo"
+        assert resumen.puntaje == 0
+
+    def test_la_instruccion_pide_numeros_de_fragmento(self):
+        from app.services.analisis_service import SYSTEM_PROMPT, _construir_prompt_seccion
+
+        from app.services.analisis_service import ESQUEMA_SECCION
+
+        prompt = _construir_prompt_seccion("texto", "[Fragmento 1] ...")
+        hallazgo = ESQUEMA_SECCION["schema"]["properties"]["hallazgos"]["items"]["properties"]
+        assert '"fragmentos"' in prompt
+        assert hallazgo["fragmentos"] == {"type": "array", "items": {"type": "integer"}}
+        assert "fragmento_relevante" not in prompt + json.dumps(ESQUEMA_SECCION)
+        assert "Principios generales" not in prompt + SYSTEM_PROMPT
+
+    async def test_el_analisis_completo_guarda_las_citas_reales(self, db_session, seed_user):
+        from app.services.analisis_service import _K_GUATEMALA, crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Terceros\n" + "Compartimos sus datos con socios comerciales. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        recuperar = AsyncMock(return_value=FRAGMENTOS)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", recuperar), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = AsyncMock(return_value=_respuesta_con_fragmentos([2], []))
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+
+        assert recuperar.await_args_list[0].kwargs["k_guatemala"] == _K_GUATEMALA
+        respaldado, sin_respaldo = registro.resultado["secciones_analizadas"][0]["hallazgos"]
+        assert respaldado["fuentes_normativas"][0]["jurisdiccion"] == "guatemala"
+        assert respaldado["sin_respaldo"] is False
+        assert sin_respaldo["sin_respaldo"] is True and sin_respaldo["fuentes_normativas"] == []
+
+
+# ---------------------------------------------------------------------------
+# Segunda pasada: respaldo buscado con la descripción de cada hallazgo
+# ---------------------------------------------------------------------------
+
+class TestSegundaPasadaDeRespaldo:
+    FRAGMENTOS_HALLAZGO = [
+        _fragmento(30, "Principios OEA 2021.pdf", "internacional",
+                   "Será necesario borrar los datos personales que ya no se necesiten."),
+        _fragmento(20, "Decreto 57-2008 (Ley de Acceso a la Información Pública).pdf", "guatemala",
+                   "Artículo 9. Datos personales."),
+    ]
+
+    async def _analizar(self, db_session, seed_user, respuestas, recuperar):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Conservación\n" + "Conservamos sus datos mientras exista un interés legítimo. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", recuperar), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            llm = MockLLM.return_value
+            llm.generar_analisis = AsyncMock(side_effect=respuestas)
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+        return registro.resultado["secciones_analizadas"][0], llm
+
+    async def test_respalda_con_los_fragmentos_del_hallazgo(self, db_session, seed_user):
+        from app.services.analisis_service import _K_FRAGMENTOS_RESPALDO, SYSTEM_PROMPT_RESPALDO
+
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO, self.FRAGMENTOS_HALLAZGO[:1]])
+        respaldo = json.dumps({"respaldos": [{"hallazgo": 1, "fragmentos": [1]}, {"hallazgo": 2, "fragmentos": []}]})
+        seccion, llm = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([], []), respaldo], recuperar,
+        )
+
+        primero, segundo = seccion["hallazgos"]
+        assert primero["sin_respaldo"] is False
+        assert primero["fuentes_normativas"][0]["documento"] == "Principios OEA 2021"
+        assert segundo["sin_respaldo"] is True
+        # Una búsqueda por hallazgo pendiente, con la descripción y k reducido.
+        busquedas = recuperar.await_args_list[1:]
+        assert len(busquedas) == 2
+        assert busquedas[0].args[1] == seccion["hallazgos"][0]["descripcion"]
+        assert busquedas[0].kwargs["k"] == _K_FRAGMENTOS_RESPALDO
+        # Los fragmentos repetidos se numeran una sola vez.
+        sistema, prompt, _ = llm.generar_analisis.await_args_list[1].args
+        assert sistema == SYSTEM_PROMPT_RESPALDO
+        assert "[Fragmento 2]" in prompt and "[Fragmento 3]" not in prompt
+        assert "[Hallazgo 2]" in prompt
+
+    async def test_sin_pendientes_no_hay_segunda_llamada(self, db_session, seed_user):
+        from app.services.analisis_service import SYSTEM_PROMPT_RESPALDO
+
+        recuperar = AsyncMock(return_value=FRAGMENTOS)
+        recomendaciones = json.dumps({"recomendaciones": ["Revisa qué datos compartes."]})
+        _, llm = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([1]), recomendaciones], recuperar,
+        )
+
+        sistemas = [llamada.args[0] for llamada in llm.generar_analisis.await_args_list]
+        assert SYSTEM_PROMPT_RESPALDO not in sistemas
+        assert recuperar.await_count == 1
+
+    @pytest.mark.parametrize("respuesta", [
+        "esto no es json",
+        json.dumps({"respaldos": [{"hallazgo": 9, "fragmentos": [1]}, {"hallazgo": "x"}, "basura"]}),
+        json.dumps({"respaldos": [{"hallazgo": 1, "fragmentos": [99]}]}),
+    ])
+    async def test_una_respuesta_invalida_conserva_la_seccion(self, db_session, seed_user, respuesta):
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO])
+        seccion, _ = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([]), respuesta], recuperar,
+        )
+
+        [hallazgo] = seccion["hallazgos"]
+        assert hallazgo["sin_respaldo"] is True and hallazgo["fuentes_normativas"] == []
+        assert hallazgo["tipo"] == "riesgo"  # no se usó la sección de respaldo
+
+    async def test_un_error_del_modelo_conserva_la_seccion(self, db_session, seed_user):
+        from app.core.exceptions import LLMError
+
+        recuperar = AsyncMock(side_effect=[[], self.FRAGMENTOS_HALLAZGO])
+        seccion, _ = await self._analizar(
+            db_session, seed_user, [_respuesta_con_fragmentos([]), LLMError("caído")], recuperar,
+        )
+
+        assert seccion["hallazgos"][0]["tipo"] == "riesgo"
+        assert seccion["hallazgos"][0]["sin_respaldo"] is True
+
+
+# ---------------------------------------------------------------------------
+# Recomendaciones prácticas redactadas a partir de los riesgos encontrados
+# ---------------------------------------------------------------------------
+
+def _seccion_con(*hallazgos):
+    from app.schemas.analysis import Hallazgo, SeccionAnalizada
+
+    return SeccionAnalizada(
+        categoria_opp115="General", titulo="Sección", texto_original="texto",
+        hallazgos=[
+            Hallazgo(
+                tipo=tipo, descripcion=desc, nivel=nivel, fuentes_normativas=[],
+                tipo_tratamiento="Transferencia de datos a terceros", sin_respaldo=sin_respaldo,
+            )
+            for tipo, nivel, desc, sin_respaldo in hallazgos
+        ],
+    )
+
+
+class TestRecomendacionesPracticas:
+    async def _generar(self, secciones, respuesta):
+        from app.services.analisis_service import _generar_recomendaciones_practicas
+
+        llm = MagicMock()
+        llm.generar_analisis = AsyncMock(
+            side_effect=respuesta if isinstance(respuesta, Exception) else [respuesta]
+        )
+        return await _generar_recomendaciones_practicas(llm, secciones, 1), llm
+
+    async def test_devuelve_las_recomendaciones_del_modelo(self):
+        from app.services.analisis_service import SYSTEM_PROMPT_RECOMENDACIONES
+
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos con anunciantes.", False))]
+        respuesta = json.dumps({"recomendaciones": [
+            "Revisa la configuración de privacidad  y limita lo que compartes.",
+            "Pide a la plataforma que elimine los datos que ya no uses.",
+        ]})
+
+        recomendaciones, llm = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == [
+            "Revisa la configuración de privacidad y limita lo que compartes.",
+            "Pide a la plataforma que elimine los datos que ya no uses.",
+        ]
+        sistema, prompt, _ = llm.generar_analisis.await_args.args
+        assert sistema == SYSTEM_PROMPT_RECOMENDACIONES
+        assert "[alto] (Transferencia de datos a terceros) Comparten tus datos con anunciantes." in prompt
+
+    async def test_prioriza_los_altos_y_los_respaldados_y_omite_lo_demas(self):
+        from app.services.analisis_service import _hallazgos_para_recomendaciones
+
+        secciones = [_seccion_con(
+            ("riesgo", "medio", "medio-respaldado", False),
+            ("riesgo", "alto", "alto-sin-respaldo", True),
+            ("riesgo", "bajo", "bajo", False),
+            ("transparencia", "alto", "transparencia", False),
+            ("riesgo", "alto", "alto-respaldado", False),
+        )]
+
+        descripciones = [h.descripcion for h in _hallazgos_para_recomendaciones(secciones)]
+
+        assert descripciones == ["alto-respaldado", "alto-sin-respaldo", "medio-respaldado"]
+
+    async def test_sin_riesgos_altos_ni_medios_no_llama_al_modelo(self):
+        secciones = [_seccion_con(("riesgo", "bajo", "bajo", False))]
+
+        recomendaciones, llm = await self._generar(secciones, "{}")
+
+        assert llm.generar_analisis.await_count == 0
+        assert recomendaciones[0].startswith("Esta política parece razonablemente transparente.")
+
+    @pytest.mark.parametrize("respuesta", [
+        "esto no es json",
+        json.dumps({"recomendaciones": "una sola"}),
+        json.dumps({"recomendaciones": [3, "", "x" * 401]}),
+        json.dumps({"otra": []}),
+    ])
+    async def test_una_respuesta_invalida_usa_las_basicas(self, respuesta):
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos.", False))]
+
+        recomendaciones, _ = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == ["En 'Sección': Comparten tus datos."]
+
+    async def test_un_error_del_modelo_usa_las_basicas(self):
+        from app.core.exceptions import LLMError
+
+        secciones = [_seccion_con(("riesgo", "alto", "Comparten tus datos.", False))]
+
+        recomendaciones, _ = await self._generar(secciones, LLMError("caído"))
+
+        assert recomendaciones == ["En 'Sección': Comparten tus datos."]
+
+    async def test_como_maximo_cinco_sin_repetir(self):
+        secciones = [_seccion_con(("riesgo", "alto", "Riesgo.", False))]
+        respuesta = json.dumps({"recomendaciones": ["Uno.", "Uno.", "Dos.", "Tres.", "Cuatro.", "Cinco.", "Seis."]})
+
+        recomendaciones, _ = await self._generar(secciones, respuesta)
+
+        assert recomendaciones == ["Uno.", "Dos.", "Tres.", "Cuatro.", "Cinco."]
+
+    async def test_el_analisis_completo_guarda_las_recomendaciones_practicas(self, db_session, seed_user):
+        from app.services.analisis_service import crear_analisis, ejecutar_analisis_background
+
+        texto = "1. Terceros\n" + "Compartimos sus datos con socios comerciales. " * 10
+        registro = await crear_analisis(db_session, texto, seed_user.id)
+        recomendaciones = json.dumps({"recomendaciones": ["Revisa con quién compartes tus datos."]})
+        with patch("app.services.analisis_service.segmentar_politica", return_value=[texto]), \
+             patch("app.services.analisis_service.recuperar_contexto", AsyncMock(return_value=FRAGMENTOS)), \
+             patch("app.services.analisis_service.OpenAIAdapter") as MockLLM:
+            MockLLM.return_value.generar_analisis = AsyncMock(
+                side_effect=[_respuesta_con_fragmentos([1]), recomendaciones]
+            )
+            await ejecutar_analisis_background(registro.id, texto)
+        await db_session.refresh(registro)
+
+        assert registro.estado == "completado"
+        assert registro.resultado["recomendaciones"] == ["Revisa con quién compartes tus datos."]
+

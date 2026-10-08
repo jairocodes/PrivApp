@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
+import Aviso from '@/components/common/Aviso'
 
 interface FormState {
   email: string
@@ -44,6 +46,8 @@ export default function LoginForm() {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 401) {
         setErrors({ general: 'Correo o contraseña incorrectos.' })
+      } else if (esLimiteDeSolicitudes(err)) {
+        setErrors({ general: MENSAJE_LIMITE_SOLICITUDES })
       } else {
         setErrors({ general: 'Ocurrió un error. Intenta nuevamente.' })
       }
@@ -53,13 +57,11 @@ export default function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-xl font-semibold text-gray-900">Iniciar sesión</h2>
+    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4 sm:p-8">
+      <h2 className="text-xl font-bold text-texto">Iniciar sesión</h2>
 
       {errors.general && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          {errors.general}
-        </div>
+        <Aviso tipo="error">{errors.general}</Aviso>
       )}
 
       <Input
@@ -88,9 +90,9 @@ export default function LoginForm() {
         Entrar
       </Button>
 
-      <p className="text-sm text-center text-gray-500">
+      <p className="text-sm text-center text-texto-2">
         ¿No tienes cuenta?{' '}
-        <Link to="/registro" className="text-blue-600 hover:underline font-medium">
+        <Link to="/registro" className="font-semibold text-marca-texto hover:underline">
           Regístrate aquí
         </Link>
       </p>

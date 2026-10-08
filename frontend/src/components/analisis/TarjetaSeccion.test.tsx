@@ -27,7 +27,17 @@ describe('TarjetaSeccion', () => {
     render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
     expect(screen.getByText('Tus datos pueden llegar a empresas que no conoces.')).toBeInTheDocument()
     expect(screen.getByText('RGPD')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'riesgo' })).toBeInTheDocument()
+    expect(screen.getByText('Riesgo alto')).toBeInTheDocument()
+    expect(screen.getByText('Buena práctica')).toBeInTheDocument()
+    expect(screen.getByText('Ver la norma que lo respalda')).toBeInTheDocument()
+  })
+
+  it('explica por qué de cada hallazgo según su criterio', () => {
+    const [primero, ...resto] = seccionEjemplo.hallazgos
+    const seccion = { ...seccionEjemplo, hallazgos: [{ ...primero, criterio: 'A4' }, ...resto] }
+    render(<TarjetaSeccion seccion={seccion} indice={1} inicialmenteExpandida />)
+
+    expect(screen.getByText('La política comparte tus datos con terceros que no identifica (criterio A4).')).toBeInTheDocument()
   })
 
   it('avisa cuando una sección no tiene hallazgos', () => {
@@ -35,5 +45,53 @@ describe('TarjetaSeccion', () => {
       <TarjetaSeccion seccion={{ ...seccionEjemplo, hallazgos: [] }} indice={2} inicialmenteExpandida />,
     )
     expect(screen.getByText('No se identificaron hallazgos en esta sección.')).toBeInTheDocument()
+  })
+
+  it('muestra el tipo de tratamiento de cada hallazgo', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    const etiqueta = screen.getByText('Transferencia de datos a terceros')
+    expect(etiqueta).toHaveAttribute('title', 'Tipo de tratamiento de datos')
+    expect(etiqueta).toHaveTextContent('Tipo de tratamiento: Transferencia de datos a terceros')
+  })
+
+  it('los hallazgos de análisis antiguos se muestran sin etiqueta y sin errores', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    // El segundo hallazgo del ejemplo no tiene tipo de tratamiento (análisis antiguo).
+    expect(screen.getByText('Se identifica al responsable del tratamiento.')).toBeInTheDocument()
+    expect(screen.getAllByTitle('Tipo de tratamiento de datos')).toHaveLength(1)
+  })
+
+  it('ofrece la definición del tipo de tratamiento desde el glosario', async () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Qué significa «Transferencia de datos a terceros»' }),
+    )
+
+    expect(screen.getByRole('link', { name: 'Ver en el glosario' })).toHaveAttribute(
+      'href',
+      '/glosario#transferencia-de-datos-a-terceros',
+    )
+  })
+
+  it('marca los hallazgos sin respaldo en el corpus normativo', () => {
+    const [primero, ...resto] = seccionEjemplo.hallazgos
+    const seccion = {
+      ...seccionEjemplo,
+      hallazgos: [{ ...primero, fuentes_normativas: [], sin_respaldo: true }, ...resto],
+    }
+    render(<TarjetaSeccion seccion={seccion} indice={1} inicialmenteExpandida />)
+
+    expect(screen.getAllByText(/Sin respaldo en el corpus normativo/)).toHaveLength(1)
+    expect(
+      screen.getByRole('button', { name: 'Qué significa «Sin respaldo en el corpus normativo»' }),
+    ).toBeInTheDocument()
+  })
+
+  it('los hallazgos respaldados no llevan la marca', () => {
+    render(<TarjetaSeccion seccion={seccionEjemplo} indice={1} inicialmenteExpandida />)
+    expect(screen.queryByText(/Sin respaldo en el corpus normativo/)).not.toBeInTheDocument()
   })
 })

@@ -3,13 +3,18 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import Button from '@/components/common/Button'
 import Input from '@/components/common/Input'
+import { MENSAJE_LIMITE_SOLICITUDES, esLimiteDeSolicitudes } from '@/utils/errores'
 import { validarPassword } from '@/utils/validators'
+import Aviso from '@/components/common/Aviso'
+import { Casilla } from '@/components/common/Campos'
 
 interface FormState {
   nombre: string
   email: string
   password: string
   confirmPassword: string
+  aceptaAviso: boolean
+  declaraEdad: boolean
 }
 
 interface FormErrors {
@@ -17,6 +22,8 @@ interface FormErrors {
   email?: string
   password?: string
   confirmPassword?: string
+  aceptaAviso?: string
+  declaraEdad?: string
   general?: string
 }
 
@@ -29,6 +36,8 @@ export default function RegisterForm() {
     email: '',
     password: '',
     confirmPassword: '',
+    aceptaAviso: false,
+    declaraEdad: false,
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -45,6 +54,13 @@ export default function RegisterForm() {
     if (form.password !== form.confirmPassword)
       newErrors.confirmPassword = 'Las contraseñas no coinciden.'
 
+    if (!form.aceptaAviso)
+      newErrors.aceptaAviso = 'Debes aceptar el aviso de privacidad para registrarte.'
+
+    if (!form.declaraEdad)
+      newErrors.declaraEdad =
+        'Debes declarar que eres mayor de 18 años o que cuentas con el consentimiento de tu madre, padre o persona encargada.'
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -56,12 +72,14 @@ export default function RegisterForm() {
     setIsLoading(true)
     setErrors({})
     try {
-      await register(form.nombre.trim(), form.email, form.password)
+      await register(form.nombre.trim(), form.email, form.password, form.aceptaAviso, form.declaraEdad)
       navigate('/dashboard')
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 409) {
         setErrors({ email: 'Este correo ya está registrado.' })
+      } else if (esLimiteDeSolicitudes(err)) {
+        setErrors({ general: MENSAJE_LIMITE_SOLICITUDES })
       } else {
         setErrors({ general: 'Ocurrió un error. Intenta nuevamente.' })
       }
@@ -71,13 +89,11 @@ export default function RegisterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4">
-      <h2 className="text-xl font-semibold text-gray-900">Crear cuenta</h2>
+    <form onSubmit={handleSubmit} noValidate className="card flex flex-col gap-4 sm:p-8">
+      <h2 className="text-xl font-bold text-texto">Crear cuenta</h2>
 
       {errors.general && (
-        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-          {errors.general}
-        </div>
+        <Aviso tipo="error">{errors.general}</Aviso>
       )}
 
       <Input
@@ -102,21 +118,16 @@ export default function RegisterForm() {
         placeholder="tucorreo@ejemplo.com"
       />
 
-      <div className="flex flex-col gap-1">
-        <Input
-          label="Contraseña"
-          type="password"
-          id="password"
-          autoComplete="new-password"
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-          error={errors.password}
-          placeholder="Mínimo 8 caracteres, 1 mayúscula, 1 número"
-        />
-        <p className="text-xs text-gray-400 mt-0.5">
-          Mínimo 8 caracteres, una mayúscula y un número.
-        </p>
-      </div>
+      <Input
+        label="Contraseña"
+        type="password"
+        id="password"
+        autoComplete="new-password"
+        value={form.password}
+        onChange={(e) => setForm({ ...form, password: e.target.value })}
+        error={errors.password}
+        ayuda="Mínimo 8 caracteres, una mayúscula y un número."
+      />
 
       <Input
         label="Confirmar contraseña"
@@ -129,13 +140,42 @@ export default function RegisterForm() {
         placeholder="Repite tu contraseña"
       />
 
+      <Casilla
+        id="aceptaAviso"
+        checked={form.aceptaAviso}
+        onChange={(e) => setForm({ ...form, aceptaAviso: e.target.checked })}
+        error={errors.aceptaAviso}
+      >
+        He leído y acepto el{' '}
+        <Link
+          to="/aviso-privacidad"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-marca-texto hover:underline"
+        >
+          aviso de privacidad
+        </Link>
+      </Casilla>
+
+      {/* El contrato de servicios de OpenAI exige el consentimiento de la madre,
+          el padre o la persona encargada para que menores usen sus servicios. */}
+      <Casilla
+        id="declaraEdad"
+        checked={form.declaraEdad}
+        onChange={(e) => setForm({ ...form, declaraEdad: e.target.checked })}
+        error={errors.declaraEdad}
+      >
+        Soy mayor de 18 años o cuento con el consentimiento de mi madre, padre o persona encargada para usar
+        PrivApp
+      </Casilla>
+
       <Button type="submit" isLoading={isLoading} className="w-full mt-2">
         Crear cuenta
       </Button>
 
-      <p className="text-sm text-center text-gray-500">
+      <p className="text-sm text-center text-texto-2">
         ¿Ya tienes cuenta?{' '}
-        <Link to="/login" className="text-blue-600 hover:underline font-medium">
+        <Link to="/login" className="text-marca-texto hover:underline font-medium">
           Inicia sesión
         </Link>
       </p>

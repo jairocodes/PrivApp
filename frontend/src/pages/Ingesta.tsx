@@ -1,17 +1,14 @@
-import Navbar from '@/components/common/Navbar'
+import EncabezadoPagina from '@/components/common/EncabezadoPagina'
 import IngestaForm from '@/components/ingesta/IngestaForm'
 
 export default function Ingesta() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Analizar política</h1>
-        <p className="text-gray-600 mb-6">
-          Pega el texto de una política de privacidad o ingresa su URL.
-        </p>
-        <IngestaForm />
-      </main>
-    </div>
+    <main className="mx-auto max-w-2xl px-4 py-6 pb-16">
+      <EncabezadoPagina
+        titulo="Analiza una política"
+        subtitulo="Pega el texto, el enlace o el archivo de una política de privacidad y te decimos qué hace la app con tus datos."
+      />
+      <IngestaForm />
+    </main>
   )
 }

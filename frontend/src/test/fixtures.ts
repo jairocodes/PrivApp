@@ -1,5 +1,5 @@
 import type { AnalisisResult, SeccionAnalizada } from '@/types/analisis'
-import type { AuthContextValue } from '@/types/auth'
+import type { AuthContextValue, User } from '@/types/auth'
 import { vi } from 'vitest'
 
 export const seccionEjemplo: SeccionAnalizada = {
@@ -11,6 +11,7 @@ export const seccionEjemplo: SeccionAnalizada = {
       tipo: 'riesgo',
       descripcion: 'Tus datos pueden llegar a empresas que no conoces.',
       nivel: 'alto',
+      tipo_tratamiento: 'Transferencia de datos a terceros',
       fuentes_normativas: [
         {
           documento: 'RGPD',
@@ -48,6 +49,18 @@ export function crearAuthValue(parcial: Partial<AuthContextValue> = {}): AuthCon
     login: vi.fn().mockResolvedValue(undefined),
     register: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn(),
+    actualizarPerfil: vi.fn().mockResolvedValue(undefined),
+    cambiarPassword: vi.fn().mockResolvedValue(undefined),
+    eliminarCuenta: vi.fn().mockResolvedValue(undefined),
     ...parcial,
   }
+}
+
+export const usuarioComun: User = { id: 1, nombre: 'Ana', email: 'ana@privapp.test', role: 'usuario' }
+
+export const administrador: User = {
+  id: 2,
+  nombre: 'Admin',
+  email: 'admin@privapp.test',
+  role: 'administrador',
 }

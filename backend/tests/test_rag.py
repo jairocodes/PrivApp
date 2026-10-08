@@ -7,6 +7,8 @@ para evitar cargar el modelo de 450 MB en el entorno de CI.
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Chunking — función pura, sin dependencias externas
@@ -139,6 +141,58 @@ class TestMetadatosCorpus:
 # Extractor de PDF — verifica manejo de archivos inexistentes
 # ---------------------------------------------------------------------------
 
+class TestArchivosDelCorpus:
+    def test_solo_incluye_archivos_de_las_carpetas_de_jurisdiccion(self, tmp_path):
+        from scripts.cargar_corpus import archivos_del_corpus
+
+        for ruta in [
+            "README.md",
+            "notas/borrador.md",
+            "guatemala/Constitucion.pdf",
+            "internacional/RGPD.pdf",
+            "estandares_tecnicos/tosdr_metodologia.md",
+            "estandares_tecnicos/README.md.bak",
+            "internacional/imagen.png",
+        ]:
+            archivo = tmp_path / ruta
+            archivo.parent.mkdir(parents=True, exist_ok=True)
+            archivo.write_text("contenido")
+
+        incluidos = [p.relative_to(tmp_path).as_posix() for p in archivos_del_corpus(tmp_path)]
+
+        assert incluidos == [
+            "estandares_tecnicos/tosdr_metodologia.md",
+            "guatemala/Constitucion.pdf",
+            "internacional/RGPD.pdf",
+        ]
+
+    def test_el_corpus_real_no_incluye_su_readme(self):
+        from scripts.cargar_corpus import CORPUS_DIR, archivos_del_corpus
+
+        if not CORPUS_DIR.exists() or not any(CORPUS_DIR.iterdir()):
+            pytest.skip("corpus_normativo no está montado en este entorno")
+        nombres = [p.name for p in archivos_del_corpus(CORPUS_DIR)]
+        assert "README.md" not in nombres
+        assert "tosdr_metodologia.md" in nombres
+
+
+class TestConsultaDeRecuperacion:
+    """La consulta real se prueba contra PostgreSQL en tests/integracion."""
+
+    async def test_solo_considera_fragmentos_activos_y_ordena_por_distancia(self):
+        from app.repositories.corpus import RepositorioCorpusNormativo
+
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=MagicMock(mappings=MagicMock(return_value=MagicMock(all=list))))
+
+        await RepositorioCorpusNormativo(db).buscar_similares("[0.1]", k=5, filtro_jurisdiccion="guatemala")
+
+        consulta = str(db.execute.call_args_list[-1].args[0])
+        assert "active = true" in consulta
+        assert "jurisdiccion = :jurisdiccion" in consulta
+        assert "ORDER  BY embedding <=>" in consulta
+
+
 class TestPdfExtractor:
     def test_archivo_inexistente_devuelve_vacio(self):
         from app.utils.pdf_extractor import extraer_texto_pdf
@@ -165,6 +219,58 @@ class TestPdfExtractor:
             resultado = _extraer_con_pdfplumber(archivo_dummy)
 
         assert "Texto de la página uno" in resultado
+
+
+class TestPdfExtractorEnMemoria:
+    """Extracción desde bytes con PDF reales generados con ReportLab."""
+
+    def test_extrae_el_texto_de_un_pdf_real(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        texto = extraer_texto_pdf_bytes(pdf_con_texto(LINEAS_POLITICA), "politica.pdf")
+
+        assert "Recopilamos su nombre" in texto
+        assert "eliminacion de sus datos" in texto
+
+    def test_pdf_de_varias_paginas(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import pdf_con_texto
+
+        lineas = [f"Linea numero {i} de la politica." for i in range(120)]
+        texto = extraer_texto_pdf_bytes(pdf_con_texto(lineas))
+
+        assert "Linea numero 0 " in texto
+        assert "Linea numero 119 " in texto
+
+    def test_pdf_sin_texto_devuelve_vacio(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import pdf_sin_texto
+
+        assert extraer_texto_pdf_bytes(pdf_sin_texto()) == ""
+
+    def test_contenido_que_no_es_pdf_devuelve_vacio(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+
+        assert extraer_texto_pdf_bytes(b"%PDF-1.4 esto no es un PDF valido") == ""
+
+    def test_si_pdfplumber_falla_usa_pypdf(self):
+        from app.utils.pdf_extractor import extraer_texto_pdf_bytes
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        with patch("pdfplumber.open", side_effect=RuntimeError("fallo simulado")):
+            texto = extraer_texto_pdf_bytes(pdf_con_texto(LINEAS_POLITICA))
+
+        assert "Recopilamos su nombre" in texto
+
+    def test_extrae_desde_disco_como_el_script_del_corpus(self, tmp_path):
+        from app.utils.pdf_extractor import extraer_texto_pdf
+        from tests.pdf_de_prueba import LINEAS_POLITICA, pdf_con_texto
+
+        ruta = tmp_path / "norma.pdf"
+        ruta.write_bytes(pdf_con_texto(LINEAS_POLITICA))
+
+        assert "Conservamos la informacion" in extraer_texto_pdf(ruta)
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +380,40 @@ class TestRAGService:
         call_args = db_mock.execute.call_args
         sql_str = str(call_args[0][0])
         assert "jurisdiccion" in sql_str
+
+    @staticmethod
+    def _fila(id_, jurisdiccion):
+        return {
+            "id": id_, "documento_fuente": f"doc{id_}.pdf", "jurisdiccion": jurisdiccion,
+            "referencia": None, "categoria_tematica": "general",
+            "texto_original": "texto", "metadatos": {},
+        }
+
+    async def test_agrega_fragmentos_guatemaltecos_sin_repetir(self):
+        from app.services.rag_service import recuperar_contexto
+
+        cercanos = [self._fila(1, "internacional"), self._fila(2, "guatemala"), self._fila(3, "internacional")]
+        guatemala = [self._fila(2, "guatemala"), self._fila(7, "guatemala")]
+
+        with patch("app.services.rag_service.encode", return_value=[0.0] * 768), \
+             patch("app.services.rag_service.RepositorioCorpusNormativo") as Repo:
+            Repo.return_value.buscar_similares = AsyncMock(side_effect=[cercanos, guatemala])
+            chunks = await recuperar_contexto(AsyncMock(), "texto", k=3, k_guatemala=2)
+
+        assert [c.id for c in chunks] == [1, 2, 3, 7]
+        segunda = Repo.return_value.buscar_similares.call_args_list[1]
+        assert segunda.args[1:3] == (2, "guatemala")
+
+    async def test_sin_k_guatemala_hace_una_sola_busqueda(self):
+        from app.services.rag_service import recuperar_contexto
+
+        with patch("app.services.rag_service.encode", return_value=[0.0] * 768), \
+             patch("app.services.rag_service.RepositorioCorpusNormativo") as Repo:
+            Repo.return_value.buscar_similares = AsyncMock(return_value=[self._fila(1, "internacional")])
+            chunks = await recuperar_contexto(AsyncMock(), "texto", k=5)
+
+        assert len(chunks) == 1
+        assert Repo.return_value.buscar_similares.await_count == 1
 
     async def test_contar_chunks(self):
         from app.services.rag_service import contar_chunks

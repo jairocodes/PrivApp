@@ -26,7 +26,7 @@ describe('useProgresoAnalisis', () => {
     const { result } = renderHook(() => useProgresoAnalisis('9'))
 
     await act(async () => {})
-    expect(result.current).toEqual({ estado: 'procesando', seccionActual: 1, seccionesTotal: 3 })
+    expect(result.current).toEqual({ estado: 'procesando', seccionActual: 1, seccionesTotal: 3, motivo: null })
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500)
