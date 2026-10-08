@@ -10,6 +10,9 @@ interface Props {
 // la puntuación es baja por debajo de 25, media hasta 75 y alta desde 75.
 const CENTRO = { x: 130, y: 130 }
 const RADIO = 110
+// La aguja va del borde de la zona de la cifra hasta el arco: nunca cruza los números,
+// que ocupan el centro (hasta ~70 px del eje, incluso con «100/100»).
+export const AGUJA = { desde: 76, hasta: 98 }
 const FRANJAS = [
   { desde: 0, hasta: 25, clase: 'stroke-riesgo-bajo-solido' },
   { desde: 25, hasta: 75, clase: 'stroke-riesgo-medio-solido' },
@@ -31,7 +34,8 @@ function arco(desde: number, hasta: number) {
  *  número tenga contexto. El nombre accesible dice la puntuación y el nivel. */
 export default function MedidorRiesgo({ puntaje, nivel }: Props) {
   const valor = Math.min(100, Math.max(0, puntaje))
-  const aguja = punto(valor, 82)
+  const inicio = punto(valor, AGUJA.desde)
+  const fin = punto(valor, AGUJA.hasta)
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -51,15 +55,14 @@ export default function MedidorRiesgo({ puntaje, nivel }: Props) {
             />
           ))}
           <line
-            x1={CENTRO.x}
-            y1={CENTRO.y}
-            x2={aguja.x.toFixed(1)}
-            y2={aguja.y.toFixed(1)}
-            strokeWidth="4"
+            x1={inicio.x.toFixed(1)}
+            y1={inicio.y.toFixed(1)}
+            x2={fin.x.toFixed(1)}
+            y2={fin.y.toFixed(1)}
+            strokeWidth="5"
             strokeLinecap="round"
             className="stroke-texto"
           />
-          <circle cx={CENTRO.x} cy={CENTRO.y} r="9" className="fill-texto" />
         </svg>
         <div aria-hidden="true" className="absolute inset-x-0 -bottom-1 flex items-baseline justify-center gap-0.5">
           <span className="text-5xl font-extrabold tracking-tight text-texto">{puntaje}</span>

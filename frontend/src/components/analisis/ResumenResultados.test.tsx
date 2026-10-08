@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Hallazgo, ResumenGeneral, SeccionAnalizada } from '@/types/analisis'
 import { describirConteo, explicarNivel, riesgosPorTratamiento } from '@/utils/resumenResultados'
-import MedidorRiesgo from './MedidorRiesgo'
+import MedidorRiesgo, { AGUJA } from './MedidorRiesgo'
 import PorQueResultado from './PorQueResultado'
 import ResumenTratamiento from './ResumenTratamiento'
 
@@ -37,6 +37,13 @@ describe('MedidorRiesgo', () => {
     const aguja = container.querySelector('line')!
     expect(Number(aguja.getAttribute('x2'))).toBeGreaterThan(130)
     expect(Number(aguja.getAttribute('y2'))).toBeCloseTo(130, 0)
+  })
+
+  it.each([0, 25, 50, 73, 100])('la aguja no cruza la cifra central (puntuación %i)', (puntaje) => {
+    const { container } = render(<MedidorRiesgo puntaje={puntaje} nivel="medio" />)
+    const aguja = container.querySelector('line')!
+    const distancia = Math.hypot(Number(aguja.getAttribute('x1')) - 130, Number(aguja.getAttribute('y1')) - 130)
+    expect(distancia).toBeCloseTo(AGUJA.desde, 0)
   })
 })
 
