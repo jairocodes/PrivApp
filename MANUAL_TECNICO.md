@@ -1097,6 +1097,8 @@ docker compose exec backend pytest
 | Registro de acceso | Activo | `--no-access-log` |
 | Cabeceras del proxy | `--proxy-headers --forwarded-allow-ips=*` | `--proxy-headers --forwarded-allow-ips=*` |
 
+En producción el backend escucha en el puerto de la variable `PORT` (la asigna Railway; 8000 si no existe). La imagen incluye el modelo de embeddings en `/app/.model_cache` (se descarga al construirla), así que el servidor no lo descarga al arrancar. `DATABASE_URL` puede llegar como `postgresql://` o `postgres://`, como la entrega Railway: `normalizar_url_bd` (`app/config.py`, también en `migrations/env.py`) la convierte a `postgresql+asyncpg://`.
+
 `--forwarded-allow-ips="*"` se usa porque Railway no publica direcciones IP fijas para su proxy; así Uvicorn toma la IP real del cliente de las cabeceras reenviadas (necesaria para el límite de solicitudes por IP). La imagen del backend instala torch en su variante solo CPU antes del resto de dependencias.
 
 El `frontend/Dockerfile` tiene tres etapas:
@@ -1115,6 +1117,40 @@ Para probar la imagen de producción en local:
 docker build -t privapp-frontend-prod --build-arg VITE_API_URL=http://localhost:8000 frontend
 docker run --rm -p 5173:80 privapp-frontend-prod   # http://localhost:5173, con el backend de Compose
 ```
+
+### Despliegue en Railway (plan Hobby)
+
+Un proyecto con cuatro servicios, desplegados desde la rama `main` del repositorio:
+
+| Servicio | Origen | Configuración |
+|---|---|---|
+| `pgvector` | Plantilla **pgvector** (no la de Postgres normal: el corpus necesita la extensión `vector`) | — |
+| `Redis` | Base de datos Redis | — |
+| `backend` | Repositorio, *Root Directory* `/backend` | *Pre-deploy Command* `alembic upgrade head`; *Healthcheck Path* `/health`; dominio público |
+| `frontend` | Repositorio, *Root Directory* `/frontend` | Dominio público |
+
+Variables del `backend` (las referencias `${{…}}` las resuelve Railway):
+
+```
+DATABASE_URL=${{pgvector.DATABASE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
+JWT_SECRET_KEY=<aleatoria, 64 caracteres>   JWT_ALGORITHM=HS256   JWT_EXPIRATION_HOURS=24
+LLM_PROVIDER=openai   OPENAI_API_KEY=<clave>   OPENAI_MODEL=gpt-4o-mini
+OPENAI_TEMPERATURE=0   OPENAI_SEED=20261003
+ENVIRONMENT=production   CORS_ORIGINS=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}
+LOG_LEVEL=INFO   SQL_ECHO=false
+```
+
+Variable del `frontend`: `VITE_API_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}` (se fija al construir; si cambia, hay que volver a desplegarlo).
+
+La imagen de producción no incluye `corpus_normativo/`. El corpus se carga una vez desde la máquina local contra la URL pública de la base (`DATABASE_PUBLIC_URL` del servicio `pgvector`), con el modelo de la caché local:
+
+```bash
+docker compose run --rm --no-deps -e DATABASE_URL="<DATABASE_PUBLIC_URL>" backend python scripts/cargar_corpus.py
+docker compose run --rm --no-deps -e DATABASE_URL="<DATABASE_PUBLIC_URL>" backend python scripts/promover_admin.py <correo>
+```
+
+El backend necesita más de 1 GB de memoria (torch y el modelo de embeddings), por eso el plan Hobby.
 
 ### Servicios disponibles (entorno local)
 
