@@ -76,6 +76,23 @@ describe('Resultados', () => {
     expect(screen.getByRole('button', { name: /Descargar PDF/ })).toBeInTheDocument()
   })
 
+  it('aclara cuando el nivel no coincide con la franja de la puntuación', () => {
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
+    const resultado = { ...analisisEjemplo, resumen_general: { ...analisisEjemplo.resumen_general, puntaje: 73 } }
+    vi.mocked(useAnalisis).mockReturnValue({ resultado, isLoading: false, error: null, obtener })
+    renderResultados()
+
+    expect(screen.getByText(/El nivel se decide por los hallazgos, no solo por la puntuación/)).toBeInTheDocument()
+  })
+
+  it('no muestra la aclaración si el nivel coincide con la puntuación', () => {
+    vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })
+    vi.mocked(useAnalisis).mockReturnValue({ resultado: analisisEjemplo, isLoading: false, error: null, obtener })
+    renderResultados()
+
+    expect(screen.queryByText(/El nivel se decide por los hallazgos/)).not.toBeInTheDocument()
+  })
+
   it('explica el límite de descargas del PDF ante un 429', async () => {
     vi.mocked(analisisApi.descargarPDF).mockRejectedValue({ response: { status: 429 } })
     vi.mocked(useProgresoAnalisis).mockReturnValue({ estado: 'completado', seccionActual: 1, seccionesTotal: 1, motivo: null })

@@ -2,7 +2,13 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Hallazgo, ResumenGeneral, SeccionAnalizada } from '@/types/analisis'
-import { describirConteo, explicarNivel, riesgosPorTratamiento } from '@/utils/resumenResultados'
+import {
+  aclaracionNivel,
+  describirConteo,
+  explicarNivel,
+  franjaDePuntuacion,
+  riesgosPorTratamiento,
+} from '@/utils/resumenResultados'
 import MedidorRiesgo, { AGUJA } from './MedidorRiesgo'
 import PorQueResultado from './PorQueResultado'
 import ResumenTratamiento from './ResumenTratamiento'
@@ -44,6 +50,19 @@ describe('MedidorRiesgo', () => {
     const aguja = container.querySelector('line')!
     const distancia = Math.hypot(Number(aguja.getAttribute('x1')) - 130, Number(aguja.getAttribute('y1')) - 130)
     expect(distancia).toBeCloseTo(AGUJA.desde, 0)
+  })
+})
+
+describe('aclaracionNivel', () => {
+  it('ubica la puntuación en su franja', () => {
+    expect([0, 24, 25, 74, 75, 100].map(franjaDePuntuacion)).toEqual(['bajo', 'bajo', 'medio', 'medio', 'alto', 'alto'])
+  })
+
+  it('solo aclara cuando el nivel no coincide con la franja de la puntuación', () => {
+    expect(aclaracionNivel(resumen('alto', 90))).toBeNull()
+    expect(aclaracionNivel(resumen('medio', 40))).toBeNull()
+    expect(aclaracionNivel(resumen('alto', 73))).toMatch(/^El nivel se decide por los hallazgos/)
+    expect(aclaracionNivel(resumen('medio', 10))).not.toBeNull()
   })
 })
 
