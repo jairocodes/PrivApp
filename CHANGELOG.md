@@ -5,10 +5,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
 ---
 
-## [Sin publicar] — Proyecto de Graduación II
+## [2.0.0] — 2026-10-07 — Proyecto de Graduación II
 
-Versión completa del sistema para el Capítulo VI. Se publicará al integrar
-`develop` en `main` con el despliegue en Railway.
+Versión completa del sistema para el Capítulo VI, desplegada en Railway.
 
 ### Added
 - **Cuentas y sesiones:** rol usuario/administrador validado con el rol vigente en la
@@ -88,7 +87,8 @@ Versión completa del sistema para el Capítulo VI. Se publicará al integrar
 - Imagen del backend lista para Railway: incluye el modelo de embeddings, escucha en
   el puerto `PORT` y acepta la URL de la base como la entrega la plataforma
   (`postgresql://`).
-- Aviso de privacidad con el correo de contacto.
+- Aviso de privacidad completo: correo de contacto, región del servidor (este de
+  Estados Unidos, Virginia), conservación de los registros técnicos (7 días) y fecha.
 - Imagen de producción del frontend: los archivos estáticos se construyen con
   `VITE_API_URL` y los sirve nginx; el servidor de Vite queda solo para desarrollo.
 - Repositorios separados para usuarios, análisis y corpus.
