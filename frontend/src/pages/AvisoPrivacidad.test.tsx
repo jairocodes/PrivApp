@@ -70,8 +70,8 @@ describe('datosPendientes', () => {
     expect(pendientes.filter((p) => p === '[correo]')).toHaveLength(1)
   })
 
-  it('el aviso ya tiene el correo de contacto', () => {
-    expect(datosPendientes()).not.toContain('[correo de contacto]')
+  it('el aviso publicado no tiene datos pendientes', () => {
+    expect(datosPendientes()).toEqual([])
   })
 
   it('encuentra marcadores en párrafos, listas y tablas', () => {

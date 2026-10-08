@@ -42,7 +42,7 @@ export interface SeccionAviso {
 }
 
 export const TITULO_AVISO = 'Aviso de privacidad de PrivApp'
-export const ULTIMA_ACTUALIZACION = '[fecha]'
+export const ULTIMA_ACTUALIZACION = '7 de octubre de 2026'
 export const CORREO_CONTACTO = 'jairocastillo.code@gmail.com'
 
 export const INTRODUCCION =
@@ -177,7 +177,7 @@ export const SECCIONES_AVISO: SeccionAviso[] = [
           {
             etiqueta: 'Railway.',
             texto:
-              'PrivApp se aloja en la plataforma Railway, [región del servidor], que por su ' +
+              'PrivApp se aloja en la plataforma Railway, en servidores del este de Estados Unidos (Virginia), que por su ' +
               'funcionamiento recibe su dirección IP al conectarse.',
           },
           {
@@ -208,7 +208,7 @@ export const SECCIONES_AVISO: SeccionAviso[] = [
           ['Texto enviado a OpenAI', 'Hasta 30 días en OpenAI, según sus condiciones'],
           [
             'Nombre de los sitios consultados (registros técnicos)',
-            '[tiempo de conservación de los registros del servidor]',
+            '7 días',
           ],
         ],
       },
