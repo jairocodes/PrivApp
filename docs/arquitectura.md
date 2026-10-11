@@ -99,7 +99,7 @@ Las consultas viven en `app/repositories/`:
 
 | Repositorio | Responsabilidad |
 |---|---|
-| `RepositorioUsuarios` | Búsqueda por correo o id, listado con búsqueda sin acentos, perfil, contraseña, estado, invalidación de sesiones, conteo de administradores activos, eliminación |
+| `RepositorioUsuarios` | Búsqueda por correo o id, listado con búsqueda por nombre sin acentos, perfil, contraseña, estado, invalidación de sesiones, conteo de administradores activos, eliminación |
 | `RepositorioAnalisis` | Creación, consulta por usuario, historial con filtros, estadísticas, metadatos del reporte, eliminación |
 | `RepositorioCorpusNormativo` | Búsqueda por similitud sobre fragmentos activos, resumen por documento, activación y desactivación, deduplicación por hash |
 
@@ -248,7 +248,7 @@ No hay tokens de refresco: al expirar el token, la persona vuelve a iniciar sesi
   la API eleva roles. La persona promovida debe volver a iniciar sesión para que su
   token lleve el rol (el servidor la reconoce como administradora de inmediato).
 - Las rutas `/api/admin/*` dependen de `require_admin`:
-  - usuarios: listado paginado con búsqueda por nombre o correo (sin acentos),
+  - usuarios: listado paginado con búsqueda por nombre (sin acentos), sin correos,
     activación y desactivación; un administrador no puede desactivarse a sí mismo;
   - corpus: listado por documento (jurisdicción, fragmentos, fecha, estado),
     activación o desactivación del documento completo y carga de documentos nuevos

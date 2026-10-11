@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Select, func, literal, or_, select
+from sqlalchemy import Select, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import ROL_ADMINISTRADOR, User
@@ -24,12 +24,10 @@ class RepositorioUsuarios:
     @staticmethod
     def _filtrar(consulta: Select, busqueda: str | None) -> Select:
         if busqueda:
-            # Sin distinguir acentos ni mayúsculas: "perez" encuentra "Pérez".
+            # Solo por nombre: buscar por correo permitiría al administrador
+            # deducirlo letra por letra. Sin distinguir acentos ni mayúsculas.
             patron = sin_acentos(literal(patron_contiene(busqueda)))
-            consulta = consulta.where(or_(
-                sin_acentos(User.nombre).ilike(patron, escape="\\"),
-                sin_acentos(User.email).ilike(patron, escape="\\"),
-            ))
+            consulta = consulta.where(sin_acentos(User.nombre).ilike(patron, escape="\\"))
         return consulta
 
     async def contar(self, busqueda: str | None = None) -> int:

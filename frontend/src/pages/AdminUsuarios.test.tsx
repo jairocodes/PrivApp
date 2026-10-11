@@ -16,7 +16,6 @@ vi.mock('@/api/admin', () => ({
 const LUIS: UsuarioAdmin = {
   id: 3,
   nombre: 'Luis Pérez',
-  email: 'luis@privapp.test',
   role: 'usuario',
   is_active: true,
   created_at: '2026-09-01T15:30:00Z',
@@ -42,31 +41,30 @@ const ADMIN_EN_LISTA: UsuarioAdmin = {
   ...LUIS,
   id: administrador.id,
   nombre: administrador.nombre,
-  email: administrador.email,
   role: 'administrador',
 }
 
 describe('AdminUsuarios', () => {
   it('lista las cuentas con su rol y estado', async () => {
     responderListado({
-      items: [LUIS, { ...LUIS, id: 4, nombre: 'Eva', email: 'eva@privapp.test', is_active: false }],
+      items: [LUIS, { ...LUIS, id: 4, nombre: 'Eva', is_active: false }],
       total: 2,
     })
     renderPantalla()
 
     expect(await screen.findByText('Luis Pérez')).toBeInTheDocument()
-    expect(screen.getByText('luis@privapp.test')).toBeInTheDocument()
     expect(screen.getByText('Activa')).toBeInTheDocument()
     expect(screen.getByText('Desactivada')).toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('@')
     expect(adminApi.listarUsuarios).toHaveBeenCalledWith(1, 10, '')
   })
 
-  it('busca por nombre o correo', async () => {
+  it('busca por nombre', async () => {
     responderListado({ items: [LUIS], total: 1 })
     renderPantalla()
     await screen.findByText('Luis Pérez')
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nombre o correo' }), '  luis ')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), '  luis ')
     await userEvent.click(screen.getByRole('button', { name: 'Buscar' }))
 
     expect(adminApi.listarUsuarios).toHaveBeenLastCalledWith(1, 10, 'luis')
@@ -91,7 +89,7 @@ describe('AdminUsuarios', () => {
     renderPantalla()
     await screen.findByText('Página 1 de 2')
 
-    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nombre o correo' }), 'pérez')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar por nombre' }), 'pérez')
     await userEvent.click(screen.getByRole('button', { name: 'Buscar' }))
     await screen.findByText('Página 1 de 2')
     await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
