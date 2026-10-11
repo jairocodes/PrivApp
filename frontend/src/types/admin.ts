@@ -3,7 +3,6 @@ import type { Rol } from './auth'
 export interface UsuarioAdmin {
   id: number
   nombre: string
-  email: string
   role: Rol
   is_active: boolean
   created_at: string

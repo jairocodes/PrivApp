@@ -20,7 +20,7 @@ configurar_registro(settings.log_level)
 logger = logging.getLogger(__name__)
 
 # Versión de la entrega del Proyecto de Graduación II (ver CHANGELOG.md).
-VERSION_API = "2.0.0"
+VERSION_API = "2.0.1"
 
 
 @asynccontextmanager

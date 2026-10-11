@@ -126,4 +126,4 @@ class TestVersion:
         from app.main import VERSION_API
 
         r = await client.get("/health")
-        assert r.json()["version"] == VERSION_API == "2.0.0"
+        assert r.json()["version"] == VERSION_API == "2.0.1"

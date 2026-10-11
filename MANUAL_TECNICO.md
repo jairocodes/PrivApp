@@ -4,7 +4,7 @@
 **Proyecto de Graduación — Universidad Mariano Gálvez, Campus Jutiapa**
 **Autor:** Jairo Ardani Castillo Girón — Carné 0905-22-12005
 **Fecha:** Septiembre 2026 (primera versión: mayo 2026)
-**Versión del sistema:** versión completa de Proyecto de Graduación II (API `2.0.0`)
+**Versión del sistema:** versión completa de Proyecto de Graduación II (API `2.0.1`)
 
 ---
 
@@ -535,7 +535,7 @@ Todas las consultas se limitan a los análisis del usuario autenticado: un anál
 
 | Método | Endpoint | Descripción |
 |---|---|---|
-| `GET` | `/usuarios` | Lista paginada (`page`, `page_size` ≤ 50, `q` por nombre o correo, sin acentos) |
+| `GET` | `/usuarios` | Lista paginada (`page`, `page_size` ≤ 50, `q` por nombre, sin acentos); no incluye correos ni permite buscar por correo |
 | `PATCH` | `/usuarios/{id}/estado` | `{activo}`; un administrador no puede desactivarse a sí mismo (400) |
 | `GET` | `/corpus` | Documentos del corpus: jurisdicción, número de fragmentos, fecha de carga, estado |
 | `PATCH` | `/corpus/estado` | `{documento_fuente, activo}`: activa o desactiva todos los fragmentos del documento |
@@ -1126,13 +1126,16 @@ Un proyecto con cuatro servicios, desplegados desde la rama `main` del repositor
 |---|---|---|
 | `pgvector` | Plantilla **pgvector** (no la de Postgres normal: el corpus necesita la extensión `vector`) | — |
 | `Redis` | Base de datos Redis | — |
-| `backend` | Repositorio, *Root Directory* `/backend` | *Pre-deploy Command* `alembic upgrade head`; *Healthcheck Path* `/health`; dominio público |
-| `frontend` | Repositorio, *Root Directory* `/frontend` | Dominio público |
+| `backend` | Repositorio, *Root Directory* `/backend`, rama `main` | *Builder* Dockerfile; *Watch Paths* `/backend/**`; *Pre-deploy step* `alembic upgrade head`; *Healthcheck Path* `/health`; *Serverless* apagado; dominio público al puerto 8080 |
+| `frontend` | Repositorio, *Root Directory* `/frontend`, rama `main` | *Builder* Dockerfile; *Watch Paths* `/frontend/**`; *Healthcheck Path* `/`; dominio público al puerto 8080 |
+
+Todos en la región US East (Virginia), la que declara el aviso de privacidad (*Settings → Scale → Regions*). En la plantilla pgvector, `DATABASE_URL` es la conexión **pública** y `DATABASE_URL_PRIVATE` la de la red privada.
 
 Variables del `backend` (las referencias `${{…}}` las resuelve Railway):
 
 ```
-DATABASE_URL=${{pgvector.DATABASE_URL}}
+PORT=8080
+DATABASE_URL=${{pgvector.DATABASE_URL_PRIVATE}}
 REDIS_URL=${{Redis.REDIS_URL}}
 JWT_SECRET_KEY=<aleatoria, 64 caracteres>   JWT_ALGORITHM=HS256   JWT_EXPIRATION_HOURS=24
 LLM_PROVIDER=openai   OPENAI_API_KEY=<clave>   OPENAI_MODEL=gpt-4o-mini
@@ -1141,13 +1144,15 @@ ENVIRONMENT=production   CORS_ORIGINS=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}
 LOG_LEVEL=INFO   SQL_ECHO=false
 ```
 
-Variable del `frontend`: `VITE_API_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}` (se fija al construir; si cambia, hay que volver a desplegarlo).
+Variables del `frontend`: `PORT=8080` y `VITE_API_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}` (se fija al construir; si cambia, hay que volver a desplegarlo).
 
-La imagen de producción no incluye `corpus_normativo/`. El corpus se carga una vez desde la máquina local contra la URL pública de la base (`DATABASE_PUBLIC_URL` del servicio `pgvector`), con el modelo de la caché local:
+**Primer despliegue:** los servicios se construyen antes de que existan los dominios, así que el frontend queda con `VITE_API_URL="https://"` y el backend sin el origen del frontend en `CORS_ORIGINS`. Después de generar los dominios hay que hacer *Redeploy* de los dos (Railway no vuelve a construir cuando cambia el valor de una referencia). Para comprobarlo: `curl https://<backend>/health` y buscar `baseURL:"https://<backend>"` en `/assets/index-*.js` del frontend.
+
+La imagen de producción no incluye `corpus_normativo/`. El corpus se carga una vez desde la máquina local contra la URL pública de la base (`DATABASE_URL` del servicio `pgvector` en esta plantilla), con el modelo de la caché local (unos 5 minutos para 9 documentos y 485 fragmentos):
 
 ```bash
-docker compose run --rm --no-deps -e DATABASE_URL="<DATABASE_PUBLIC_URL>" backend python scripts/cargar_corpus.py
-docker compose run --rm --no-deps -e DATABASE_URL="<DATABASE_PUBLIC_URL>" backend python scripts/promover_admin.py <correo>
+docker compose run --rm --no-deps -e DATABASE_URL="<URL pública>" backend python scripts/cargar_corpus.py
+docker compose run --rm --no-deps -e DATABASE_URL="<URL pública>" backend python scripts/promover_admin.py <correo>
 ```
 
 El backend necesita más de 1 GB de memoria (torch y el modelo de embeddings), por eso el plan Hobby.

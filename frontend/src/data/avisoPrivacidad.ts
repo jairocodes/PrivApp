@@ -42,7 +42,7 @@ export interface SeccionAviso {
 }
 
 export const TITULO_AVISO = 'Aviso de privacidad de PrivApp'
-export const ULTIMA_ACTUALIZACION = '7 de octubre de 2026'
+export const ULTIMA_ACTUALIZACION = '10 de octubre de 2026'
 export const CORREO_CONTACTO = 'jairocastillo.code@gmail.com'
 
 export const INTRODUCCION =
@@ -226,7 +226,7 @@ export const SECCIONES_AVISO: SeccionAviso[] = [
           {
             texto:
               'Solo usted puede ver sus análisis. El administrador del sistema puede ver su nombre, ' +
-              'correo, rol, estado y fecha de registro, pero no el contenido de sus análisis.',
+              'rol, estado y fecha de registro, pero no su correo ni el contenido de sus análisis.',
           },
           {
             texto:

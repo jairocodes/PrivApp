@@ -58,21 +58,21 @@ export default function AdminUsuarios() {
       <main className="mx-auto max-w-3xl px-4 py-6 pb-16">
         <EncabezadoPagina
           titulo="Usuarios"
-          subtitulo="Cuentas registradas. No se muestra el contenido de sus análisis."
+          subtitulo="Cuentas registradas. No se muestran los correos ni el contenido de los análisis."
           volverA="/admin"
           etiquetaVolver="Volver a administración"
         />
 
         <form onSubmit={buscar} role="search" className="flex gap-2 mb-5">
           <label htmlFor="busqueda-usuarios" className="sr-only">
-            Buscar por nombre o correo
+            Buscar por nombre
           </label>
           <input
             id="busqueda-usuarios"
             type="search"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder="Buscar por nombre o correo"
+            placeholder="Buscar por nombre"
             className="input-field flex-1"
           />
           <button type="submit" className="btn-primary inline-flex items-center gap-1 text-sm">
@@ -146,7 +146,6 @@ function FilaUsuario({
     <li className="flex items-center justify-between gap-3 rounded-2xl border border-borde bg-superficie p-4">
       <div className="min-w-0">
         <p className="truncate font-bold text-texto">{usuario.nombre}</p>
-        <p className="text-sm text-texto-2 truncate">{usuario.email}</p>
         <p className="text-xs text-texto-3 mt-1">
           {usuario.role === 'administrador' ? 'Administrador' : 'Usuario'} · Registrado el {fecha}
         </p>
