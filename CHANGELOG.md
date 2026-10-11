@@ -5,6 +5,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
 ---
 
+## [2.0.1] — 2026-10-10
+
+### Security
+- El administrador ya no ve los correos de los usuarios: el listado de cuentas no los
+  incluye y la búsqueda es solo por nombre (buscar por correo permitía deducirlo letra
+  por letra). El aviso de privacidad se actualiza en consecuencia.
+
+---
+
 ## [2.0.0] — 2026-10-07 — Proyecto de Graduación II
 
 Versión completa del sistema para el Capítulo VI, desplegada en Railway.

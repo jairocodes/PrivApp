@@ -91,7 +91,7 @@ La carga del corpus es idempotente: si se repite, no duplica fragmentos.
 | URL | Resultado esperado |
 |---|---|
 | http://localhost:5173 | Pantalla de inicio de sesión de PrivApp |
-| http://localhost:8000/health | `{"status": "ok", "service": "privapp-backend", "version": "2.0.0", ...}` |
+| http://localhost:8000/health | `{"status": "ok", "service": "privapp-backend", "version": "2.0.1", ...}` |
 | http://localhost:8000/docs | Swagger UI con todos los endpoints |
 
 ### Paso 4 (opcional): Crear un administrador
@@ -277,9 +277,10 @@ Requiere una cuenta promovida a administrador (Paso 4).
 
 1. Hacer clic en **Administración** en la barra de navegación y luego en **Usuarios**.
 2. **Resultado esperado:** lista paginada de cuentas con rol, fecha de registro y estado
-   (**Activa** o **Desactivada**). La propia cuenta aparece como **Tu cuenta** y no puede
-   desactivarse.
-3. Buscar con **Buscar por nombre o correo** y el botón **Buscar** (no distingue acentos).
+   (**Activa** o **Desactivada**), sin correos electrónicos. La propia cuenta aparece como
+   **Tu cuenta** y no puede desactivarse.
+3. Buscar con **Buscar por nombre** y el botón **Buscar** (no distingue acentos). Buscar parte
+   de un correo no encuentra a nadie.
 4. Hacer clic en **Desactivar** en otra cuenta y confirmar. Resultado esperado: la persona
    no puede iniciar sesión y se cierran todas sus sesiones activas. **Activar** revierte el
    cambio.

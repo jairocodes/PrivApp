@@ -66,7 +66,7 @@ Las rutas sin límite se indican con "—".
 {
   "status": "ok",
   "service": "privapp-backend",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "environment": "development"
 }
 ```
@@ -633,8 +633,9 @@ Todas las rutas requieren rol **Administrador**. Una cuenta sin ese rol recibe H
 #### `GET /api/admin/usuarios` — HTTP 200
 
 **Parámetros de consulta:** `page` (≥ 1, por defecto 1), `page_size` (1 a 50, por defecto 10) y
-`q` (máx. 100 caracteres; busca por nombre o correo sin distinguir mayúsculas ni acentos). El
-listado se ordena por id y nunca incluye el contenido de los análisis.
+`q` (máx. 100 caracteres; busca por nombre sin distinguir mayúsculas ni acentos). El
+listado se ordena por id y nunca incluye el correo ni el contenido de los análisis; la búsqueda
+tampoco considera el correo, para que no pueda deducirse letra por letra.
 
 ```json
 {
@@ -642,7 +643,6 @@ listado se ordena por id y nunca incluye el contenido de los análisis.
     {
       "id": 1,
       "nombre": "Jairo Castillo",
-      "email": "jairo@ejemplo.com",
       "role": "usuario",
       "is_active": true,
       "created_at": "2026-09-01T10:00:00Z"
