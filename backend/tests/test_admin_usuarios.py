@@ -59,7 +59,7 @@ class TestListadoDeUsuarios:
         datos = r.json()
         assert datos["total"] == 2
         assert [u["id"] for u in datos["items"]] == [admin.id, otro.id]
-        assert set(datos["items"][1]) == {"id", "nombre", "email", "role", "is_active", "created_at"}
+        assert set(datos["items"][1]) == {"id", "nombre", "role", "is_active", "created_at"}
         assert datos["items"][1]["role"] == "usuario"
         assert datos["items"][1]["is_active"] is True
 
@@ -80,6 +80,15 @@ class TestListadoDeUsuarios:
         assert "Contenido privado" not in r.text
         assert "no debe verse" not in r.text
 
+    async def test_el_listado_no_expone_los_correos(
+        self, client: AsyncClient, db_session: AsyncSession, token_admin: str
+    ):
+        await _crear_usuario(db_session, "Luis Pérez", "luis@privapp.test")
+
+        r = await client.get("/api/admin/usuarios", headers=_auth(token_admin))
+
+        assert "@" not in r.text
+
     async def test_pagina_el_listado(
         self, client: AsyncClient, db_session: AsyncSession, token_admin: str
     ):
@@ -91,10 +100,22 @@ class TestListadoDeUsuarios:
         datos = r.json()
         assert datos["total"] == 5
         assert datos["page"] == 2
-        assert [u["email"] for u in datos["items"]] == ["u1@privapp.test", "u2@privapp.test"]
+        assert [u["nombre"] for u in datos["items"]] == ["Usuario 1", "Usuario 2"]
 
-    @pytest.mark.parametrize("busqueda", ["luis", "LUIS@PRIV"])
-    async def test_busca_por_nombre_o_correo_sin_distinguir_mayusculas(
+    async def test_busca_por_nombre_sin_distinguir_mayusculas(
+        self, client: AsyncClient, db_session: AsyncSession, token_admin: str
+    ):
+        await _crear_usuario(db_session, "Luis Pérez", "luis@privapp.test")
+        await _crear_usuario(db_session, "María López", "maria@privapp.test")
+
+        r = await client.get("/api/admin/usuarios?q=LUIS", headers=_auth(token_admin))
+
+        datos = r.json()
+        assert datos["total"] == 1
+        assert datos["items"][0]["nombre"] == "Luis Pérez"
+
+    @pytest.mark.parametrize("busqueda", ["luis@", "privapp.test", "maria@privapp"])
+    async def test_no_busca_por_correo(
         self, client: AsyncClient, db_session: AsyncSession, token_admin: str, busqueda: str
     ):
         await _crear_usuario(db_session, "Luis Pérez", "luis@privapp.test")
@@ -102,9 +123,7 @@ class TestListadoDeUsuarios:
 
         r = await client.get(f"/api/admin/usuarios?q={busqueda}", headers=_auth(token_admin))
 
-        datos = r.json()
-        assert datos["total"] == 1
-        assert datos["items"][0]["email"] == "luis@privapp.test"
+        assert r.json()["total"] == 0
 
     @pytest.mark.parametrize("busqueda,esperados", [("perez", 2), ("PÉREZ", 2), ("maria lopez", 1)])
     async def test_busca_sin_distinguir_acentos(

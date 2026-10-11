@@ -35,7 +35,7 @@ router = APIRouter(dependencies=[Depends(require_admin)])
 async def listar(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
-    q: str | None = Query(None, max_length=100, description="Busca por nombre o correo"),
+    q: str | None = Query(None, max_length=100, description="Busca por nombre"),
     db: AsyncSession = Depends(get_db),
 ) -> ListadoUsuariosResponse:
     """Lista las cuentas de usuario, ordenadas por id."""
