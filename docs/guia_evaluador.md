@@ -128,7 +128,7 @@ La persona debe **cerrar sesión y volver a iniciarla** para que aparezca la opc
 
 ### CP-02: Inicio y cierre de sesión
 
-1. Hacer clic en **Salir** en la barra de navegación.
+1. Hacer clic en **Salir** (ícono de cierre de sesión) en la barra superior.
 2. Iniciar sesión con las credenciales registradas y el botón **Iniciar sesión**.
 3. **Resultado esperado:** acceso a la pantalla principal, aunque el correo se escriba con
    otras mayúsculas. Credenciales incorrectas muestran *"Correo o contraseña incorrectos."*
@@ -150,7 +150,7 @@ La persona debe **cerrar sesión y volver a iniciarla** para que aparezca la opc
    palabras y el texto que se analizará. Se puede elegir **Corregir** (vuelve al formulario
    conservando lo ingresado) o **Cancelar** (descarta todo).
 5. Hacer clic en **Confirmar y analizar**.
-6. **Resultado esperado:** la pantalla **Resultados del análisis** muestra el progreso
+6. **Resultado esperado:** la pantalla **Resultados** muestra el progreso
    (*"Analizando la política: N de M secciones listas..."*) y un **Consejo de privacidad**
    que cambia cada pocos segundos. Al terminar aparece el resultado (ver CP-07).
 
@@ -183,32 +183,38 @@ La persona debe **cerrar sesión y volver a iniciarla** para que aparezca la opc
 
 En la pantalla de resultados, verificar:
 
-1. **Resumen ejecutivo:** fecha, semáforo (**Riesgo Bajo**, **Riesgo Medio** o **Riesgo
-   Alto**), **Puntuación de riesgo** de 0 a 100, comentario breve y los indicadores
-   **Secciones**, **Hallazgos críticos** y **Recomendaciones**.
-2. **Secciones analizadas:** cada sección se expande o contrae; muestra el **Fragmento
-   analizado** y sus **Hallazgos** con nivel (alto, medio o bajo), tipo (riesgo,
-   transparencia o neutral) y **tipo de tratamiento** (por ejemplo, *Transferencia de datos a
-   terceros*). Los análisis anteriores a esta función pueden no mostrar el tipo de tratamiento.
-3. **Fuentes normativas:** cada cita muestra la etiqueta de jurisdicción **Guatemala**
-   (azul), **Internacional** (morado) o **Estándar técnico** (gris), el documento, los
-   artículos detectados y el extracto real del corpus. Las internacionales llevan la nota
-   *"Referencia internacional — buena práctica, no ley vigente en Guatemala."*
-4. **Hallazgos sin respaldo:** si ningún fragmento del corpus respalda un hallazgo, este se
+1. **Puntuación de riesgo:** medidor semicircular de 0 a 100 con las franjas **Bajo**,
+   **Medio** y **Alto**, el nivel general con ícono y texto (**Riesgo alto**, **Riesgo
+   medio** o **Riesgo bajo**), una frase que lo explica y el comentario breve. Si el nivel no
+   coincide con la franja de la puntuación (por ejemplo, 73 con **Riesgo alto**), aparece
+   *"El nivel se decide por los hallazgos, no solo por la puntuación…"*.
+2. **¿Por qué este resultado?:** cuántas cláusulas cuentan para el resultado, una barra por
+   nivel y la regla que decide el nivel general.
+3. **Qué hace con tus datos:** una ficha por tipo de tratamiento (por ejemplo, *Transferencia
+   de datos a terceros*) con sus riesgos; al pulsarla, la lista de hallazgos se filtra por ese
+   tipo.
+4. **Hallazgos por sección:** cada sección se expande o contrae; cada hallazgo muestra su
+   nivel, su tipo de tratamiento, la descripción, **Por qué:** (el criterio que cumple, en
+   lenguaje sencillo), **Ver el fragmento analizado** y **Ver la norma que lo respalda** (o
+   **Ver las N normas…**). Cada cita muestra la jurisdicción (**Guatemala**,
+   **Internacional** o **Estándar técnico**), el documento, los artículos detectados y el
+   extracto real del corpus; las internacionales llevan la nota *"Referencia internacional —
+   buena práctica, no ley vigente en Guatemala."*
+5. **Hallazgos sin respaldo:** si ningún fragmento del corpus respalda un hallazgo, este se
    marca como **Sin respaldo en el corpus normativo**, no muestra citas y no cuenta para el
    nivel global ni para la puntuación. Tampoco cuentan las secciones que no pudieron
    analizarse (*"No fue posible analizar esta sección automáticamente."*).
-5. **Filtros:** en el recuadro de filtros, elegir **Nivel de riesgo** y **Jurisdicción de la
-   cita**. Se muestra *"Mostrando X de Y hallazgos"*, las secciones sin coincidencias se
+6. **Filtros:** en el recuadro de filtros, elegir **Nivel de riesgo**, **Jurisdicción de la
+   cita** y **Tipo de tratamiento**. Se muestra *"Mostrando X de Y hallazgos"*, las secciones sin coincidencias se
    ocultan (las demás conservan su número) y el resumen ejecutivo no cambia. **Limpiar
    filtros** o **Mostrar todos los hallazgos** restablecen la vista.
-6. **Ayuda del glosario:** el ícono de interrogación junto a *Nivel de riesgo*, *Puntuación
+7. **Ayuda del glosario:** el ícono de interrogación junto a *Nivel de riesgo*, *Puntuación
    de riesgo*, el tipo de tratamiento, *Recomendaciones* y las notas de citas muestra la
    definición del término y el enlace **Ver en el glosario**.
-7. **Recomendaciones:** entre 3 y 5 acciones prácticas redactadas a partir de los riesgos
-   altos y medios encontrados. Si no hay riesgos de ese tipo, se muestran recomendaciones
+8. **Qué puedes hacer:** entre 3 y 5 recomendaciones prácticas, en tarjetas numeradas,
+   redactadas a partir de los riesgos altos y medios encontrados. Si no hay riesgos de ese tipo, se muestran recomendaciones
    generales.
-8. Al final se muestra el aviso de que el análisis es orientativo y no constituye asesoría
+9. Al final se muestra el aviso de que el análisis es orientativo y no constituye asesoría
    legal.
 
 ### CP-08: Descarga del reporte PDF
@@ -222,8 +228,9 @@ En la pantalla de resultados, verificar:
 ### CP-09: Historial con filtros y eliminación
 
 1. En la pantalla principal, hacer clic en la tarjeta **Mis análisis**.
-2. **Resultado esperado:** lista de análisis con fecha, comentario breve, semáforo y
-   puntuación; al hacer clic en uno se abren sus resultados.
+2. **Resultado esperado:** tarjetas de análisis agrupadas por día (**Hoy**, **Ayer** o la
+   fecha), cada una con un anillo de la puntuación, el comentario breve y el nivel; al hacer
+   clic en una se abren sus resultados.
 3. Probar los filtros **Buscar** (texto de la política o del resumen; no distingue acentos),
    **Nivel de riesgo**, **Desde** y **Hasta**, y hacer clic en **Aplicar filtros**. Se
    indica cuántos análisis coinciden; **Limpiar filtros** vuelve a la lista completa. Una
@@ -244,8 +251,8 @@ En la pantalla de resultados, verificar:
 
 ### CP-11: Perfil
 
-1. Hacer clic en el nombre del usuario en la barra de navegación (en pantallas pequeñas, el
-   ícono de persona) para abrir **Mi perfil**.
+1. Abrir **Mi perfil** desde el nombre del usuario en la barra superior (en el teléfono,
+   desde la pestaña **Perfil** de la barra inferior).
 2. **Datos de la cuenta:** muestra el correo (no se puede modificar) y el rol.
 3. **Editar nombre:** cambiar el nombre y hacer clic en **Guardar cambios**. Resultado
    esperado: *"Tu nombre se actualizó correctamente."* y el nombre nuevo en la barra.
@@ -254,7 +261,10 @@ En la pantalla de resultados, verificar:
    esperado: confirmación de que la contraseña se actualizó y de que se cerraron las
    sesiones abiertas en otros dispositivos. Una contraseña actual incorrecta muestra un
    error en ese campo.
-5. **Eliminar mi cuenta** (probar con una cuenta de prueba): escribir la **Contraseña**,
+5. **Apariencia:** elegir **Claro**, **Oscuro** o **Automático**. Resultado esperado: la
+   interfaz cambia de inmediato y la elección se conserva al volver a abrir el sitio;
+   **Automático** sigue la configuración del dispositivo.
+6. **Eliminar mi cuenta** (probar con una cuenta de prueba): escribir la **Contraseña**,
    hacer clic en **Eliminar mi cuenta** y confirmar con **Eliminar definitivamente** en el
    diálogo **¿Eliminar tu cuenta?**. Resultado esperado: se vuelve al inicio de sesión con
    el mensaje *"Tu cuenta y todos tus análisis se eliminaron definitivamente."* No es posible
@@ -265,11 +275,13 @@ En la pantalla de resultados, verificar:
 
 1. Abrir **Glosario** desde la barra de navegación o el pie de página (también está
    disponible sin iniciar sesión).
-2. **Resultado esperado:** la lista de términos con su definición; el campo **Buscar un
-   término** filtra la lista e indica cuántos términos coinciden.
+2. **Resultado esperado:** los términos en tarjetas, con su definición; el campo **Buscar un
+   término** filtra las tarjetas e indica cuántos términos coinciden.
 3. Abrir **Aviso de privacidad** desde el pie de página o desde el formulario de registro.
-4. **Resultado esperado:** el aviso completo, con su fecha de última actualización, visible
-   sin iniciar sesión.
+4. **Resultado esperado:** el aviso completo, con un índice de apartados al inicio y su fecha
+   de última actualización, visible sin iniciar sesión.
+5. Abrir una dirección que no existe (por ejemplo, `/algo`). **Resultado esperado:** la
+   pantalla **Página no encontrada**, con enlaces al inicio y al glosario.
 
 ### CP-13: Administración de usuarios
 
@@ -316,8 +328,10 @@ Requiere una cuenta promovida a administrador (Paso 4).
 1. Abrir las herramientas de desarrollador del navegador (F12).
 2. Activar la vista de dispositivo móvil (375 px de ancho).
 3. Recorrer el análisis, los resultados, el historial y el perfil.
-4. **Resultado esperado:** la interfaz es usable: texto legible, botones accesibles y
-   secciones expandibles que funcionan correctamente.
+4. **Resultado esperado:** la navegación pasa a una barra de cinco pestañas en la parte
+   inferior (**Inicio**, **Analizar**, **Historial**, **Glosario** y **Perfil**) y la
+   interfaz es usable: texto legible, botones accesibles y secciones expandibles que
+   funcionan correctamente.
 
 ---
 
